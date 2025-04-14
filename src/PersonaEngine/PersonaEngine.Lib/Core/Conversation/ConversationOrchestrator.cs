@@ -9,8 +9,7 @@ using PersonaEngine.Lib.Core.Conversation.Common.Messaging;
 using PersonaEngine.Lib.Core.Conversation.Context;
 using PersonaEngine.Lib.Core.Conversation.Contracts.Events;
 using PersonaEngine.Lib.Core.Conversation.Contracts.Interfaces;
-using PersonaEngine.Lib.LLM;
-using PersonaEngine.Lib.Vision;
+using PersonaEngine.Lib.Core.Conversation.Policies;
 
 using ChatMessage = PersonaEngine.Lib.LLM.ChatMessage;
 
@@ -18,18 +17,31 @@ namespace PersonaEngine.Lib.Core.Conversation;
 
 public class ConversationOrchestrator : IConversationOrchestrator
 {
+    public enum State
+    {
+        Idle,
+
+        Processing,
+
+        Cancelling
+    }
+
     private readonly IChannelRegistry _channelRegistry;
-    
-    private readonly ILlmProcessor _llmProcessor;
 
     private readonly IContextManager _contextManager;
-    
-    private readonly Lock            _lock = new();
+
+    private readonly ILlmProcessor _llmProcessor;
+
+    private readonly Lock _lock = new();
 
     private readonly ILogger<ConversationOrchestrator> _logger;
 
+    private readonly IOutputFormattingStrategy _outputFormatter;
+
     private readonly ChannelWriter<ProcessOutputRequest> _outputRequestWriter;
-    
+
+    private readonly ITurnTakingStrategy _turnTakingStrategy;
+
     private CancellationTokenSource? _activeProcessingCts = null;
 
     private Task? _activeProcessingTask = null;
@@ -40,12 +52,14 @@ public class ConversationOrchestrator : IConversationOrchestrator
         IChannelRegistry                  channelRegistry,
         ILlmProcessor                     llmProcessor,
         IContextManager                   contextManager,
-        ILogger<ConversationOrchestrator> logger)
+        ILogger<ConversationOrchestrator> logger, IOutputFormattingStrategy outputFormatter, ITurnTakingStrategy turnTakingStrategy)
     {
-        _channelRegistry = channelRegistry;
-        _llmProcessor    = llmProcessor;
-        _contextManager  = contextManager;
+        _channelRegistry     = channelRegistry;
+        _llmProcessor        = llmProcessor;
+        _contextManager      = contextManager;
         _logger              = logger;
+        _outputFormatter     = outputFormatter;
+        _turnTakingStrategy  = turnTakingStrategy;
         _outputRequestWriter = channelRegistry.OutputRequests.Writer;
     }
 
@@ -195,13 +209,18 @@ public class ConversationOrchestrator : IConversationOrchestrator
         _logger.LogInformation("Orchestrator received utterance from {User} (SourceId: {SourceId}). Text: '{Text}'",
                                utterance.User, utterance.SourceId, utterance.AggregatedText);
 
+        var action = _turnTakingStrategy.DecideAction(utterance, _currentState);
+        _logger.LogDebug("Turn-taking strategy decided action: {Action}", action);
+
+        // Add User Interaction to Context (Do this regardless of action?)
+        // Or only if Processing or Queuing? Let's do it always for a full record.
         var userInteraction = new Interaction(
                                               utterance.SourceId,
                                               ChatMessageRole.User,
                                               utterance.AggregatedText,
                                               utterance.EndTimestamp
                                              );
-        
+
         try
         {
             await _contextManager.AddInteractionAsync(userInteraction);
@@ -209,28 +228,44 @@ public class ConversationOrchestrator : IConversationOrchestrator
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to add user interaction to context history.");
-            // Continue processing anyway? Yes.
         }
-        
+
         lock (_lock)
         {
-            if (_currentState == State.Idle)
+            switch ( action )
             {
-                if (!string.IsNullOrWhiteSpace(utterance.AggregatedText))
-                {
-                    TransitionTo(State.Processing);
-                    // Pass the utterance object to the processing flow
-                    _ = ProcessUtteranceFlowAsync(utterance); // Fire and forget the flow start
-                }
-                else
-                {
-                    _logger.LogWarning("Ignoring empty utterance.");
-                }
-            }
-            else
-            {
-                // TODO: Implement queuing or interruption logic for utterances arriving while busy.
-                _logger.LogWarning("Utterance received while orchestrator state is {State}. Ignoring.", _currentState);
+                case TurnTakingAction.ProcessNow:
+                    // Ensure state is actually Idle before proceeding (strategy might be wrong)
+                    if ( _currentState == State.Idle )
+                    {
+                        if ( !string.IsNullOrWhiteSpace(utterance.AggregatedText) )
+                        {
+                            _logger.LogInformation("Strategy allows processing now. Transitioning to Processing.");
+                            TransitionTo(State.Processing);
+                            _ = ProcessUtteranceFlowAsync(utterance);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Ignoring empty utterance even though strategy allowed processing.");
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Strategy suggested ProcessNow, but current state is {State}. Ignoring.", _currentState);
+                    }
+
+                    break;
+
+                case TurnTakingAction.Queue:
+                    // TODO: Implement actual queuing mechanism if needed
+                    _logger.LogWarning("Strategy requested queuing utterance from {User} (SourceId: {SourceId}), but queuing is not implemented. Ignoring.", utterance.User, utterance.SourceId);
+
+                    break;
+
+                case TurnTakingAction.Ignore:
+                    _logger.LogInformation("Strategy requested ignoring utterance from {User} (SourceId: {SourceId}) because current state is {State}.", utterance.User, utterance.SourceId, _currentState);
+
+                    break;
             }
         }
     }
@@ -283,15 +318,16 @@ public class ConversationOrchestrator : IConversationOrchestrator
     {
         CancellationTokenSource? currentCts = null;
         Task?                    flowTask   = null;
-        
 
         lock (_lock) // Assign CTS under lock
         {
-            if (_currentState != State.Processing)
+            if ( _currentState != State.Processing )
             {
                 _logger.LogWarning("ProcessUtteranceFlowAsync started but state changed to {State}. Aborting.", _currentState);
+
                 return;
             }
+
             _activeProcessingCts?.Dispose();
             _activeProcessingCts  = new CancellationTokenSource();
             currentCts            = _activeProcessingCts;
@@ -301,108 +337,127 @@ public class ConversationOrchestrator : IConversationOrchestrator
         _logger.LogInformation("Starting LLM processing flow for utterance from {User} (SourceId: {SourceId}).", utterance.User, utterance.SourceId);
         var cancellationToken = currentCts.Token;
 
-         try
+        try
         {
-            // --- Create the actual processing task ---
-            flowTask = Task.Run(async () => {
-                IAsyncEnumerable<string>? llmStream = null;
-                string? aggregatedResponse = null;
+            flowTask = Task.Run(async () =>
+                                {
+                                    IAsyncEnumerable<string>? llmStream          = null;
+                                    string?                   aggregatedResponse = null;
 
-                try
-                {
-                    // 1. Get Context Snapshot
-                    _logger.LogDebug("Getting context snapshot...");
-                    var contextSnapshot = await _contextManager.GetContextSnapshotAsync(utterance.SourceId);
-                    cancellationToken.ThrowIfCancellationRequested(); // Check after async call
+                                    try
+                                    {
+                                        // 1. Get Context Snapshot
+                                        _logger.LogDebug("Getting context snapshot...");
+                                        var contextSnapshot = await _contextManager.GetContextSnapshotAsync(utterance.SourceId);
+                                        cancellationToken.ThrowIfCancellationRequested(); // Check after async call
 
-                    // 2. Get LLM Response Stream (using new signature)
-                    _logger.LogDebug("Requesting LLM stream...");
-                    var currentMessage = new ChatMessage(utterance.User, utterance.AggregatedText); // Current message remains separate
+                                        // 2. Get LLM Response Stream (using new signature)
+                                        _logger.LogDebug("Requesting LLM stream...");
+                                        var currentMessage = new ChatMessage(utterance.User, utterance.AggregatedText); // Current message remains separate
 
-                    llmStream = _llmProcessor.GetStreamingChatResponseAsync(
-                        currentMessage,
-                        contextSnapshot, // Pass the snapshot
-                        cancellationToken);
+                                        llmStream = _llmProcessor.GetStreamingChatResponseAsync(
+                                                                                                currentMessage,
+                                                                                                contextSnapshot, // Pass the snapshot
+                                                                                                cancellationToken);
 
-                    if (llmStream == null)
-                    {
-                        _logger.LogWarning("LLM Processor returned null stream.");
-                        throw new InvalidOperationException("LLM processing failed to return a stream.");
-                    }
+                                        if ( llmStream == null )
+                                        {
+                                            _logger.LogWarning("LLM Processor returned null stream.");
 
-                    // 3. Aggregate LLM Response
-                    _logger.LogDebug("Aggregating LLM response stream...");
-                    var responseBuilder = new StringBuilder();
-                    await foreach (var chunk in llmStream.WithCancellation(cancellationToken))
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        responseBuilder.Append(chunk);
-                    }
-                    aggregatedResponse = responseBuilder.ToString();
-                    _logger.LogInformation("LLM response aggregated (Length: {Length}).", aggregatedResponse.Length);
+                                            throw new InvalidOperationException("LLM processing failed to return a stream.");
+                                        }
 
-                    if (string.IsNullOrWhiteSpace(aggregatedResponse))
-                    {
-                        _logger.LogWarning("LLM returned empty or whitespace response.");
-                        return; // Exit task successfully, don't publish or add to history
-                    }
+                                        // 3. Aggregate LLM Response
+                                        _logger.LogDebug("Aggregating LLM response stream...");
+                                        var responseBuilder = new StringBuilder();
+                                        await foreach ( var chunk in llmStream.WithCancellation(cancellationToken) )
+                                        {
+                                            cancellationToken.ThrowIfCancellationRequested();
+                                            responseBuilder.Append(chunk);
+                                        }
 
-                    // --- Add Assistant Interaction to Context ---
-                    // Add *before* publishing, so if publishing fails, it's still recorded? Or after?
-                    // Let's add *after* successful publishing, as the output wasn't fully delivered otherwise.
-                    // Moved this logic after the WriteAsync call below.
-                    // -------------------------------------------
+                                        aggregatedResponse = responseBuilder.ToString();
+                                        _logger.LogInformation("LLM response aggregated (Length: {Length}).", aggregatedResponse.Length);
 
-                    // 4. Publish Output Request
-                    _logger.LogDebug("Publishing ProcessOutputRequest...");
-                    var outputRequest = new ProcessOutputRequest(
-                        aggregatedResponse,
-                        utterance.SourceId // Pass originating SourceId for context
-                    );
+                                        if ( string.IsNullOrWhiteSpace(aggregatedResponse) )
+                                        {
+                                            _logger.LogWarning("LLM returned empty or whitespace response.");
 
-                    cancellationToken.ThrowIfCancellationRequested();
-                    await _outputRequestWriter.WriteAsync(outputRequest, cancellationToken);
-                    _logger.LogDebug("ProcessOutputRequest published.");
+                                            return; // Exit task successfully, don't publish or add to history
+                                        }
 
-                    // --- Add Assistant Interaction to Context (AFTER successful publish) ---
-                    var assistantInteraction = new Interaction(
-                        "Assistant", // Or a more specific bot ID if available
-                        ChatMessageRole.Assistant, // Assuming Assistant role
-                        aggregatedResponse,
-                        DateTimeOffset.Now // Timestamp when response was finalized/published
-                    );
-                    try
-                    {
-                        await _contextManager.AddInteractionAsync(assistantInteraction);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Failed to add assistant interaction to context history.");
-                        // Non-fatal, continue flow
-                    }
-                    // -------------------------------------------
+                                        string formattedResponse;
+                                        try {
+                                            _logger.LogDebug("Applying output formatting strategy...");
+                                            // Pass metadata if needed, e.g., request.Metadata
+                                            formattedResponse = _outputFormatter.Format(aggregatedResponse);
+                                            _logger.LogDebug("Output formatting applied.");
+                                        } catch (Exception ex) {
+                                            _logger.LogError(ex, "Error applying output formatting strategy. Using raw response.");
+                                            formattedResponse = aggregatedResponse; // Fallback
+                                        }
+                                        
+                                        // --- Add Assistant Interaction to Context ---
+                                        // Add *before* publishing, so if publishing fails, it's still recorded? Or after?
+                                        // Let's add *after* successful publishing, as the output wasn't fully delivered otherwise.
+                                        // Moved this logic after the WriteAsync call below.
+                                        // -------------------------------------------
 
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    _logger.LogInformation("LLM/Aggregation/Publishing task cancelled.");
-                    throw; // Propagate
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error during LLM/Aggregation/Publishing task.");
-                    throw; // Propagate
-                }
+                                        // 4. Publish Output Request
+                                        _logger.LogDebug("Publishing ProcessOutputRequest...");
+                                        var outputRequest = new ProcessOutputRequest(
+                                                                                     formattedResponse,
+                                                                                     utterance.SourceId // Pass originating SourceId for context
+                                                                                    );
 
-            }, cancellationToken);
+                                        cancellationToken.ThrowIfCancellationRequested();
+                                        await _outputRequestWriter.WriteAsync(outputRequest, cancellationToken);
+                                        _logger.LogDebug("ProcessOutputRequest published.");
+
+                                        // --- Add Assistant Interaction to Context (AFTER successful publish) ---
+                                        var assistantInteraction = new Interaction(
+                                                                                   "Assistant",               // Or a more specific bot ID if available
+                                                                                   ChatMessageRole.Assistant, // Assuming Assistant role
+                                                                                   aggregatedResponse, // Log raw response to history
+                                                                                   DateTimeOffset.Now // Timestamp when response was finalized/published
+                                                                                  );
+
+                                        try
+                                        {
+                                            await _contextManager.AddInteractionAsync(assistantInteraction);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            _logger.LogError(ex, "Failed to add assistant interaction to context history.");
+                                            // Non-fatal, continue flow
+                                        }
+                                        // -------------------------------------------
+                                    }
+                                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                                    {
+                                        _logger.LogInformation("LLM/Aggregation/Publishing task cancelled.");
+
+                                        throw; // Propagate
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        _logger.LogError(ex, "Error during LLM/Aggregation/Publishing task.");
+
+                                        throw; // Propagate
+                                    }
+                                }, cancellationToken);
 
             // --- Assign task under lock ---
             lock (_lock)
             {
-                if (_activeProcessingCts != currentCts || cancellationToken.IsCancellationRequested)
+                if ( _activeProcessingCts != currentCts || cancellationToken.IsCancellationRequested )
                 {
                     _logger.LogWarning("State or cancellation changed during flow task setup. Aborting assignment.");
-                    if (!cancellationToken.IsCancellationRequested) currentCts.Cancel();
+                    if ( !cancellationToken.IsCancellationRequested )
+                    {
+                        currentCts.Cancel();
+                    }
+
                     flowTask = null;
                 }
                 else
@@ -412,7 +467,7 @@ public class ConversationOrchestrator : IConversationOrchestrator
             }
 
             // --- Await the flow task completion (outside lock) ---
-            if (flowTask != null)
+            if ( flowTask != null )
             {
                 _logger.LogDebug("Awaiting LLM/Aggregation/Publishing task...");
                 await flowTask;
@@ -433,10 +488,10 @@ public class ConversationOrchestrator : IConversationOrchestrator
         {
             lock (_lock)
             {
-                if (_activeProcessingCts == currentCts)
+                if ( _activeProcessingCts == currentCts )
                 {
                     ClearActiveTask("Flow finally block");
-                    if (_currentState == State.Processing || _currentState == State.Cancelling)
+                    if ( _currentState == State.Processing || _currentState == State.Cancelling )
                     {
                         _logger.LogDebug("Transitioning to Idle in flow finally block (State: {CurrentState}).", _currentState);
                         TransitionTo(State.Idle);
@@ -566,6 +621,4 @@ public class ConversationOrchestrator : IConversationOrchestrator
             _activeProcessingTask = null;
         }
     }
-
-    private enum State { Idle, Processing, Cancelling }
 }
