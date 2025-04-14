@@ -9,11 +9,13 @@ public interface IAudioOutputService : IAsyncDisposable
     /// Synthesizes and plays the given text stream as audio.
     /// Publishes AssistantSpeakingStarted/Stopped events.
     /// </summary>
+    /// <param name="requestId">A unique identifier for this playback request.</param>
     /// <param name="textStream">The stream of text chunks to synthesize and play.</param>
     /// <param name="utteranceStartTime">Timestamp when the triggering user utterance started (for latency tracking).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task that completes when playback finishes, is cancelled, or errors.</returns>
     Task PlayTextStreamAsync(
+        Guid                     requestId,
         IAsyncEnumerable<string> textStream,
         DateTimeOffset?          utteranceStartTime,
         CancellationToken        cancellationToken);

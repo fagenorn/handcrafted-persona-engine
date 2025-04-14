@@ -5,9 +5,11 @@
 /// </summary>
 /// <param name="Timestamp">Timestamp when speaking stopped.</param>
 /// <param name="Reason">Reason for stopping.</param>
+/// <param name="RequestId">The ID of the request associated with this speech.</param>
 public record AssistantSpeakingStopped(
     DateTimeOffset      Timestamp,
-    AssistantStopReason Reason
+    AssistantStopReason Reason,
+    Guid                RequestId 
 );
 
 /// <summary>
