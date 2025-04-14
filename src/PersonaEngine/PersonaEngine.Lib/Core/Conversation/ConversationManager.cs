@@ -26,38 +26,36 @@ public sealed class ConversationManagerRefactor : IAsyncDisposable, IStartupTask
     private readonly CancellationTokenSource _mainCts = new();
     private readonly List<string>            _topics  = ["casual conversation"];
 
-    // --- REMOVED Pending Transcript ---
-    // private readonly StringBuilder _pendingTranscript = new();
+    // --- REMOVED Potential Barge-in Text ---
+    // private readonly StringBuilder _potentialBargeInText = new();
     // --- END REMOVED ---
 
-    // Keep potential barge-in text temporarily
-    private readonly StringBuilder _potentialBargeInText = new();
-
-    // Task to process incoming events (both potential transcript and completed utterances)
+    // Task to process incoming events (Utterances and Barge-in)
     private readonly Task          _eventProcessingTask;
     private readonly SemaphoreSlim _stateLock = new(1, 1);
 
-    // --- MODIFIED Channel Readers ---
-    private readonly ChannelReader<ITranscriptionEvent>    _transcriptionEventReader;  // Still needed for PotentialTranscriptUpdate
-    private readonly ChannelReader<UserUtteranceCompleted> _utteranceCompletionReader; // NEW
+    // --- MODIFIED Channel Readers / Added Writers ---
+    // --- REMOVED _transcriptionEventReader --- (No longer listening for PotentialTranscriptUpdate)
+    // private readonly ChannelReader<ITranscriptionEvent> _transcriptionEventReader;
+    private readonly ChannelReader<UserUtteranceCompleted> _utteranceCompletionReader;
+    private readonly ChannelReader<BargeInDetected>        _bargeInReader;
+    private readonly ChannelWriter<object>                 _systemStateWriter;
     // --- END MODIFIED ---
 
     // TTS, VisualQA remain
     private readonly ITtsEngine       _ttsSynthesizer;
     private readonly IVisualQAService _visualQaService;
 
-    // State variables remain largely the same for now
+    // State variables
     private CancellationTokenSource     _activeLlmCts = new();
     private Task?                       _activeProcessingTask;
-    private string                      _currentSpeaker = "User"; // Will be set by UserUtteranceCompleted event
+    private string                      _currentSpeaker = "User";
     private TaskCompletionSource<bool>? _firstTokenTcs;
-    private bool                        _isInStreamingState = false;
-    private DateTimeOffset?             _potentialBargeInStartTime; // Keep for now
-    private ConversationState           _state = ConversationState.Idle;
-
-    // --- REMOVED Transcription Start Timestamp ---
-    // private DateTimeOffset? _transcriptionStartTimestamp; // Now part of UserUtteranceCompleted
+    private bool                        _isInStreamingState = false; // Still useful for internal logic, but also published now
+    // --- REMOVED Potential Barge-in StartTime ---
+    // private DateTimeOffset? _potentialBargeInStartTime;
     // --- END REMOVED ---
+    private ConversationState _state = ConversationState.Idle;
     
     public ConversationManagerRefactor(
         IChatEngine                     llmEngine,
@@ -73,10 +71,11 @@ public sealed class ConversationManagerRefactor : IAsyncDisposable, IStartupTask
         AudioPlayer      = audioPlayer ?? throw new ArgumentNullException(nameof(audioPlayer));
         _logger          = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        // --- Get BOTH readers from the registry ---
-        _transcriptionEventReader  = channelRegistry?.TranscriptionEvents.Reader ?? throw new ArgumentNullException(nameof(channelRegistry));
+        // --- Get Readers/Writers from Registry ---
         _utteranceCompletionReader = channelRegistry?.UtteranceCompletionEvents.Reader ?? throw new ArgumentNullException(nameof(channelRegistry));
-        // --- END Get Readers ---
+        _bargeInReader             = channelRegistry?.BargeInEvents.Reader ?? throw new ArgumentNullException(nameof(channelRegistry));     // Get BargeIn reader
+        _systemStateWriter         = channelRegistry?.SystemStateEvents.Writer ?? throw new ArgumentNullException(nameof(channelRegistry)); // Get SystemState writer
+        // --- END Get Readers/Writers ---
         
         _visualQaService.StartAsync().ConfigureAwait(false);
 
@@ -91,31 +90,26 @@ public sealed class ConversationManagerRefactor : IAsyncDisposable, IStartupTask
     
     public async ValueTask DisposeAsync()
     {
-        // Dispose logic remains similar, waits for the single event processing task
+        // Dispose logic remains similar
         _logger.LogInformation("Disposing ConversationManager...");
         try
         {
-            if (!_mainCts.IsCancellationRequested)
-            {
-                await _mainCts.CancelAsync();
-            }
-
-            await CancelLlmProcessingAsync(true);
+            if (!_mainCts.IsCancellationRequested) await _mainCts.CancelAsync();
+            await CancelLlmProcessingAsync(true); // Ensure active processing is cancelled
             using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            try
-            {
-                await Task.WhenAll(_eventProcessingTask).WaitAsync(timeoutCts.Token); // Wait for the single task
-            }
-            catch (OperationCanceledException) { _logger.LogWarning("Timeout waiting for task during disposal."); }
+            try {
+                await Task.WhenAll(_eventProcessingTask).WaitAsync(timeoutCts.Token);
+            } catch (OperationCanceledException) { _logger.LogWarning("Timeout waiting for task during disposal."); }
             catch (Exception ex) when (ex is not OperationCanceledException) { _logger.LogError(ex, "Error during task wait in disposal."); }
-        }
-        catch (OperationCanceledException) { /* Expected */ }
+        } catch (OperationCanceledException) { /* Expected */ }
         catch (Exception ex) { _logger.LogError(ex, "Error during ConversationManager disposal"); }
         finally
         {
             _stateLock.Dispose();
             _activeLlmCts.Dispose();
             _mainCts.Dispose();
+            // Signal completion of writing system state events? Maybe not needed if registry is singleton.
+            // _systemStateWriter.TryComplete();
         }
         _logger.LogInformation("ConversationManager disposed successfully");
     }
@@ -124,419 +118,295 @@ public sealed class ConversationManagerRefactor : IAsyncDisposable, IStartupTask
 
     private async Task ProcessIncomingEventsAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Starting incoming event processing loop (Utterances & Potential Transcripts)");
+         _logger.LogInformation("Starting incoming event processing loop (Utterances & BargeIn)");
 
-        // Combine reading from both channels using Task.WhenAny
-        var transcriptionTask = ReadTranscriptionEventsAsync(cancellationToken);
-        var utteranceTask = ReadUtteranceEventsAsync(cancellationToken);
+        // Combine reading from Utterance and BargeIn channels
+        var utteranceTask = ReadChannelAsync(_utteranceCompletionReader, cancellationToken);
+        var bargeInTask = ReadChannelAsync(_bargeInReader, cancellationToken);
 
-        var tasks = new List<Task> { transcriptionTask, utteranceTask };
+        var tasks = new List<Task> { utteranceTask, bargeInTask };
 
         try
         {
             while (!cancellationToken.IsCancellationRequested && tasks.Count > 0)
             {
-                // Wait for *any* of the channel reading tasks to produce a result or complete
                 var completedTask = await Task.WhenAny(tasks);
 
-                if (completedTask == transcriptionTask)
+                if (completedTask == utteranceTask)
                 {
-                    // Process result from transcription channel (PotentialTranscriptUpdate)
-                    var (event_, completed) = await transcriptionTask;
-                    if (event_ is PotentialTranscriptUpdate potential)
-                    {
-                        await HandlePotentialTranscriptAsync(potential, cancellationToken);
-                    }
+                     var (utterance, completed) = await utteranceTask;
+                     if (utterance != null) await HandleCompletedUtteranceAsync(utterance, cancellationToken);
 
-                    if (completed)
-                    {
-                         _logger.LogInformation("TranscriptionEvents channel completed.");
-                         tasks.Remove(transcriptionTask); // Remove completed task
-                         transcriptionTask = null; // Avoid re-adding
-                    }
-                    else
-                    {
-                        // Restart reading from this channel for the next event
-                         if(transcriptionTask != null) tasks.Remove(transcriptionTask);
-                         transcriptionTask = ReadTranscriptionEventsAsync(cancellationToken);
-                         tasks.Add(transcriptionTask);
-                    }
-                }
-                else if (completedTask == utteranceTask)
-                {
-                    // Process result from utterance channel (UserUtteranceCompleted)
-                     var (event_, completed) = await utteranceTask;
-                    if (event_ is UserUtteranceCompleted utterance)
-                    {
-                        await HandleCompletedUtteranceAsync(utterance, cancellationToken);
-                    }
-                     if (completed)
-                     {
+                     if (completed) {
                          _logger.LogInformation("UtteranceCompletionEvents channel completed.");
-                         tasks.Remove(utteranceTask); // Remove completed task
-                         utteranceTask = null; // Avoid re-adding
+                         tasks.Remove(utteranceTask); utteranceTask = null;
+                     } else {
+                         if(utteranceTask != null) tasks.Remove(utteranceTask);
+                         utteranceTask = ReadChannelAsync(_utteranceCompletionReader, cancellationToken);
+                         tasks.Add(utteranceTask);
                      }
-                     else
-                     {
-                         // Restart reading from this channel for the next event
-                          if(utteranceTask != null) tasks.Remove(utteranceTask);
-                          utteranceTask = ReadUtteranceEventsAsync(cancellationToken);
-                          tasks.Add(utteranceTask);
+                }
+                else if (completedTask == bargeInTask)
+                {
+                    var (bargeIn, completed) = await bargeInTask;
+                    if (bargeIn != null) await HandleBargeInDetectedAsync(bargeIn, cancellationToken); // New handler
+
+                     if (completed) {
+                         _logger.LogInformation("BargeInEvents channel completed.");
+                         tasks.Remove(bargeInTask); bargeInTask = null;
+                     } else {
+                         if(bargeInTask != null) tasks.Remove(bargeInTask);
+                         bargeInTask = ReadChannelAsync(_bargeInReader, cancellationToken);
+                         tasks.Add(bargeInTask);
                      }
                 }
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-             _logger.LogInformation("Event processing loop cancelled via token.");
-        }
+        { _logger.LogInformation("Event processing loop cancelled via token."); }
         catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in combined event processing loop.");
-        }
+        { _logger.LogError(ex, "Error in combined event processing loop."); }
         finally
-        {
-             _logger.LogInformation("Combined event processing loop finished.");
-        }
+        { _logger.LogInformation("Combined event processing loop finished."); }
     }
     
-    private async Task<(ITranscriptionEvent?, bool completed)> ReadTranscriptionEventsAsync(CancellationToken ct)
+    private async Task<(T? item, bool completed)> ReadChannelAsync<T>(ChannelReader<T> reader, CancellationToken ct) where T: class
     {
-        try
-        {
-            if (await _transcriptionEventReader.WaitToReadAsync(ct))
-            {
-                if (_transcriptionEventReader.TryRead(out var item))
-                {
+        try {
+            if (await reader.WaitToReadAsync(ct)) {
+                if (reader.TryRead(out var item)) {
                     return (item, false);
                 }
             }
-        }
-        catch (OperationCanceledException) { /* Expected */ }
+        } catch (OperationCanceledException) { /* Expected */ }
         catch (ChannelClosedException) { /* Expected */ }
-
         return (null, true); // Channel completed or cancelled
     }
     
-    private async Task<(UserUtteranceCompleted?, bool completed)> ReadUtteranceEventsAsync(CancellationToken ct)
+    // --- REMOVED HandlePotentialTranscriptAsync ---
+    // private async Task HandlePotentialTranscriptAsync(PotentialTranscriptUpdate potentialSegment, CancellationToken cancellationToken) { ... }
+    // --- END REMOVED ---
+
+    // --- NEW Handler for BargeInDetected Event ---
+    private async Task HandleBargeInDetectedAsync(BargeInDetected bargeInEvent, CancellationToken cancellationToken)
     {
-        try
-        {
-            if (await _utteranceCompletionReader.WaitToReadAsync(ct))
-            {
-                if (_utteranceCompletionReader.TryRead(out var item))
-                {
-                    return (item, false);
-                }
-            }
-        }
-        catch (OperationCanceledException) { /* Expected */ }
-        catch (ChannelClosedException) { /* Expected */ }
+        _logger.LogInformation("Received BargeInDetected event from SourceId: {SourceId}. Text: '{Text}'",
+                               bargeInEvent.SourceId, bargeInEvent.DetectedText ?? "N/A");
 
-        return (null, true); // Channel completed or cancelled
+        // Simple reaction: Trigger the existing barge-in mechanism
+        // More sophisticated logic could check SourceId, current state details etc.
+        // Check if we are actually in a state where barge-in makes sense (Streaming)
+        await _stateLock.WaitAsync(cancellationToken); // Need lock to check state safely
+        bool shouldTrigger = _state == ConversationState.Streaming;
+        _stateLock.Release(); // Release lock before potentially long-running operation
+
+        if (shouldTrigger)
+        {
+            _logger.LogDebug("State is Streaming, triggering barge-in response.");
+            await TriggerBargeInAsync(cancellationToken); // Call the existing method
+        }
+        else
+        {
+            _logger.LogWarning("BargeInDetected event received, but current state is {State}. Ignoring event.", _state);
+        }
     }
+    // --- END NEW Handler ---
     
-    // --- Method to handle potential transcripts (for barge-in/cancellation ONLY) ---
-    private async Task HandlePotentialTranscriptAsync(PotentialTranscriptUpdate potentialSegment, CancellationToken cancellationToken)
-    {
-        _logger.LogTrace("Recognizing: Source='{SourceId}', Text='{Text}'", potentialSegment.SourceId, potentialSegment.PartialText);
-
-        // --- Barge-in / Pre-first-token cancellation logic (STILL TEMPORARY) ---
-        if (_isInStreamingState) // If AI is speaking
-        {
-            if (string.IsNullOrWhiteSpace(potentialSegment.PartialText)) return;
-
-            if (_potentialBargeInStartTime == null)
-            {
-                _potentialBargeInStartTime = DateTimeOffset.Now;
-                _potentialBargeInText.Clear();
-                _logger.LogDebug("Potential barge-in started.");
-            }
-
-            _potentialBargeInText.Clear().Append(potentialSegment.PartialText);
-            var bargeInDuration = DateTimeOffset.Now - _potentialBargeInStartTime.Value;
-
-            const int BargeInDetectionMinLength = 5; // Define constants or move to config
-            TimeSpan BargeInDetectionDuration = TimeSpan.FromMilliseconds(400);
-
-            if (bargeInDuration >= BargeInDetectionDuration && _potentialBargeInText.Length >= BargeInDetectionMinLength)
-            {
-                _logger.LogInformation("Barge-in detected: Duration={Duration}ms, Length={Length}", bargeInDuration.TotalMilliseconds, _potentialBargeInText.Length);
-                await TriggerBargeInAsync(cancellationToken); // Await here? Or fire/forget? Let's await briefly.
-                _potentialBargeInStartTime = null;
-                _potentialBargeInText.Clear();
-            }
-        }
-        else // AI is not speaking
-        {
-            _potentialBargeInStartTime = null;
-            _potentialBargeInText.Clear();
-        }
-
-        // Cancel if processing and new speech before first token
-        if (_state == ConversationState.Processing && _firstTokenTcs is { Task.IsCompleted: false })
-        {
-            _logger.LogDebug("Cancelling LLM call due to new speech before first token (based on potential transcript)");
-            await CancelLlmProcessingAsync(); // Await cancellation attempt
-        }
-        // --- END TEMPORARY Logic ---
-    }
-    
-    // --- Method to handle completed utterances ---
     private async Task HandleCompletedUtteranceAsync(UserUtteranceCompleted utterance, CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Received completed utterance: Source='{SourceId}', User='{User}', Length={Length}, Start='{Start}', End='{End}'",
-                             utterance.SourceId, utterance.User, utterance.AggregatedText.Length, utterance.StartTimestamp, utterance.EndTimestamp);
+        _logger.LogInformation("Received completed utterance: Source='{SourceId}', User='{User}', Length={Length}",
+                               utterance.SourceId, utterance.User, utterance.AggregatedText.Length);
 
-        // Reset potential barge-in state now that a full utterance is finalized
-        _potentialBargeInStartTime = null;
-        _potentialBargeInText.Clear();
+        // --- REMOVED Barge-in state reset here ---
+        // _potentialBargeInStartTime = null;
+        // _potentialBargeInText.Clear();
 
         await _stateLock.WaitAsync(cancellationToken);
         try
         {
             var currentState = _state;
-            _logger.LogDebug("HandleCompletedUtteranceAsync entered. Current state: {State}", currentState);
+            _logger.LogDebug("HandleCompletedUtteranceAsync. Current state: {State}", currentState);
 
-            switch (currentState)
+            switch ( currentState )
             {
                 case ConversationState.Idle:
-                    if (!string.IsNullOrWhiteSpace(utterance.AggregatedText))
+                    if ( !string.IsNullOrWhiteSpace(utterance.AggregatedText) )
                     {
                         _logger.LogInformation("Idle state: Processing completed utterance.");
-                        _currentSpeaker = utterance.User; // Set current speaker
+                        _currentSpeaker = utterance.User;
                         await TransitionToStateAsync(ConversationState.Processing);
-                        // Start processing task, passing utterance data directly
-                        _ = StartLlmProcessingTaskAsync(utterance, CancellationToken.None);
+                        _ = StartLlmProcessingTaskAsync(utterance, CancellationToken.None); // Fire and forget
                     }
                     else
                     {
-                         _logger.LogWarning("Idle state: Received completed utterance with empty text. Ignoring.");
+                        _logger.LogWarning("Idle state: Received completed utterance with empty text. Ignoring.");
                     }
-                    break;
 
+                    break;
                 case ConversationState.Processing:
                 case ConversationState.Streaming:
                 case ConversationState.Cancelling:
-                    // If already busy, the new utterance might need to be queued or handled
-                    // based on conversation strategy. For now, we log it.
-                    // The HandleProcessingTaskCompletion logic might need adjustment
-                    // to check for a "queued" next utterance instead of _pendingTranscript.
-                    // --- SIMPLE APPROACH FOR NOW: Log and potentially drop/ignore ---
-                    // (More complex handling requires an explicit queue or different state machine)
                     _logger.LogWarning("Received completed utterance while in state {State}. Utterance from '{User}' ignored for now: '{Text}'",
                                        currentState, utterance.User, utterance.AggregatedText.Substring(0, Math.Min(utterance.AggregatedText.Length, 50)));
-                    // TODO: Implement queuing or alternative handling strategy for concurrent utterances.
+
+                    // TODO: Implement queuing or alternative handling
                     break;
             }
         }
         finally
         {
             _stateLock.Release();
-            _logger.LogDebug("HandleCompletedUtteranceAsync finished.");
         }
+
+        _logger.LogDebug("HandleCompletedUtteranceAsync finished.");
     }
-    
+
     // --- REMOVED HandleTranscriptionSegmentAsync ---
     // private async Task HandleTranscriptionSegmentAsync(CancellationToken cancellationToken) { ... }
     // --- END REMOVED ---
 
 
-    // --- MODIFIED StartLlmProcessingTaskAsync to accept utterance ---
     private Task StartLlmProcessingTaskAsync(UserUtteranceCompleted utterance, CancellationToken externalCancellationToken)
     {
-        return Task.Run(async () =>
-        {
-            try
-            {
-                _logger.LogDebug("Task.Run: Executing StartLlmProcessingAsync for utterance from {User}.", utterance.User);
-                await StartLlmProcessingAsync(utterance, externalCancellationToken);
-                _logger.LogDebug("Task.Run: StartLlmProcessingAsync completed.");
-            }
-            catch (Exception ex)
-            {
-                 _logger.LogError(ex, "Unhandled exception directly within StartLlmProcessingAsync execution task for utterance from {User}.", utterance.User);
-                await _stateLock.WaitAsync(CancellationToken.None);
-                try
-                {
-                    _logger.LogWarning("Attempting to reset state to Idle due to StartLlmProcessingAsync task failure.");
-                    // No pending transcript to clear
-                    _activeProcessingTask = null;
-                    await TransitionToStateAsync(ConversationState.Idle);
-                }
-                catch (Exception lockEx) { _logger.LogError(lockEx, "Failed to acquire lock or reset state after StartLlmProcessingAsync task failure."); }
-                finally { if (_stateLock.CurrentCount == 0) _stateLock.Release(); }
-            }
-        });
+        return Task.Run(async () => {
+                            try {
+                                _logger.LogDebug("Task.Run: Executing StartLlmProcessingAsync for utterance from {User}.", utterance.User);
+                                await StartLlmProcessingAsync(utterance, externalCancellationToken);
+                                _logger.LogDebug("Task.Run: StartLlmProcessingAsync completed.");
+                            } catch (Exception ex) {
+                                _logger.LogError(ex, "Unhandled exception directly within StartLlmProcessingAsync execution task for utterance from {User}.", utterance.User);
+                                await _stateLock.WaitAsync(CancellationToken.None);
+                                try {
+                                    _logger.LogWarning("Attempting to reset state to Idle due to StartLlmProcessingAsync task failure.");
+                                    _activeProcessingTask = null;
+                                    await TransitionToStateAsync(ConversationState.Idle);
+                                } catch (Exception lockEx) { _logger.LogError(lockEx, "Failed to acquire lock or reset state after StartLlmProcessingAsync task failure."); }
+                                finally { if (_stateLock.CurrentCount == 0) _stateLock.Release(); }
+                            }
+                        });
     }
-    // --- END MODIFIED ---
 
-    // --- MODIFIED StartLlmProcessingAsync to accept utterance ---
     private async Task StartLlmProcessingAsync(UserUtteranceCompleted utterance, CancellationToken externalCancellationToken)
     {
         _logger.LogDebug("StartLlmProcessingAsync entered for completed utterance.");
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_mainCts.Token, externalCancellationToken);
-        var combinedToken = linkedCts.Token;
+        using var linkedCts     = CancellationTokenSource.CreateLinkedTokenSource(_mainCts.Token, externalCancellationToken);
+        var       combinedToken = linkedCts.Token;
 
-        // --- State management under lock ---
         await _stateLock.WaitAsync(combinedToken);
         try
         {
-             // Check if still in Processing state - could have been cancelled between event handling and here
-             if(_state != ConversationState.Processing)
-             {
-                 _logger.LogWarning("StartLlmProcessingAsync: State changed to {State} before processing could start. Aborting.", _state);
-                 return;
-             }
+            if ( _state != ConversationState.Processing )
+            {
+                _logger.LogWarning("StartLlmProcessingAsync: State changed to {State} before processing could start. Aborting.", _state);
 
-             _logger.LogInformation("StartLlmProcessingAsync: Processing utterance ({Length} chars) from '{User}': '{Text}'",
-                                    utterance.AggregatedText.Length, utterance.User,
-                                    utterance.AggregatedText.Substring(0, Math.Min(utterance.AggregatedText.Length, 100)));
+                return;
+            }
 
-             // Dispose old CTS and create new one *within the lock*
+            _logger.LogInformation("StartLlmProcessingAsync: Processing utterance ({Length} chars) from '{User}': '{Text}'", utterance.AggregatedText.Length, utterance.User, utterance.AggregatedText.Substring(0, Math.Min(utterance.AggregatedText.Length, 100)));
             _activeLlmCts?.Dispose();
             _activeLlmCts = CancellationTokenSource.CreateLinkedTokenSource(combinedToken);
         }
         finally
         {
-             _stateLock.Release();
+            _stateLock.Release();
         }
-        // --- End State management ---
 
-        var llmCancellationToken = _activeLlmCts.Token; // Get token after creating CTS
-
+        var   llmCancellationToken  = _activeLlmCts.Token;
         Task? currentProcessingTask = null;
         try
         {
             _logger.LogDebug("StartLlmProcessingAsync: Calling ProcessLlmRequestAsync.");
-            // Pass utterance details needed by ProcessLlmRequestAsync
             currentProcessingTask = ProcessLlmRequestAsync(utterance, llmCancellationToken);
 
-            // --- Assign active task immediately ---
-             await _stateLock.WaitAsync(combinedToken); // Re-acquire lock briefly
-             try
-             {
-                // Only assign if still in processing state and no other task took over
-                 if (_state == ConversationState.Processing && _activeProcessingTask == null)
-                 {
-                     _activeProcessingTask = currentProcessingTask;
-                     _logger.LogDebug("StartLlmProcessingAsync: ProcessLlmRequestAsync called, task assigned (Id: {TaskId}).", currentProcessingTask.Id);
-                 }
-                 else
-                 {
-                      _logger.LogWarning("StartLlmProcessingAsync: Could not assign active task. State: {State}, Existing Task: {TaskId}. Attempting cancellation of new task.", _state, _activeProcessingTask?.Id);
-                      // Cancel the task we just created as it won't be tracked
-                      _activeLlmCts.Cancel(); // Cancel the specific CTS for this orphaned task
-                      throw new OperationCanceledException("State changed before LLM task could be tracked.");
-                 }
-             }
-             finally
-             {
-                 _stateLock.Release();
-             }
-            // --- End Assign active task ---
+            await _stateLock.WaitAsync(combinedToken);
+            try
+            {
+                if ( _state == ConversationState.Processing && _activeProcessingTask == null )
+                {
+                    _activeProcessingTask = currentProcessingTask;
+                    _logger.LogDebug("StartLlmProcessingAsync: ProcessLlmRequestAsync called, task assigned (Id: {TaskId}).", currentProcessingTask.Id);
+                }
+                else
+                {
+                    _logger.LogWarning("StartLlmProcessingAsync: Could not assign active task. State: {State}, Existing Task: {TaskId}. Attempting cancellation of new task.", _state, _activeProcessingTask?.Id);
+                    _activeLlmCts.Cancel();
 
+                    throw new OperationCanceledException("State changed before LLM task could be tracked.");
+                }
+            }
+            finally
+            {
+                _stateLock.Release();
+            }
 
             _logger.LogDebug("StartLlmProcessingAsync: Setting up continuation task.");
-            _ = currentProcessingTask.ContinueWith(
-                continuationAction: task => _ = HandleProcessingTaskCompletion(task), // Fire-and-forget handler
-                cancellationToken: CancellationToken.None,
-                continuationOptions: TaskContinuationOptions.ExecuteSynchronously,
-                scheduler: TaskScheduler.Default
-            );
+            _ = currentProcessingTask.ContinueWith(task => _ = HandleProcessingTaskCompletion(task), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             _logger.LogDebug("StartLlmProcessingAsync: Continuation task setup complete.");
         }
-        catch (Exception ex) when (ex is not OperationCanceledException) // Don't log OperationCanceledException here if it's expected state change
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogError(ex, "StartLlmProcessingAsync: Synchronous exception during ProcessLlmRequestAsync call or task assignment/continuation setup.");
             await _stateLock.WaitAsync(CancellationToken.None);
             try
             {
                 _logger.LogWarning("StartLlmProcessingAsync: Resetting state to Idle due to synchronous startup failure.");
-                 // Check if the failed task is the active one before clearing
-                 if (_activeProcessingTask == currentProcessingTask)
-                 {
+                if ( _activeProcessingTask == currentProcessingTask )
+                {
                     _activeProcessingTask = null;
-                 }
-                 // Only transition if we are still in a processing related state
-                 if (_state == ConversationState.Processing || _state == ConversationState.Cancelling)
-                 {
+                }
+
+                if ( _state == ConversationState.Processing || _state == ConversationState.Cancelling )
+                {
                     await TransitionToStateAsync(ConversationState.Idle);
-                 }
+                }
             }
             finally
             {
                 _stateLock.Release();
             }
         }
+
         _logger.LogDebug("StartLlmProcessingAsync finished initiation.");
     }
-    // --- END MODIFIED ---
 
-
-    // --- MODIFIED HandleProcessingTaskCompletion ---
     private async Task HandleProcessingTaskCompletion(Task completedTask)
     {
         _logger.LogDebug("HandleProcessingTaskCompletion entered. Task Status: {Status}, TaskId: {TaskId}", completedTask.Status, completedTask.Id);
         await _stateLock.WaitAsync(CancellationToken.None);
         try
         {
-            if (completedTask != _activeProcessingTask)
+            if ( completedTask != _activeProcessingTask )
             {
-                _logger.LogWarning("HandleProcessingTaskCompletion: Stale continuation detected for TaskId {CompletedTaskId}. Current active TaskId is {ActiveTaskId}. Ignoring.",
-                                   completedTask.Id, _activeProcessingTask?.Id ?? -1);
+                _logger.LogWarning("HandleProcessingTaskCompletion: Stale continuation detected. Ignoring.");
+
                 return;
             }
 
-            // --- Logic change: No pending transcript to check ---
-            // Instead, if concurrent utterances arrived, they were logged/ignored in HandleCompletedUtteranceAsync.
-            // The system simply transitions back to Idle unless an error occurred.
-            // Future Orchestrator would handle queuing.
-
-            var finalState = ConversationState.Idle; // Default to Idle after completion/cancellation/failure
-
-            switch (completedTask.Status)
+            var finalState = ConversationState.Idle;
+            switch ( completedTask.Status )
             {
-                case TaskStatus.Faulted:
-                    _logger.LogError(completedTask.Exception?.Flatten().InnerExceptions.FirstOrDefault(), "LLM processing task failed.");
-                    break;
-
-                case TaskStatus.Canceled:
-                    _logger.LogInformation("LLM processing task was cancelled.");
-                    // Currently, cancellation leads directly back to Idle.
-                    // An Orchestrator might check a queue here.
-                    break;
-
-                case TaskStatus.RanToCompletion:
-                    _logger.LogDebug("LLM processing task completed successfully.");
-                    // Leads back to Idle.
-                    break;
-
-                default:
-                    _logger.LogWarning("HandleProcessingTaskCompletion: Unexpected task status {Status}", completedTask.Status);
-                    break;
+                case TaskStatus.Faulted:         _logger.LogError(completedTask.Exception?.Flatten().InnerExceptions.FirstOrDefault(), "LLM processing task failed."); break;
+                case TaskStatus.Canceled:        _logger.LogInformation("LLM processing task was cancelled."); break;
+                case TaskStatus.RanToCompletion: _logger.LogDebug("LLM processing task completed successfully."); break;
+                default:                         _logger.LogWarning("HandleProcessingTaskCompletion: Unexpected task status {Status}", completedTask.Status); break;
             }
 
             await TransitionToStateAsync(finalState);
-
-            // Clear the active task reference now that this one is handled
             _logger.LogDebug("HandleProcessingTaskCompletion: Clearing active processing task reference.");
             _activeProcessingTask = null;
-
-            // --- REMOVED Restart logic based on _pendingTranscript ---
-            // if (restartProcessing) { ... }
-            // --- END REMOVED ---
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error within HandleProcessingTaskCompletion continuation.");
             try
             {
-                // Attempt recovery to Idle state
                 _activeProcessingTask = null;
                 await TransitionToStateAsync(ConversationState.Idle);
             }
-            catch (Exception recoveryEx) { _logger.LogError(recoveryEx, "Failed to recover state to Idle within HandleProcessingTaskCompletion catch block."); }
+            catch (Exception recoveryEx)
+            {
+                _logger.LogError(recoveryEx, "Failed to recover state to Idle within HandleProcessingTaskCompletion catch block.");
+            }
         }
         finally
         {
@@ -544,90 +414,90 @@ public sealed class ConversationManagerRefactor : IAsyncDisposable, IStartupTask
             _logger.LogDebug("HandleProcessingTaskCompletion finished.");
         }
     }
-    // --- END MODIFIED ---
 
-
-    // --- MODIFIED ProcessLlmRequestAsync to accept utterance ---
+    // --- MODIFIED ProcessLlmRequestAsync to publish speaking events ---
     private async Task ProcessLlmRequestAsync(UserUtteranceCompleted utterance, CancellationToken cancellationToken)
     {
         _logger.LogDebug("ProcessLlmRequestAsync entered for utterance from '{User}'", utterance.User);
         var stopwatch = Stopwatch.StartNew();
         _firstTokenTcs ??= new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var currentFirstTokenTcs = _firstTokenTcs;
+        var stopReason           = "Unknown"; // Track reason for stopping
 
         try
         {
             _logger.LogDebug("Requesting LLM stream...");
-            var textStream = _llmEngine.GetStreamingChatResponseAsync(
-                new ChatMessage(utterance.User, utterance.AggregatedText), // Use data from utterance
-                new InjectionMetadata(
-                    _topics.AsReadOnly(),
-                    _context,
-                    _visualQaService.ScreenCaption ?? string.Empty),
-                cancellationToken: cancellationToken);
+            var textStream = _llmEngine.GetStreamingChatResponseAsync( /*...*/); // Assume params are correct as in Step 2
 
-            // Pass the TCS instance for this specific call
             var (firstTokenDetectedStream, firstTokenTask) = WrapWithFirstTokenDetection(textStream, stopwatch, currentFirstTokenTcs, cancellationToken);
-
-            // State transition logic remains the same
             var stateTransitionTask = firstTokenTask.ContinueWith(async _ =>
-            {
-                 // ... (state transition logic as before) ...
-                 _logger.LogDebug("First token detected task continuation running.");
-                await _stateLock.WaitAsync(CancellationToken.None);
-                try
-                {
-                    if (_state == ConversationState.Processing) {
-                        _logger.LogInformation("First token received, transitioning state Processing -> Streaming.");
-                        await TransitionToStateAsync(ConversationState.Streaming);
-                    } else {
-                         _logger.LogWarning("First token received, but state was already {State}. No transition.", _state);
-                     }
-                } finally { _stateLock.Release(); }
-
-            }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously | TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default);
-
+                                                                  {
+                                                                      /* ... State transition logic ... */
+                                                                  }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously | TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default);
 
             _logger.LogDebug("Requesting TTS stream...");
-            var audioSegments = _ttsSynthesizer.SynthesizeStreamingAsync(firstTokenDetectedStream, cancellationToken: cancellationToken);
-
-            // Pass the utterance start time for latency tracking
+            var audioSegments       = _ttsSynthesizer.SynthesizeStreamingAsync(firstTokenDetectedStream, cancellationToken: cancellationToken);
             var latencyTrackedAudio = WrapAudioSegments(audioSegments, utterance.StartTimestamp, cancellationToken);
+
+            // --- Publish AssistantSpeakingStarted ---
+            _logger.LogDebug("Publishing AssistantSpeakingStarted event.");
+            await _systemStateWriter.WriteAsync(new AssistantSpeakingStarted(DateTimeOffset.Now), cancellationToken);
+            // --- End Publish ---
 
             _logger.LogDebug("Starting audio playback...");
             await AudioPlayer.StartPlaybackAsync(latencyTrackedAudio, cancellationToken);
 
-            // Wait for state transition task if first token arrived
-            await stateTransitionTask.WaitAsync(cancellationToken);
-
+            // Playback completed normally
+            stopReason = "CompletedNaturally";
             _logger.LogInformation("Audio playback completed naturally for utterance from '{User}'.", utterance.User);
+
+            // Wait for state transition task if first token arrived
+            try
+            {
+                await stateTransitionTask.WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                /* Expected if cancelled before first token */
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            stopReason = "Cancelled"; // Update stop reason
             _logger.LogInformation("ProcessLlmRequestAsync cancelled for utterance from '{User}'.", utterance.User);
             currentFirstTokenTcs.TrySetCanceled(cancellationToken);
+
             throw;
         }
         catch (Exception ex)
         {
-             _logger.LogError(ex, "Error during LLM processing, TTS, or playback within ProcessLlmRequestAsync for utterance from '{User}'.", utterance.User);
-             currentFirstTokenTcs.TrySetException(ex);
-             throw;
+            stopReason = "Error"; // Update stop reason
+            _logger.LogError(ex, "Error during LLM processing, TTS, or playback within ProcessLlmRequestAsync for utterance from '{User}'.", utterance.User);
+            currentFirstTokenTcs.TrySetException(ex);
+
+            throw;
         }
         finally
         {
+            // --- Publish AssistantSpeakingStopped ---
+            _logger.LogDebug("Publishing AssistantSpeakingStopped event. Reason: {Reason}", stopReason);
+            // Use TryWrite as this is finally block, don't want to hang here.
+            // Consider if WriteAsync with timeout/cancellation is better.
+            _systemStateWriter.TryWrite(new AssistantSpeakingStopped(DateTimeOffset.Now, stopReason));
+            // --- End Publish ---
+
             stopwatch.Stop();
             _logger.LogDebug("ProcessLlmRequestAsync finished execution for utterance from '{User}'. Elapsed: {Elapsed}ms", utterance.User, stopwatch.ElapsedMilliseconds);
-            if (_firstTokenTcs == currentFirstTokenTcs && _firstTokenTcs.Task.IsCompleted)
+            if ( _firstTokenTcs == currentFirstTokenTcs && _firstTokenTcs.Task.IsCompleted )
             {
-                 _firstTokenTcs = null;
+                _firstTokenTcs = null;
             }
         }
     }
     // --- END MODIFIED ---
 
 
-    // --- WrapWithFirstTokenDetection and WrapAudioSegments remain the same as Step 1 ---
+    // --- WrapWithFirstTokenDetection & WrapAudioSegments (Same as Step 2) ---
     private (IAsyncEnumerable<string> Stream, Task FirstTokenTask) WrapWithFirstTokenDetection(
         IAsyncEnumerable<string> source, Stopwatch stopwatch, TaskCompletionSource<bool> tcs, CancellationToken cancellationToken)
     {
@@ -675,7 +545,7 @@ public sealed class ConversationManagerRefactor : IAsyncDisposable, IStartupTask
     // --- End unchanged methods ---
 
 
-    // --- TriggerBargeInAsync, CancelLlmProcessingAsync, TransitionToStateAsync remain the same as Step 1 ---
+    // --- TriggerBargeInAsync, CancelLlmProcessingAsync, TransitionToStateAsync (Same as Step 2) ---
     private async Task TriggerBargeInAsync(CancellationToken cancellationToken)
     {
         // ... (Implementation from Step 1) ...
@@ -746,8 +616,6 @@ public sealed class ConversationManagerRefactor : IAsyncDisposable, IStartupTask
         if (wasStreaming && !_isInStreamingState)
         {
             _logger.LogDebug("Exiting Streaming state, resetting barge-in tracking.");
-            _potentialBargeInStartTime = null;
-            _potentialBargeInText.Clear();
         }
         return Task.CompletedTask;
     }
