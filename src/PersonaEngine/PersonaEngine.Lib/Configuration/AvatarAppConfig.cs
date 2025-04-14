@@ -1,4 +1,5 @@
-﻿using PersonaEngine.Lib.Core.Conversation.Detection;
+﻿using PersonaEngine.Lib.Core.Conversation.Context;
+using PersonaEngine.Lib.Core.Conversation.Detection;
 using PersonaEngine.Lib.Core.Conversation.Transcription;
 
 namespace PersonaEngine.Lib.Configuration;
@@ -28,4 +29,6 @@ public record AvatarAppConfig
     public BargeInDetectorOptions BargeInDetector { get; set; } = new();
     
     public TranscriptionServiceOptions[]  InputAdapters { get; set; } = [];
+    
+    public ContextManagerOptions ContextManager { get; set; } = new();
 }

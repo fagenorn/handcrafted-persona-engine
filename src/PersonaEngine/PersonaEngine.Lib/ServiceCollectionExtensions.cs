@@ -19,6 +19,7 @@ using PersonaEngine.Lib.Core.Conversation;
 using PersonaEngine.Lib.Core.Conversation.Adapters;
 using PersonaEngine.Lib.Core.Conversation.Aggregation;
 using PersonaEngine.Lib.Core.Conversation.Common.Messaging;
+using PersonaEngine.Lib.Core.Conversation.Context;
 using PersonaEngine.Lib.Core.Conversation.Contracts.Interfaces;
 using PersonaEngine.Lib.Core.Conversation.Detection;
 using PersonaEngine.Lib.Core.Conversation.Transcription;
@@ -82,11 +83,15 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ILlmProcessor, LlmProcessor>();
         services.AddSingleton<IAudioOutputService, AudioOutputService>();
 
-        // 2. Background Processing Services (Register as Singletons)
+        // 2. Register Context Manager & Options
+        services.Configure<ContextManagerOptions>(configuration.GetSection("Config:ContextManager"));
+        services.AddSingleton<IContextManager, ContextManager>();
+        
+        // 3. Background Processing Services (Register as Singletons)
         services.AddSingleton<IUtteranceAggregator, UtteranceAggregator>();
         services.AddSingleton<IBargeInDetector, BargeInDetector>();
 
-        // 3. Input Adapters (Configure and Register)
+        // 4. Input Adapters (Configure and Register)
         // Configure options for TranscriptionService from appsettings.json
         services.Configure<TranscriptionServiceOptions>(configuration.GetSection("Config:InputAdapters:Microphone1"));
 
@@ -96,7 +101,7 @@ public static class ServiceCollectionExtensions
 
         // --- Add registration for other IInputAdapters here when created ---
 
-        // 4. Output Adapters (Register and Run as Hosted Services)
+        // 5. Output Adapters (Register and Run as Hosted Services)
         services.AddSingleton<AudioOutputAdapter>();
         services.AddSingleton<IOutputAdapter>(sp => sp.GetRequiredService<AudioOutputAdapter>());
         services.AddSingleton<IStartupTask>(sp => sp.GetRequiredService<AudioOutputAdapter>());
@@ -107,7 +112,7 @@ public static class ServiceCollectionExtensions
 
         // --- Add registration for other IOutputAdapters here when created ---
 
-        // 5. Register background services that need starting (as IStartupTask)
+        // 6. Register background services that need starting (as IStartupTask)
 
         // Modify UtteranceAggregator, BargeInDetector, ConversationOrchestrator to implement IStartupTask
         // Add StartAsync/StopAsync to them that call the existing start/stop logic.
@@ -125,7 +130,7 @@ public static class ServiceCollectionExtensions
         // Create a simple IStartupTask to start the internal components
         services.AddSingleton<IStartupTask, InternalConversationServicesManager>();
 
-        // 6. Configuration for Detectors/Aggregators
+        // 7. Configuration for Detectors/Aggregators
         services.Configure<BargeInDetectorOptions>(configuration.GetSection("Config:BargeInDetector"));
         // Add configuration for UtteranceAggregator silence timeout if needed
 
