@@ -11,8 +11,12 @@ public interface IChannelRegistry
 {
     /// <summary>
     /// Gets the channel dedicated to publishing and consuming transcription events.
+    /// (both potential and final).
     /// </summary>
     Channel<ITranscriptionEvent> TranscriptionEvents { get; }
     
-    // Add other channels here as needed for different event types
+    /// <summary>
+    /// Gets the channel dedicated to publishing and consuming completed user utterance events.
+    /// </summary>
+    Channel<UserUtteranceCompleted> UtteranceCompletionEvents { get; } 
 }
