@@ -35,6 +35,7 @@
         <PackageReference Include="Silk.NET.Input.Extensions" Version="2.22.0"/>
         <PackageReference Include="SixLabors.ImageSharp" Version="3.1.7"/>
         <PackageReference Include="Spout.NETCore" Version="1.0.0"/>
+        <PackageReference Include="Stateless" Version="5.17.0" />
         <PackageReference Include="System.Runtime.Caching" Version="9.0.2"/>
         <PackageReference Include="Whisper.net" Version="1.8.1" />
         <PackageReference Include="Whisper.net.Runtime.Cuda.Windows" Version="1.8.1" />
