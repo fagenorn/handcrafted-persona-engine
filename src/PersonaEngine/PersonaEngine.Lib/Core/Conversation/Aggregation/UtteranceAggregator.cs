@@ -1,4 +1,9 @@
-﻿using System.Text;
+﻿// ========================================================================
+// FILE: src/PersonaEngine/PersonaEngine.Lib/Core/Conversation/Aggregation/UtteranceAggregator.cs
+// REASON: Simplified logic to rely solely on IRealtimeSpeechTranscriptor's
+//         segmentation (VAD). Removed internal silence timer and buffering.
+//         Each FinalTranscriptSegmentReceived is now treated as a complete utterance.
+// ========================================================================
 using System.Threading.Channels;
 
 using Microsoft.Extensions.Logging;
@@ -8,19 +13,15 @@ using PersonaEngine.Lib.Core.Conversation.Contracts.Events;
 
 namespace PersonaEngine.Lib.Core.Conversation.Aggregation;
 
+/// <summary>
+///     Service responsible for converting final transcript segments directly into completed utterances,
+///     relying on the upstream transcription service (IRealtimeSpeechTranscriptor) for segmentation via VAD.
+/// </summary>
 public sealed class UtteranceAggregator : IUtteranceAggregator
 {
-    private static readonly TimeSpan DefaultSilenceTimeout = TimeSpan.FromSeconds(1.5);
-
     private readonly ILogger<UtteranceAggregator> _logger;
 
-    private readonly TimeSpan _silenceTimeout;
-
-    private readonly Lock _stateLock = new();
-
     private readonly ChannelReader<ITranscriptionEvent> _transcriptionEventReader;
-
-    private readonly Dictionary<string, UtteranceBuilderState> _utteranceBuilders = new();
 
     private readonly ChannelWriter<UserUtteranceCompleted> _utteranceWriter;
 
@@ -30,15 +31,14 @@ public sealed class UtteranceAggregator : IUtteranceAggregator
 
     public UtteranceAggregator(
         IChannelRegistry             channelRegistry,
-        ILogger<UtteranceAggregator> logger,
-        TimeSpan?                    silenceTimeout = null)
+        ILogger<UtteranceAggregator> logger)
     {
-        _transcriptionEventReader = channelRegistry.TranscriptionEvents.Reader ?? throw new ArgumentNullException(nameof(channelRegistry));
-        _utteranceWriter          = channelRegistry.UtteranceCompletionEvents.Writer ?? throw new ArgumentNullException(nameof(channelRegistry));
+        // Removed silenceTimeout parameter as it's no longer used
+        _transcriptionEventReader = channelRegistry.TranscriptionEvents.Reader ?? throw new ArgumentNullException(nameof(channelRegistry.TranscriptionEvents));
+        _utteranceWriter          = channelRegistry.UtteranceCompletionEvents.Writer ?? throw new ArgumentNullException(nameof(channelRegistry.UtteranceCompletionEvents));
         _logger                   = logger ?? throw new ArgumentNullException(nameof(logger));
-        _silenceTimeout           = silenceTimeout ?? DefaultSilenceTimeout;
 
-        _logger.LogInformation("UtteranceAggregator created with SilenceTimeout: {Timeout}ms", _silenceTimeout.TotalMilliseconds);
+        _logger.LogInformation("UtteranceAggregator created (Simplified: Relies on upstream VAD/segmentation).");
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -61,24 +61,35 @@ public sealed class UtteranceAggregator : IUtteranceAggregator
         }
 
         _logger.LogInformation("Stopping UtteranceAggregator...");
-        await _serviceCts.CancelAsync();
+        // Use CancelAsync for potentially cleaner cancellation if available
+        try
+        {
+            await _serviceCts.CancelAsync();
+        }
+        catch
+        {
+            _serviceCts.Cancel();
+        }
 
         try
         {
             await _executionTask.WaitAsync(TimeSpan.FromSeconds(5));
             _logger.LogInformation("UtteranceAggregator execution task completed.");
-
-            FinalizeAllUtterances("Service stopping");
+            // No utterances to finalize anymore
         }
         catch (OperationCanceledException)
         {
             _logger.LogInformation("UtteranceAggregator loop cancelled gracefully.");
-            FinalizeAllUtterances("Service cancelled");
+            // No utterances to finalize anymore
         }
         catch (TimeoutException)
         {
             _logger.LogWarning("Timeout waiting for utterance aggregator loop to stop.");
-            FinalizeAllUtterances("Service stop timeout");
+            // No utterances to finalize anymore
+        }
+        catch (Exception ex) when (_executionTask.IsFaulted) // Catch exceptions from the task itself
+        {
+            _logger.LogError(ex, "Error during utterance aggregator execution: {ExceptionMessage}", _executionTask.Exception?.InnerException?.Message ?? ex.Message);
         }
         catch (Exception ex)
         {
@@ -86,7 +97,7 @@ public sealed class UtteranceAggregator : IUtteranceAggregator
         }
         finally
         {
-            _utteranceWriter.TryComplete();
+            _utteranceWriter.TryComplete(); // Ensure writer is completed
             _serviceCts?.Dispose();
             _serviceCts    = null;
             _executionTask = null;
@@ -101,18 +112,49 @@ public sealed class UtteranceAggregator : IUtteranceAggregator
         _logger.LogInformation("UtteranceAggregator disposed.");
     }
 
+    /// <summary>
+    ///     Processes transcription events, converting each final segment into a completed utterance.
+    /// </summary>
     private async Task ProcessEventsAsync(CancellationToken cancellationToken)
     {
-        _logger.LogDebug("Starting utterance aggregation event loop.");
+        _logger.LogDebug("Starting simplified utterance aggregation event loop.");
         try
         {
+            // Read all transcription events
             await foreach ( var transcriptionEvent in _transcriptionEventReader.ReadAllAsync(cancellationToken) )
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if ( transcriptionEvent is FinalTranscriptSegmentReceived finalSegment )
+                // Only process final, non-empty segments
+                if ( transcriptionEvent is FinalTranscriptSegmentReceived finalSegment &&
+                     !string.IsNullOrWhiteSpace(finalSegment.Text) )
                 {
-                    ProcessFinalSegment(finalSegment);
+                    _logger.LogTrace("Processing FinalTranscriptSegmentReceived for SourceId: {SourceId}", finalSegment.SourceId);
+
+                    // Create UserUtteranceCompleted directly from the final segment
+                    var completedEvent = new UserUtteranceCompleted(
+                                                                    finalSegment.Text.Trim(), // Use segment text directly
+                                                                    finalSegment.SourceId,
+                                                                    finalSegment.User,      // Assuming User is populated by TranscriptionService
+                                                                    finalSegment.Timestamp, // Start and End are the same
+                                                                    finalSegment.Timestamp,
+                                                                    new List<FinalTranscriptSegmentReceived> { finalSegment } // Include the single segment
+                                                                   );
+
+                    _logger.LogInformation("Publishing UserUtteranceCompleted from final segment. SourceId: {SourceId}, Length: {Length}",
+                                           completedEvent.SourceId, completedEvent.AggregatedText.Length);
+
+                    // Use TryWrite to avoid blocking if the downstream channel is full
+                    if ( !_utteranceWriter.TryWrite(completedEvent) )
+                    {
+                        _logger.LogWarning("Failed to write completed utterance to channel for SourceId: {SourceId} (Channel full or closed).", finalSegment.SourceId);
+                        // Depending on requirements, could implement retry or drop logic here
+                    }
+                }
+                else if ( transcriptionEvent is PotentialTranscriptUpdate potentialUpdate )
+                {
+                    // Ignore potential updates in this simplified model
+                    _logger.LogTrace("Ignoring PotentialTranscriptUpdate for SourceId: {SourceId}", potentialUpdate.SourceId);
                 }
             }
         }
@@ -127,172 +169,13 @@ public sealed class UtteranceAggregator : IUtteranceAggregator
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error in utterance aggregation loop.");
-            _utteranceWriter.TryComplete(ex);
+            _utteranceWriter.TryComplete(ex); // Signal error downstream
         }
         finally
         {
             _logger.LogInformation("Utterance aggregation event loop completed.");
-            _utteranceWriter.TryComplete();
-
-            lock (_stateLock)
-            {
-                foreach ( var builder in _utteranceBuilders.Values )
-                {
-                    builder.DisposeTimer();
-                }
-
-                _utteranceBuilders.Clear();
-            }
-        }
-    }
-
-    private void ProcessFinalSegment(FinalTranscriptSegmentReceived segment)
-    {
-        lock (_stateLock)
-        {
-            if ( !_utteranceBuilders.TryGetValue(segment.SourceId, out var builder) )
-            {
-                builder = new UtteranceBuilderState(segment, UtteranceTimedOut, _silenceTimeout, _logger);
-                _utteranceBuilders.Add(segment.SourceId, builder);
-                _logger.LogDebug("Started new utterance builder for SourceId: {SourceId}", segment.SourceId);
-            }
-            else
-            {
-                builder.AddSegment(segment);
-                _logger.LogTrace("Appended segment to utterance for SourceId: {SourceId}", segment.SourceId);
-            }
-
-            builder.ResetTimer();
-        }
-    }
-
-    private void UtteranceTimedOut(object? state)
-    {
-        if ( state is not string sourceId )
-        {
-            return;
-        }
-
-        _logger.LogDebug("Utterance timeout detected for SourceId: {SourceId}", sourceId);
-        FinalizeUtterance(sourceId, "Timeout");
-    }
-
-    private void FinalizeUtterance(string sourceId, string reason)
-    {
-        UserUtteranceCompleted? completedEvent = null;
-        lock (_stateLock)
-        {
-            if ( _utteranceBuilders.Remove(sourceId, out var builder) )
-            {
-                completedEvent = builder.CompleteUtterance();
-                builder.DisposeTimer();
-                _logger.LogInformation("Finalized utterance for SourceId: {SourceId}. Reason: {Reason}. Length: {Length}",
-                                       sourceId, reason, completedEvent.AggregatedText.Length);
-            }
-            else
-            {
-                _logger.LogWarning("Attempted to finalize utterance for SourceId {SourceId}, but no builder was found (possibly already finalized). Reason: {Reason}", sourceId, reason);
-            }
-        }
-
-        if ( completedEvent == null )
-        {
-            return;
-        }
-
-        // Use TryWrite, as writing might block if channel is full and downstream is slow.
-        // Or use WriteAsync carefully if backpressure is desired.
-        // Consider adding cancellation token if using WriteAsync.
-        if ( !_utteranceWriter.TryWrite(completedEvent) )
-        {
-            _logger.LogWarning("Failed to write completed utterance to channel for SourceId: {SourceId} (Channel full or closed).", sourceId);
-        }
-    }
-
-    private void FinalizeAllUtterances(string reason)
-    {
-        _logger.LogInformation("Finalizing all pending utterances. Reason: {Reason}", reason);
-        List<string> sourceIds;
-        lock (_stateLock)
-        {
-            sourceIds = new List<string>(_utteranceBuilders.Keys);
-        }
-
-        foreach ( var sourceId in sourceIds )
-        {
-            FinalizeUtterance(sourceId, reason);
-        }
-
-        _logger.LogInformation("Finished finalizing all pending utterances.");
-    }
-
-    private class UtteranceBuilderState
-    {
-        private readonly ILogger _logger;
-
-        private readonly List<FinalTranscriptSegmentReceived> _segments = new();
-
-        private readonly StringBuilder _textBuilder = new();
-
-        private readonly TimeSpan _timeoutDuration;
-
-        private Timer? _timer;
-
-        public UtteranceBuilderState(FinalTranscriptSegmentReceived firstSegment, TimerCallback timeoutCallback, TimeSpan timeoutDuration, ILogger logger)
-        {
-            SourceId             = firstSegment.SourceId;
-            User                 = firstSegment.User;
-            StartTimestamp       = firstSegment.Timestamp;
-            LastSegmentTimestamp = firstSegment.Timestamp;
-            _timeoutDuration     = timeoutDuration;
-            _logger              = logger;
-
-            _segments.Add(firstSegment);
-            _textBuilder.Append(firstSegment.Text).Append(" ");
-
-            // Initialize timer but don't start it immediately? Or start now? Let's start now.
-            _timer = new Timer(timeoutCallback, SourceId, _timeoutDuration, Timeout.InfiniteTimeSpan);
-        }
-
-        public string User { get; private set; }
-
-        public DateTimeOffset StartTimestamp { get; }
-
-        public DateTimeOffset LastSegmentTimestamp { get; private set; }
-
-        public string SourceId { get; }
-
-        public void AddSegment(FinalTranscriptSegmentReceived segment)
-        {
-            // Update user if it changes (take the latest?) - depends on desired logic
-            // User = segment.User;
-            LastSegmentTimestamp = segment.Timestamp;
-            _segments.Add(segment);
-            _textBuilder.Append(segment.Text).Append(" ");
-        }
-
-        public void ResetTimer()
-        {
-            _timer?.Change(_timeoutDuration, Timeout.InfiniteTimeSpan);
-            _logger.LogTrace("Reset utterance timer for SourceId: {SourceId}", SourceId);
-        }
-
-        public void DisposeTimer()
-        {
-            _timer?.Dispose();
-            _timer = null;
-        }
-
-        public UserUtteranceCompleted CompleteUtterance()
-        {
-            return new UserUtteranceCompleted(
-                                              _textBuilder.ToString().Trim(),
-                                              SourceId,
-                                              User,
-                                              StartTimestamp,
-                                              LastSegmentTimestamp,
-                                              _segments.AsReadOnly()
-                                             );
+            _utteranceWriter.TryComplete(); // Ensure completion is signaled
+            // No builders or timers to clean up
         }
     }
 }
