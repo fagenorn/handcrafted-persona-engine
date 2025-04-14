@@ -82,7 +82,7 @@ public class SemanticKernelChatEngine : IChatEngine
             }
         }
 
-        var userMsgId = historyManager.AddUserMessage($"[{userInput.speaker}]{userInput.content.Trim()}");
+        var userMsgId = historyManager.AddUserMessage($"[{userInput.User}]{userInput.Content.Trim()}");
 
         var cleanupNeeded = true;
         var stopwatch     = Stopwatch.StartNew();

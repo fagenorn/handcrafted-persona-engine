@@ -2,7 +2,7 @@ using Microsoft.SemanticKernel;
 
 namespace PersonaEngine.Lib.LLM;
 
-public record ChatMessage(string speaker, string content);
+public record ChatMessage(string User, string Content);
 
 public record InjectionMetadata(IEnumerable<string> Topics, string Context, string VisualContext);
 
