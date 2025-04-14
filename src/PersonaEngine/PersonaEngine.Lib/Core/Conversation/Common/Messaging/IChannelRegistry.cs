@@ -30,4 +30,9 @@ public interface IChannelRegistry
     ///     Gets the channel for publishing and consuming barge-in detection events.
     /// </summary>
     Channel<BargeInDetected> BargeInEvents { get; }
+    
+    /// <summary>
+    /// Gets the channel for publishing and consuming requests for output processing.
+    /// </summary>
+    Channel<ProcessOutputRequest> OutputRequests { get; } 
 }

@@ -1,4 +1,7 @@
-﻿namespace PersonaEngine.Lib.Configuration;
+﻿using PersonaEngine.Lib.Core.Conversation.Detection;
+using PersonaEngine.Lib.Core.Conversation.Transcription;
+
+namespace PersonaEngine.Lib.Configuration;
 
 public record AvatarAppConfig
 {
@@ -21,4 +24,8 @@ public record AvatarAppConfig
     public VisionConfig Vision { get; set; } = new();
 
     public RouletteWheelOptions RouletteWheel { get; set; } = new();
+    
+    public BargeInDetectorOptions BargeInDetector { get; set; } = new();
+    
+    public TranscriptionServiceOptions[]  InputAdapters { get; set; } = [];
 }

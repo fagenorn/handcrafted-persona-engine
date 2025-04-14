@@ -20,4 +20,7 @@ public sealed class ChannelRegistry : IChannelRegistry
 
     public Channel<BargeInDetected> BargeInEvents { get; } =
         Channel.CreateBounded<BargeInDetected>(new BoundedChannelOptions(10) { SingleReader = false, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait });
+
+    public Channel<ProcessOutputRequest> OutputRequests { get; } =
+        Channel.CreateBounded<ProcessOutputRequest>(new BoundedChannelOptions(50) { SingleReader = false, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait });
 }

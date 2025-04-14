@@ -1,4 +1,5 @@
-﻿using System.Threading.Channels;
+﻿using System.Text;
+using System.Threading.Channels;
 
 using Microsoft.Extensions.Logging;
 
@@ -12,8 +13,6 @@ namespace PersonaEngine.Lib.Core.Conversation;
 
 public class ConversationOrchestrator : IConversationOrchestrator
 {
-    private readonly IAudioOutputService _audioOutputService;
-
     private readonly IChannelRegistry _channelRegistry;
 
     private readonly string _llmContext = "Relaxed discussion in discord voice chat.";
@@ -23,6 +22,8 @@ public class ConversationOrchestrator : IConversationOrchestrator
     private readonly Lock _lock = new();
 
     private readonly ILogger<ConversationOrchestrator> _logger;
+
+    private readonly ChannelWriter<ProcessOutputRequest> _outputRequestWriter;
 
     private readonly List<string> _topics = ["casual conversation"];
 
@@ -37,15 +38,14 @@ public class ConversationOrchestrator : IConversationOrchestrator
     public ConversationOrchestrator(
         IChannelRegistry                  channelRegistry,
         ILlmProcessor                     llmProcessor,
-        IAudioOutputService               audioOutputService,
         IVisualQAService                  visualQaService,
         ILogger<ConversationOrchestrator> logger)
     {
-        _channelRegistry    = channelRegistry;
-        _llmProcessor       = llmProcessor;
-        _audioOutputService = audioOutputService;
-        _visualQaService    = visualQaService;
-        _logger             = logger;
+        _channelRegistry     = channelRegistry;
+        _llmProcessor        = llmProcessor;
+        _visualQaService     = visualQaService;
+        _logger              = logger;
+        _outputRequestWriter = channelRegistry.OutputRequests.Writer;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -242,34 +242,17 @@ public class ConversationOrchestrator : IConversationOrchestrator
             switch ( stateEvent )
             {
                 case AssistantSpeakingStarted started:
-                    _logger.LogDebug("Orchestrator noted AssistantSpeakingStarted.");
-                    if ( _currentState == State.Processing )
-                    {
-                        TransitionTo(State.Streaming);
-                    }
-                    else
-                    {
-                        _logger.LogWarning("AssistantSpeakingStarted received but state was {State}.", _currentState);
-                    }
+                    _logger.LogDebug("Orchestrator noted AssistantSpeakingStarted event from an adapter.");
 
+                    // Don't transition Orchestrator state based on this anymore.
+                    // Just potentially use this info for barge-in logic enablement (which BargeInDetector already does).
                     break;
 
                 case AssistantSpeakingStopped stopped:
-                    _logger.LogDebug("Orchestrator noted AssistantSpeakingStopped. Reason: {Reason}", stopped.Reason);
-                    if ( _currentState is State.Streaming or State.Cancelling )
-                    {
-                        if ( stopped.Reason is AssistantStopReason.Cancelled or AssistantStopReason.Error )
-                        {
-                            ClearActiveTask("Assistant stopped due to cancellation/error");
-                        }
+                    _logger.LogDebug("Orchestrator noted AssistantSpeakingStopped event from an adapter. Reason: {Reason}", stopped.Reason);
 
-                        TransitionTo(State.Idle);
-                    }
-                    else
-                    {
-                        _logger.LogWarning("AssistantSpeakingStopped received but state was {State}.", _currentState);
-                    }
-
+                    // Don't transition Orchestrator state based on this anymore.
+                    // The flow reaches Idle when publishing is done or it fails/cancels.
                     break;
             }
         }
@@ -280,10 +263,10 @@ public class ConversationOrchestrator : IConversationOrchestrator
     private async Task ProcessUtteranceFlowAsync(UserUtteranceCompleted utterance)
     {
         CancellationTokenSource? currentCts = null;
+        Task?                    flowTask   = null; // Task representing the whole flow (LLM + publishing)
 
-        lock (_lock) // Assign CTS under lock
+        lock (_lock)
         {
-            // Ensure we are still in Processing state
             if ( _currentState != State.Processing )
             {
                 _logger.LogWarning("ProcessUtteranceFlowAsync started but state changed to {State}. Aborting.", _currentState);
@@ -291,83 +274,162 @@ public class ConversationOrchestrator : IConversationOrchestrator
                 return;
             }
 
-            _activeProcessingCts?.Dispose(); // Dispose previous if any (shouldn't happen ideally)
+            _activeProcessingCts?.Dispose();
             _activeProcessingCts  = new CancellationTokenSource();
-            currentCts            = _activeProcessingCts; // Capture the current CTS
-            _activeProcessingTask = Task.CompletedTask;   // Placeholder, actual task assigned below
+            currentCts            = _activeProcessingCts;
+            _activeProcessingTask = null; // Placeholder, actual task assigned below
         }
 
-        _logger.LogInformation("Starting LLM processing flow for utterance from {User}.", utterance.User);
-        var                       cancellationToken = currentCts.Token;
-        IAsyncEnumerable<string>? llmStream         = null;
+        _logger.LogInformation("Starting LLM processing flow for utterance from {User} (SourceId: {SourceId}).", utterance.User, utterance.SourceId);
+        var cancellationToken = currentCts.Token;
 
         try
         {
-            // 1. Get LLM Response Stream
-            var message = new ChatMessage(utterance.User, utterance.AggregatedText);
-            var metadata = new InjectionMetadata(
-                                                 _topics.AsReadOnly(),
-                                                 _llmContext,
-                                                 _visualQaService.ScreenCaption ?? string.Empty); // Get latest caption
+            // --- Create the actual processing task ---
+            flowTask = Task.Run(async () =>
+                                {
+                                    // Encapsulate the logic in a task
+                                    IAsyncEnumerable<string>? llmStream          = null;
+                                    string?                   aggregatedResponse = null;
 
-            // --- Call LLM Processor ---
-            llmStream = _llmProcessor.GetStreamingChatResponseAsync(message, metadata, cancellationToken);
+                                    try
+                                    {
+                                        // 1. Get LLM Response Stream
+                                        var message = new ChatMessage(utterance.User, utterance.AggregatedText);
+                                        var metadata = new InjectionMetadata(
+                                                                             _topics.AsReadOnly(),
+                                                                             _llmContext,
+                                                                             _visualQaService.ScreenCaption ?? string.Empty);
 
-            if ( llmStream == null )
-            {
-                _logger.LogWarning("LLM Processor returned null stream.");
+                                        llmStream = _llmProcessor.GetStreamingChatResponseAsync(message, metadata, cancellationToken);
 
-                throw new InvalidOperationException("LLM processing failed to return a stream.");
-            }
+                                        if ( llmStream == null )
+                                        {
+                                            _logger.LogWarning("LLM Processor returned null stream.");
+
+                                            throw new InvalidOperationException("LLM processing failed to return a stream.");
+                                        }
+
+                                        // 2. Aggregate LLM Response (Simple aggregation for Phase 1)
+                                        _logger.LogDebug("Aggregating LLM response stream...");
+                                        var responseBuilder = new StringBuilder();
+                                        await foreach ( var chunk in llmStream.WithCancellation(cancellationToken) )
+                                        {
+                                            cancellationToken.ThrowIfCancellationRequested(); // Check frequently during aggregation
+                                            responseBuilder.Append(chunk);
+                                        }
+
+                                        aggregatedResponse = responseBuilder.ToString();
+                                        _logger.LogInformation("LLM response aggregated (Length: {Length}).", aggregatedResponse.Length);
+
+                                        if ( string.IsNullOrWhiteSpace(aggregatedResponse) )
+                                        {
+                                            _logger.LogWarning("LLM returned empty or whitespace response.");
+
+                                            // Decide whether to publish an empty request or just transition to Idle
+                                            // Let's not publish anything for an empty response.
+                                            return; // Exit the task successfully
+                                        }
+
+                                        // 3. Publish Output Request
+                                        _logger.LogDebug("Publishing ProcessOutputRequest...");
+                                        var outputRequest = new ProcessOutputRequest(
+                                                                                     aggregatedResponse,
+                                                                                     utterance.SourceId // Pass originating SourceId for context
+                                                                                     // Add other metadata if needed, e.g., utterance start time
+                                                                                     // Metadata = new Dictionary<string, object> { { "UtteranceStartTime", utterance.StartTimestamp } }
+                                                                                    );
+
+                                        // Check for cancellation *before* writing to the channel
+                                        cancellationToken.ThrowIfCancellationRequested();
+
+                                        await _outputRequestWriter.WriteAsync(outputRequest, cancellationToken);
+                                        _logger.LogDebug("ProcessOutputRequest published.");
+                                    }
+                                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                                    {
+                                        _logger.LogInformation("LLM/Aggregation/Publishing task cancelled.");
+
+                                        // Let the exception propagate to the outer catch block of ProcessUtteranceFlowAsync
+                                        throw;
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        _logger.LogError(ex, "Error during LLM/Aggregation/Publishing task.");
+
+                                        // Let the exception propagate
+                                        throw;
+                                    }
+                                }, cancellationToken); // Pass token to Task.Run
 
             // --- Assign task under lock ---
-            // The task represents the *rest* of the flow (audio playback)
-            Task audioTask;
             lock (_lock)
             {
-                if ( cancellationToken.IsCancellationRequested )
+                // Check if state changed or cancelled while task was being set up
+                if ( _activeProcessingCts != currentCts || cancellationToken.IsCancellationRequested )
                 {
-                    throw new OperationCanceledException(); // Check before starting audio
-                }
+                    _logger.LogWarning("State or cancellation changed during flow task setup. Aborting assignment.");
+                    // Cancel the newly created task if it wasn't already cancelled
+                    if ( !cancellationToken.IsCancellationRequested )
+                    {
+                        currentCts.Cancel();
+                    }
 
-                // Create the task for audio playback but don't await yet
-                audioTask             = _audioOutputService.PlayTextStreamAsync(llmStream, utterance.StartTimestamp, cancellationToken);
-                _activeProcessingTask = audioTask; // Track the audio task
+                    flowTask = null; // Don't track it
+                    // Manually transition back to Idle if needed? The finally block should handle this.
+                }
+                else
+                {
+                    _activeProcessingTask = flowTask; // Track the flow task
+                }
             }
 
-            // 2. Await Audio Playback (outside lock)
-            _logger.LogDebug("Awaiting audio playback task...");
-            await audioTask; // Await the task returned and tracked
+            // --- Await the flow task completion (outside lock) ---
+            if ( flowTask != null )
+            {
+                _logger.LogDebug("Awaiting LLM/Aggregation/Publishing task...");
+                await flowTask; // Await the task completion
 
-            // If we reach here without exceptions or cancellation, it completed naturally
-            var flowCompletedSuccessfully = !cancellationToken.IsCancellationRequested;
-            _logger.LogInformation("LLM/Audio processing flow completed. Success: {Success}", flowCompletedSuccessfully);
+                // If we reach here without exceptions or cancellation, it completed naturally
+                var flowCompletedSuccessfully = !cancellationToken.IsCancellationRequested;
+                _logger.LogInformation("LLM/Aggregation/Publishing flow completed. Success: {Success}", flowCompletedSuccessfully);
+            }
         }
         catch (OperationCanceledException)
         {
-            _logger.LogInformation("LLM/Audio processing flow was cancelled.");
-            // State transition handled by AssistantSpeakingStopped(Cancelled) or direct cancellation logic
+            _logger.LogInformation("LLM/Aggregation/Publishing flow was cancelled (outer catch).");
+            // State transition handled by finally block or AssistantSpeakingStopped(Cancelled) if audio started somehow (it shouldn't now)
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during LLM/Audio processing flow.");
-            // State transition handled by AssistantSpeakingStopped(Error)
+            _logger.LogError(ex, "Error during LLM/Aggregation/Publishing flow (outer catch).");
+            // State transition handled by finally block or AssistantSpeakingStopped(Error)
         }
         finally
         {
             lock (_lock)
             {
-                // Only clear/transition if this specific flow's CTS is still the active one
                 if ( _activeProcessingCts == currentCts )
                 {
                     ClearActiveTask("Flow finally block");
-
-                    // If state wasn't already set back to Idle by AssistantSpeakingStopped, do it now.
-                    // This handles cases where LLM fails before audio starts.
-                    if ( _currentState == State.Processing || _currentState == State.Streaming || _currentState == State.Cancelling )
+                    // Ensure transition back to Idle happens reliably.
+                    // Since output is now decoupled, we transition to Idle once the request is published (or fails).
+                    // AssistantSpeaking events are now just informational for barge-in.
+                    if ( _currentState == State.Processing ) // Should transition from Processing
                     {
                         _logger.LogDebug("Transitioning to Idle in flow finally block.");
                         TransitionTo(State.Idle);
+                    }
+                    else if ( _currentState == State.Cancelling )
+                    {
+                        // If cancellation happened, ensure we end up Idle.
+                        _logger.LogDebug("Transitioning to Idle after cancellation in flow finally block.");
+                        TransitionTo(State.Idle);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("In finally block, state was {State}, expected Processing or Cancelling. Forcing Idle.", _currentState);
+                        TransitionTo(State.Idle); // Force idle state if something went wrong
                     }
                 }
                 else
@@ -378,8 +440,6 @@ public class ConversationOrchestrator : IConversationOrchestrator
         }
     }
 
-    // --- State Management & Cancellation ---
-
     private void TransitionTo(State newState)
     {
         // Assumes lock is held
@@ -389,10 +449,15 @@ public class ConversationOrchestrator : IConversationOrchestrator
         }
 
         _logger.LogInformation("Orchestrator state transition: {OldState} -> {NewState}", _currentState, newState);
+        var oldState = _currentState;
         _currentState = newState;
 
+        // State 'Streaming' is less relevant now for the orchestrator itself.
+        // Might remove it later if AudioOutputAdapter handles all audio-related state.
+        // Keep it for now, but don't transition *to* it from Processing.
+
         // Reset things when becoming Idle
-        if ( newState == State.Idle )
+        if ( newState == State.Idle && oldState != State.Idle )
         {
             ClearActiveTask("Transitioning to Idle");
         }
@@ -400,21 +465,28 @@ public class ConversationOrchestrator : IConversationOrchestrator
 
     private async Task CancelCurrentActivityAsync(string reason)
     {
-        _logger.LogInformation("Attempting to cancel current activity. Reason: {Reason}", reason);
-        CancellationTokenSource? ctsToCancel   = null;
-        Task?                    audioStopTask = null;
+        _logger.LogInformation("Attempting to cancel current activity (LLM/Aggregation/Publishing flow). Reason: {Reason}", reason);
+        CancellationTokenSource? ctsToCancel = null;
+        Task?                    taskToAwait = null;
 
         lock (_lock)
         {
-            if ( _currentState == State.Processing || _currentState == State.Streaming )
+            // Can cancel during Processing state now
+            if ( _currentState == State.Processing ) // Streaming state might become obsolete
             {
+                // If already cancelling, do nothing more here
+                if ( _currentState == State.Cancelling )
+                {
+                    return;
+                }
+
                 TransitionTo(State.Cancelling); // Move to cancelling state
 
-                ctsToCancel = _activeProcessingCts; // Get the CTS to cancel
+                ctsToCancel = _activeProcessingCts;  // Get the CTS to cancel
+                taskToAwait = _activeProcessingTask; // Get the task to potentially await
 
-                // Initiate audio stop if we were streaming (or potentially processing if audio could start soon)
-                _logger.LogDebug("Initiating audio stop playback.");
-                audioStopTask = _audioOutputService.StopPlaybackAsync(); // Fire and forget stop
+                // We no longer directly stop audio here. Adapters handle their cancellation.
+                // The AssistantSpeakingStopped(Cancelled) event will come from the AudioOutputAdapter if it was playing.
             }
             else
             {
@@ -425,48 +497,45 @@ public class ConversationOrchestrator : IConversationOrchestrator
         }
 
         // Perform cancellation outside the lock
-        if ( ctsToCancel != null )
+        if ( ctsToCancel != null && !ctsToCancel.IsCancellationRequested )
         {
             _logger.LogDebug("Signalling cancellation token.");
             try
             {
-                ctsToCancel.Cancel();
+                await ctsToCancel.CancelAsync(); // Use async version
             }
             catch (ObjectDisposedException)
             {
                 /* Ignore if already disposed */
             }
-            // Don't dispose CTS here, finally block in ProcessUtteranceFlowAsync handles it
         }
 
-        // Await the audio stop task if it was started
-        try
+        // Await the task briefly to allow it to observe cancellation
+        if ( taskToAwait != null && !taskToAwait.IsCompleted )
         {
-            _logger.LogDebug("Awaiting audio stop task...");
-            // Add a timeout to prevent hanging
-            await audioStopTask.WaitAsync(TimeSpan.FromSeconds(2));
-            _logger.LogDebug("Audio stop task completed.");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Error or timeout awaiting audio stop task during cancellation.");
+            _logger.LogDebug("Waiting briefly for active task ({TaskId}) to observe cancellation...", taskToAwait.Id);
+            try
+            {
+                await Task.WhenAny(taskToAwait, Task.Delay(TimeSpan.FromMilliseconds(200))); // Brief wait
+                _logger.LogDebug("Brief wait completed. Task Status: {Status}", taskToAwait.Status);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Exception during brief wait for cancelled task.");
+            }
         }
 
-        // State should eventually transition to Idle via AssistantSpeakingStopped(Cancelled/Error)
-        // or the finally block of ProcessUtteranceFlowAsync.
-        // We could force transition to Idle here, but relying on the events might be cleaner.
-        // Let's add a failsafe: if still Cancelling after a short delay, force Idle.
+        // State should transition to Idle via the finally block of ProcessUtteranceFlowAsync
+        // The failsafe task delay might still be useful.
         _ = Task.Delay(500).ContinueWith(_ =>
                                          {
                                              lock (_lock)
                                              {
-                                                 if ( _currentState != State.Cancelling )
+                                                 if ( _currentState == State.Cancelling )
                                                  {
-                                                     return;
+                                                     _logger.LogWarning("Forcing state to Idle after cancellation timeout.");
+                                                     TransitionTo(State.Idle);
                                                  }
-
-                                                 _logger.LogWarning("Forcing state to Idle after cancellation timeout.");
-                                                 TransitionTo(State.Idle);
                                              }
                                          });
     }
@@ -477,8 +546,7 @@ public class ConversationOrchestrator : IConversationOrchestrator
         if ( _activeProcessingTask != null || _activeProcessingCts != null )
         {
             _logger.LogDebug("Clearing active processing task/CTS. Reason: {Reason}", reason);
-
-            _activeProcessingCts?.Dispose();
+            _activeProcessingCts?.Dispose(); // Dispose the CTS
             _activeProcessingCts  = null;
             _activeProcessingTask = null;
         }

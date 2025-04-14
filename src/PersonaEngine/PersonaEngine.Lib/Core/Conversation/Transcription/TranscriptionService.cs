@@ -1,21 +1,28 @@
 ﻿using System.Threading.Channels;
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using PersonaEngine.Lib.ASR.Transcriber;
 using PersonaEngine.Lib.Audio;
+using PersonaEngine.Lib.Core.Conversation.Adapters;
 using PersonaEngine.Lib.Core.Conversation.Common.Messaging;
 using PersonaEngine.Lib.Core.Conversation.Contracts.Events;
+using PersonaEngine.Lib.UI.Common;
+
+using Silk.NET.OpenGL;
 
 namespace PersonaEngine.Lib.Core.Conversation.Transcription;
 
-public sealed class TranscriptionService : ITranscriptionService
+public sealed class TranscriptionService : IInputAdapter, IStartupTask
 {
     private readonly ChannelWriter<ITranscriptionEvent> _eventWriter;
 
     private readonly ILogger<TranscriptionService> _logger;
 
     private readonly IMicrophone _microphone;
+
+    private readonly TranscriptionServiceOptions _options;
 
     private readonly string _sourceId;
 
@@ -26,30 +33,39 @@ public sealed class TranscriptionService : ITranscriptionService
     private CancellationTokenSource? _serviceCts;
 
     public TranscriptionService(
-        IMicrophone                   microphone,
-        IRealtimeSpeechTranscriptor   transcriptor,
-        IChannelRegistry              channelRegistry,
-        ILogger<TranscriptionService> logger,
-        string                        sourceId = "DefaultMicrophone")
+        IMicrophone                           microphone,
+        IRealtimeSpeechTranscriptor           transcriptor,
+        IChannelRegistry                      channelRegistry,
+        ILogger<TranscriptionService>         logger,
+        IOptions<TranscriptionServiceOptions> options)
     {
-        _microphone   = microphone ?? throw new ArgumentNullException(nameof(microphone));
-        _transcriptor = transcriptor ?? throw new ArgumentNullException(nameof(transcriptor));
-        _eventWriter  = channelRegistry?.TranscriptionEvents.Writer ?? throw new ArgumentNullException(nameof(channelRegistry));
-        _logger       = logger ?? throw new ArgumentNullException(nameof(logger));
-        _sourceId     = sourceId;
+        _microphone   = microphone;
+        _transcriptor = transcriptor;
+        _eventWriter  = channelRegistry.TranscriptionEvents.Writer;
+        _logger       = logger;
+        _options      = options.Value;
+
+        if ( string.IsNullOrWhiteSpace(_options.SourceId) )
+        {
+            throw new ArgumentException("SourceId cannot be null or whitespace in TranscriptionServiceOptions.", nameof(options));
+        }
+
+        SourceId = _options.SourceId;
 
         _logger.LogInformation("TranscriptionService created for SourceId: {SourceId}", _sourceId);
     }
+
+    public string SourceId { get; }
 
     /// <summary>
     ///     Starts the transcription loop in the background.
     /// </summary>
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Starting TranscriptionService for SourceId: {SourceId}...", _sourceId);
+        _logger.LogInformation("Starting TranscriptionService (IInputAdapter) for SourceId: {SourceId}...", SourceId);
         _serviceCts    = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _executionTask = RunTranscriptionLoopAsync(_serviceCts.Token);
-        _logger.LogInformation("TranscriptionService started for SourceId: {SourceId}.", _sourceId);
+        _logger.LogInformation("TranscriptionService (IInputAdapter) started for SourceId: {SourceId}.", SourceId);
 
         return Task.CompletedTask;
     }
@@ -61,12 +77,12 @@ public sealed class TranscriptionService : ITranscriptionService
     {
         if ( _serviceCts == null || _serviceCts.IsCancellationRequested || _executionTask == null )
         {
-            _logger.LogWarning("StopAsync called but service is not running or already stopping.");
+            _logger.LogWarning("StopAsync called on TranscriptionService {SourceId} but service is not running or already stopping.", SourceId);
 
             return;
         }
 
-        _logger.LogInformation("Stopping TranscriptionService for SourceId: {SourceId}...", _sourceId);
+        _logger.LogInformation("Stopping TranscriptionService (IInputAdapter) for SourceId: {SourceId}...", SourceId);
         await _serviceCts.CancelAsync();
 
         try
@@ -92,33 +108,34 @@ public sealed class TranscriptionService : ITranscriptionService
             _serviceCts.Dispose();
             _serviceCts    = null;
             _executionTask = null;
-            _logger.LogInformation("TranscriptionService stopped for SourceId: {SourceId}.", _sourceId);
+            
+            _logger.LogInformation("TranscriptionService (IInputAdapter) stopped for SourceId: {SourceId}.", SourceId);
         }
     }
 
     public async ValueTask DisposeAsync()
     {
-        _logger.LogInformation("Disposing TranscriptionService for SourceId: {SourceId}...", _sourceId);
+        _logger.LogInformation("Disposing TranscriptionService (IInputAdapter) for SourceId: {SourceId}...", SourceId);
         await StopAsync();
-        _logger.LogInformation("TranscriptionService disposed for SourceId: {SourceId}.", _sourceId);
+        _logger.LogInformation("TranscriptionService (IInputAdapter) disposed for SourceId: {SourceId}.", SourceId);
         _serviceCts?.Dispose();
     }
 
     private async Task RunTranscriptionLoopAsync(CancellationToken cancellationToken)
     {
-        _logger.LogDebug("Starting transcription loop for SourceId: {SourceId}", _sourceId);
+        _logger.LogDebug("Starting transcription loop for SourceId: {SourceId}", SourceId);
 
         try
         {
             _microphone.StartRecording();
 
-            await foreach ( var event_ in _transcriptor.TranscribeAsync(_microphone, cancellationToken) )
+            await foreach ( var recognitionEvent in _transcriptor.TranscribeAsync(_microphone, cancellationToken) )
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
                 ITranscriptionEvent? transcriptionEvent = null;
 
-                switch ( event_ )
+                switch ( recognitionEvent )
                 {
                     case RealtimeSegmentRecognized recognized:
 
@@ -129,12 +146,12 @@ public sealed class TranscriptionService : ITranscriptionService
 
                         transcriptionEvent = new FinalTranscriptSegmentReceived(
                                                                                 recognized.Segment.Text,
-                                                                                _sourceId,
+                                                                                SourceId,
                                                                                 user,
                                                                                 DateTimeOffset.Now);
 
-                        _logger.LogTrace("[{SourceId}] Final segment: User='{User}', Text='{Text}'", _sourceId, user, recognized.Segment.Text);
-
+                        _logger.LogTrace("[{SourceId}] Final segment: User='{User}', Text='{Text}'", SourceId, user, recognized.Segment.Text);
+                        
                         break;
 
                     case RealtimeSegmentRecognizing recognizing:
@@ -142,10 +159,10 @@ public sealed class TranscriptionService : ITranscriptionService
                         {
                             transcriptionEvent = new PotentialTranscriptUpdate(
                                                                                recognizing.Segment.Text,
-                                                                               _sourceId,
+                                                                               SourceId,
                                                                                DateTimeOffset.Now);
 
-                            _logger.LogTrace("[{SourceId}] Potential segment: '{Text}'", _sourceId, recognizing.Segment.Text);
+                            _logger.LogTrace("[{SourceId}] Potential segment: '{Text}'", SourceId, recognizing.Segment.Text);
                         }
 
                         break;
@@ -162,7 +179,7 @@ public sealed class TranscriptionService : ITranscriptionService
                 }
                 catch (ChannelClosedException)
                 {
-                    _logger.LogWarning("[{SourceId}] Transcription event channel closed while trying to write. Exiting loop.", _sourceId);
+                    _logger.LogWarning("[{SourceId}] Transcription event channel closed while trying to write. Exiting loop.", SourceId);
 
                     break;
                 }
@@ -170,15 +187,15 @@ public sealed class TranscriptionService : ITranscriptionService
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            _logger.LogInformation("Transcription loop cancelled via token for SourceId: {SourceId}.", _sourceId);
+            _logger.LogInformation("Transcription loop cancelled via token for SourceId: {SourceId}.", SourceId);
         }
         catch (ChannelClosedException)
         {
-            _logger.LogInformation("Transcription channel closed, ending loop for SourceId: {SourceId}.", _sourceId);
+            _logger.LogInformation("Transcription channel closed, ending loop for SourceId: {SourceId}.", SourceId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in transcription loop for SourceId: {SourceId}", _sourceId);
+            _logger.LogError(ex, "Error in transcription loop for SourceId: {SourceId}", SourceId);
             _eventWriter.TryComplete(ex);
         }
         finally
@@ -187,7 +204,12 @@ public sealed class TranscriptionService : ITranscriptionService
             // Signal that no more items will be written.
             // This is crucial for consumers reading with ReadAllAsync.
             _eventWriter.TryComplete();
-            _logger.LogInformation("Transcription loop completed for SourceId: {SourceId}.", _sourceId);
+            _logger.LogInformation("Transcription loop completed for SourceId: {SourceId}.", SourceId);
         }
+    }
+
+    public void Execute(GL gl)
+    {
+        StartAsync(CancellationToken.None);
     }
 }
