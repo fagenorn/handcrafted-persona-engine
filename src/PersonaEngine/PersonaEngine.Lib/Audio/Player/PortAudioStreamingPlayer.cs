@@ -67,8 +67,6 @@ public sealed class PortAudioStreamingPlayer : IStreamingAudioPlayer, IStreaming
 
     private volatile bool _producerCompleted; // Flag indicating the producer task finished adding segments for the *current* playback
 
-    public PlayerState State { get; private set; } = PlayerState.Uninitialized;
-
     /// <summary>
     ///     Initializes a new instance of the <see cref="PortAudioStreamingPlayer" /> class.
     /// </summary>
@@ -180,7 +178,7 @@ public sealed class PortAudioStreamingPlayer : IStreamingAudioPlayer, IStreaming
                     throw new ObjectDisposedException(nameof(PortAudioStreamingPlayer));
                 }
 
-                State             = PlayerState.Starting;
+                State              = PlayerState.Starting;
                 _producerCompleted = false;
                 _playbackCts?.Dispose(); // Dispose previous CTS
                 _playbackCts        = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -370,7 +368,7 @@ public sealed class PortAudioStreamingPlayer : IStreamingAudioPlayer, IStreaming
             if ( State != PlayerState.Uninitialized )
             {
                 needsTermination = true;
-                State           = PlayerState.Uninitialized;
+                State            = PlayerState.Uninitialized;
             }
         }
 
@@ -392,6 +390,20 @@ public sealed class PortAudioStreamingPlayer : IStreamingAudioPlayer, IStreaming
 
         _logger.LogInformation("PortAudioStreamingPlayer disposed.");
     }
+
+    /// <summary>
+    ///     Stops the current playback asynchronously.
+    ///     If no playback is active, this method returns immediately.
+    /// </summary>
+    public Task StopPlaybackAsync()
+    {
+        ThrowIfDisposed();
+        _logger.LogInformation("External stop requested.");
+
+        return StopPlaybackInternalAsync();
+    }
+
+    public PlayerState State { get; private set; } = PlayerState.Uninitialized;
 
     /// <summary>
     ///     Gets the current playback time in seconds, relative to the start of the currently playing audio segment.
@@ -430,18 +442,6 @@ public sealed class PortAudioStreamingPlayer : IStreamingAudioPlayer, IStreaming
     /// </summary>
     public event EventHandler<AudioPlaybackEventArgs>? OnPlaybackCompleted;
 
-    /// <summary>
-    ///     Stops the current playback asynchronously.
-    ///     If no playback is active, this method returns immediately.
-    /// </summary>
-    public Task StopPlaybackAsync()
-    {
-        ThrowIfDisposed();
-        _logger.LogInformation("External stop requested.");
-
-        return StopPlaybackInternalAsync();
-    }
-
     // =====================================
     // Internal Implementation Details
     // =====================================
@@ -475,7 +475,7 @@ public sealed class PortAudioStreamingPlayer : IStreamingAudioPlayer, IStreaming
                 return;
             }
 
-            State                    = PlayerState.Stopping;
+            State                     = PlayerState.Stopping;
             currentPlaybackCts        = _playbackCts;
             currentPlaybackCompletion = _playbackCompletion; // Capture the TCS
         }

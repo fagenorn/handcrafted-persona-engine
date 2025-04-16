@@ -189,6 +189,18 @@ public class WhisperOnnxSpeechTranscriptor : ISpeechTranscriptor
         }
     }
 
+    public async ValueTask DisposeAsync()
+    {
+        if ( _inferenceSession is IAsyncDisposable inferenceSessionAsyncDisposable )
+        {
+            await inferenceSessionAsyncDisposable.DisposeAsync();
+        }
+        else
+        {
+            _inferenceSession.Dispose();
+        }
+    }
+
     public void Dispose() { _inferenceSession.Dispose(); }
 
     public static int GetLangId(string languageString) { return LangToId.GetValueOrDefault(languageString, 50259); }

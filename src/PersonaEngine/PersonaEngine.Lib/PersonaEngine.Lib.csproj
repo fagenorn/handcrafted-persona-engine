@@ -126,4 +126,11 @@
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
     </ItemGroup>
+
+    <ItemGroup>
+      <Compile Remove="Core\Conversation\Services\InMemoryChannelRegistry.cs" />
+      <Compile Remove="Core\Conversation\Services\ConversationSessionFactory.cs" />
+      <Compile Remove="Core\Conversation\Models\ConversationTrigger.cs" />
+      <Compile Remove="Core\Conversation\Interfaces\IConversationSessionFactory.cs" />
+    </ItemGroup>
 </Project>

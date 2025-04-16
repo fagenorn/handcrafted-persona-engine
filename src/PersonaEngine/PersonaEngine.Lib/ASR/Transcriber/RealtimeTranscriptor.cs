@@ -10,7 +10,7 @@ using PersonaEngine.Lib.Audio;
 
 namespace PersonaEngine.Lib.ASR.Transcriber;
 
-internal class RealtimeTranscriptor : IRealtimeSpeechTranscriptor, IDisposable
+internal class RealtimeTranscriptor : IRealtimeSpeechTranscriptor, IAsyncDisposable
 {
     private readonly object cacheLock = new();
 
@@ -50,23 +50,23 @@ internal class RealtimeTranscriptor : IRealtimeSpeechTranscriptor, IDisposable
                         options, realtimeOptions);
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         if ( isDisposed )
         {
             return;
         }
 
-        lock (cacheLock)
+        // lock (cacheLock)
+        // {
+        logger.LogInformation("Disposing {Count} cached transcriptors", transcriptorCache.Count);
+        foreach ( var transcriptor in transcriptorCache.Values )
         {
-            logger.LogInformation("Disposing {Count} cached transcriptors", transcriptorCache.Count);
-            foreach ( var transcriptor in transcriptorCache.Values )
-            {
-                transcriptor.Dispose();
-            }
-
-            transcriptorCache.Clear();
+            await transcriptor.DisposeAsync();
         }
+
+        transcriptorCache.Clear();
+        // }
 
         isDisposed = true;
         GC.SuppressFinalize(this);
@@ -230,7 +230,7 @@ internal class RealtimeTranscriptor : IRealtimeSpeechTranscriptor, IDisposable
         }
         finally
         {
-            CleanupSession(sessionId);
+            await CleanupSessionAsync(sessionId);
         }
     }
 
@@ -340,23 +340,25 @@ internal class RealtimeTranscriptor : IRealtimeSpeechTranscriptor, IDisposable
         }
     }
 
-    private void CleanupSession(string sessionId)
+    private async ValueTask CleanupSessionAsync(string sessionId)
     {
-        lock (cacheLock)
-        {
-            var keysToRemove = transcriptorCache.Keys
-                                                .Where(k => k.StartsWith($"{sessionId}_"))
-                                                .ToList();
+        // lock (cacheLock)
+        // {
+        var keysToRemove = transcriptorCache.Keys
+                                            .Where(k => k.StartsWith($"{sessionId}_"))
+                                            .ToList();
 
-            foreach ( var key in keysToRemove )
+        foreach ( var key in keysToRemove )
+        {
+            if ( !transcriptorCache.TryGetValue(key, out var transcriptor) )
             {
-                if ( transcriptorCache.TryGetValue(key, out var transcriptor) )
-                {
-                    transcriptor.Dispose();
-                    transcriptorCache.Remove(key);
-                }
+                continue;
             }
+
+            await transcriptor.DisposeAsync();
+            transcriptorCache.Remove(key);
         }
+        // }
     }
 
     private ConcatAudioSource GetSilenceAddedSource(IAudioSource source, TimeSpan paddedStart, TimeSpan paddedDuration)

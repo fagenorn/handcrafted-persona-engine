@@ -9,8 +9,6 @@ namespace PersonaEngine.Lib.ASR.Transcriber;
 
 internal class WhisperNetSpeechTranscriptor(WhisperProcessor whisperProcessor) : ISpeechTranscriptor
 {
-    public void Dispose() { whisperProcessor.Dispose(); }
-
     public async IAsyncEnumerable<TranscriptSegment> TranscribeAsync(IAudioSource source, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         if ( source.ChannelCount != 1 )
@@ -48,4 +46,6 @@ internal class WhisperNetSpeechTranscriptor(WhisperProcessor whisperProcessor) :
                                                };
         }
     }
+
+    public async ValueTask DisposeAsync() { await whisperProcessor.DisposeAsync(); }
 }

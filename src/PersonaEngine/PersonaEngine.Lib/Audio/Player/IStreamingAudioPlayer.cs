@@ -1,3 +1,7 @@
+using System.Threading.Channels;
+
+using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
 using PersonaEngine.Lib.TTS.Synthesis;
 
 namespace PersonaEngine.Lib.Audio.Player;
@@ -16,10 +20,22 @@ public interface IStreamingAudioPlayer : IAsyncDisposable
     public Task StopPlaybackAsync();
 }
 
+public interface IStreamingAudioPlayerChannel
+{
+    Task StartPlaybackAsync(
+        ChannelReader<TtsChunkEvent> inputReader,
+        ChannelWriter<IOutputEvent>  outputWriter,
+        Guid                         turnId,
+        Guid                         sessionId,
+        CancellationToken            cancellationToken = default);
+
+    public Task StopPlaybackAsync();
+}
+
 public interface IStreamingAudioPlayerHost
 {
     float CurrentTime { get; }
-    
+
     PlayerState State { get; }
 
     event EventHandler<AudioPlaybackEventArgs>? OnPlaybackStarted;

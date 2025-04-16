@@ -127,6 +127,8 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
             return cachedResult;
         }
 
+        var cancelled = false;
+
         try
         {
             await _processLock.WaitAsync(cancellationToken);
@@ -176,6 +178,12 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
 
             return result;
         }
+        catch (OperationCanceledException)
+        {
+            cancelled = true;
+
+            return (null, null);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting phonemes from espeak-ng for word {Word}", word);
@@ -185,7 +193,10 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
         }
         finally
         {
-            _processLock.Release();
+            if ( !cancelled )
+            {
+                _processLock.Release();
+            }
         }
     }
 

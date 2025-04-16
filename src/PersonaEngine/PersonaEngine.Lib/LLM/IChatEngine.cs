@@ -1,4 +1,10 @@
+using System.Threading.Channels;
+
 using Microsoft.SemanticKernel;
+
+using PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
+using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Common;
 
 namespace PersonaEngine.Lib.LLM;
 
@@ -12,18 +18,13 @@ public interface IChatEngine : IDisposable
 {
     IChatHistoryManager HistoryManager { get; }
 
-    IAsyncEnumerable<string> GetStreamingChatResponseAsync(
-        ChatMessage              userInput,
-        InjectionMetadata?       injectionMetadata = null,
-        PromptExecutionSettings? executionSettings = null,
-        CancellationToken        cancellationToken = default);
-
-    IAsyncEnumerable<string> GetStreamingChatResponseWithHistoryAsync(
-        ChatMessage              userInput,
-        IChatHistoryManager      historyManager,
-        InjectionMetadata?       injectionMetadata = null,
-        PromptExecutionSettings? executionSettings = null,
-        CancellationToken        cancellationToken = default);
+    Task<CompletionReason> GetStreamingChatResponseAsync(
+        IConversationContext                 context,
+        ChannelWriter<IOutputEvent> outputWriter,
+        Guid                        turnId,
+        Guid                        sessionId,
+        PromptExecutionSettings?    executionSettings = null,
+        CancellationToken           cancellationToken = default);
 }
 
 public interface IVisualChatEngine : IDisposable

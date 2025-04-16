@@ -16,7 +16,7 @@ internal class SileroVadOnnxModel : IDisposable
 
     public SileroVadOnnxModel(string modelPath)
     {
-        var sessionOptions = new SessionOptions { InterOpNumThreads = 1, IntraOpNumThreads = 1, GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL };
+        var sessionOptions = new SessionOptions { InterOpNumThreads = 1, IntraOpNumThreads = 1, GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL, LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL };
         sessionOptions.AppendExecutionProvider_CUDA();
 
         session    = new InferenceSession(modelPath, sessionOptions);

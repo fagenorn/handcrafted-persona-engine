@@ -5,7 +5,7 @@ namespace PersonaEngine.Lib.ASR.Transcriber;
 /// <summary>
 ///     Represents a segment of transcribed text.
 /// </summary>
-public interface ISpeechTranscriptor : IDisposable
+public interface ISpeechTranscriptor : IAsyncDisposable
 {
     /// <summary>
     ///     Transcribes the given audio stream to segments of text.
