@@ -17,6 +17,7 @@ using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.Core;
 using PersonaEngine.Lib.Core.Conversation;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Adapters;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Metrics;
 using PersonaEngine.Lib.Live2D;
 using PersonaEngine.Lib.Live2D.Behaviour;
 using PersonaEngine.Lib.Live2D.Behaviour.Emotion;
@@ -71,6 +72,7 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddConversationPipeline(this IServiceCollection services, IConfiguration configuration)
     {
+        services.AddSingleton<ConversationMetrics>();
         // // 1. Core Services & Channels (Singleton)
         // services.AddSingleton<IChannelRegistry, ChannelRegistry>();
         // services.AddSingleton<IConversationOrchestrator, ConversationOrchestrator>();

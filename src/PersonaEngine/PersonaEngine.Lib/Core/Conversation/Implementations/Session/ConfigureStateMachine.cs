@@ -41,6 +41,7 @@ public partial class ConversationSession
                      .Permit(ConversationTrigger.ErrorOccurred, ConversationState.Error);
 
         _stateMachine.Configure(ConversationState.Listening)
+                     .SubstateOf(ConversationState.Idle)
                      .OnEntry(LogState)
                      .Permit(ConversationTrigger.InputFinalized, ConversationState.ProcessingInput)
                      .Permit(ConversationTrigger.StopRequested, ConversationState.Ended)
@@ -101,7 +102,7 @@ public partial class ConversationSession
                      .OnEntry(LogState)
                      .OnEntryFromAsync(inputDetectedTrigger, HandleInterruptionAsync, "Handle Barge-In Action")
                      .OnEntryFromAsync(inputFinalizedTrigger, HandleInterruptionAsync, "Handle Barge-In Action (Finalized)")
-                     .OnEntryAsync(CancelResponseGenerationAsync, "Ensure Pipeline Cancelled on Interruption")
+                     .OnEntryAsync(CancelCurrentTurnProcessingAsync, "Ensure Pipeline Cancelled on Interruption")
                      .Ignore(ConversationTrigger.LlmStreamStarted)
                      .Ignore(ConversationTrigger.LlmStreamChunkReceived)
                      .Ignore(ConversationTrigger.LlmStreamEnded)
@@ -127,13 +128,13 @@ public partial class ConversationSession
         _stateMachine.Configure(ConversationState.Error)
                      .OnEntry(LogState)
                      .OnEntryFromAsync(errorOccurredTrigger, HandleErrorAsync, "Log Error and Update Context")
-                     .OnEntryAsync(CancelResponseGenerationAsync, "Ensure Pipeline Cancelled on Error")
+                     .OnEntryAsync(CancelCurrentTurnProcessingAsync, "Ensure Pipeline Cancelled on Error")
                      .Permit(ConversationTrigger.StopRequested, ConversationState.Ended)
                      .Ignore(ConversationTrigger.ErrorOccurred);
 
         _stateMachine.Configure(ConversationState.Ended)
                      .OnEntry(LogState)
-                     .OnEntryAsync(CancelResponseGenerationAsync, "Ensure Pipeline Cancelled on End")
+                     .OnEntryAsync(CancelCurrentTurnProcessingAsync, "Ensure Pipeline Cancelled on End")
                      .OnEntryAsync(CleanupSessionAsync, "Stop Adapters and Cleanup Resources");
 
         _stateMachine.OnUnhandledTriggerAsync(async (state, trigger, unmetGuards) =>

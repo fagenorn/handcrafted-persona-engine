@@ -10,6 +10,7 @@ using PersonaEngine.Lib.Audio;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Configuration;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Input;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Output;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Metrics;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Session;
 using PersonaEngine.Lib.LLM;
 using PersonaEngine.Lib.TTS.Synthesis;
@@ -38,6 +39,7 @@ internal static class Program
                                 loggingBuilder.AddSerilog();
                             });
 
+        services.AddMetrics();
         services.AddApp(config);
 
         var serviceProvider = services.BuildServiceProvider();
@@ -52,10 +54,11 @@ internal static class Program
         // var sp      = serviceProvider.GetRequiredService<IAggregatedStreamingAudioPlayer>();
         var logger  = serviceProvider.GetRequiredService<ILogger<ConversationSession>>();
         var logge3  = serviceProvider.GetRequiredService<ILogger<PortaudioOutputAdapter>>();
+        var cm      = serviceProvider.GetRequiredService<ConversationMetrics>();
         var options = new ConversationOptions();
         var au      = new PortaudioOutputAdapter(logge3);
 
-        var conversationSession = new ConversationSession(logger, Guid.NewGuid(), options, ce, te, [new MicrophoneInputAdapter(mic, rt, logger2)], au);
+        var conversationSession = new ConversationSession(logger, Guid.NewGuid(), options, ce, te, [new MicrophoneInputAdapter(mic, rt, logger2)], au, cm);
         await conversationSession.RunAsync(CancellationToken.None);
 
         Console.ReadLine();
@@ -70,7 +73,7 @@ internal static class Program
     {
         Log.Logger = new LoggerConfiguration()
                      .MinimumLevel.Warning()
-                     .MinimumLevel.Override("PersonaEngine.Lib.Core.CC", LogEventLevel.Information)
+                     .MinimumLevel.Override("PersonaEngine.Lib.Core.Conversation", LogEventLevel.Information)
                      .Enrich.FromLogContext()
                      .Enrich.With<GuidToEmojiEnricher>()
                      .WriteTo.Console(
