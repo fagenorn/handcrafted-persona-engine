@@ -64,8 +64,6 @@ public class OnnxAudioSynthesizer : IAudioSynthesizer
     {
         if ( string.IsNullOrEmpty(phonemes) )
         {
-            _logger.LogWarning("Empty phonemes provided for synthesis");
-
             return new AudioData(Array.Empty<float>(), Array.Empty<long>());
         }
 
@@ -189,7 +187,6 @@ public class OnnxAudioSynthesizer : IAudioSynthesizer
                                                     LogSeverityLevel       = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL,
                                                 };
 
-        // Add CUDA provider if available
         try
         {
             sessionOptions.AppendExecutionProvider_CUDA();

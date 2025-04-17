@@ -394,7 +394,11 @@ public partial class ConversationSession : IConversationSession
 
     #region Fields
 
-    private Task? _responseGenerationTask;
+    private Task? _llmTask;
+
+    private Task? _ttsTask;
+
+    private Task? _audioTask;
 
     private readonly ILogger _logger;
 
@@ -453,6 +457,14 @@ public partial class ConversationSession : IConversationSession
     private Stopwatch? _firstAudioLatencyStopwatch;
 
     private double? _currentTurnFirstAudioLatencyMs;
+
+    private Stopwatch? _firstLlmTokenLatencyStopwatch;
+
+    private double? _currentTurnFirstLlmTokenLatencyMs;
+
+    private Stopwatch? _firstTtsChunkLatencyStopwatch;
+
+    private double? _currentTurnFirstTtsChunkLatencyMs;
 
     #endregion
 
@@ -516,8 +528,11 @@ public partial class ConversationSession : IConversationSession
         _currentTurnCts = CancellationTokenSource.CreateLinkedTokenSource(_sessionCts.Token);
         _currentTurnId  = Guid.NewGuid();
 
-        _turnStopwatch              = Stopwatch.StartNew();
-        _firstAudioLatencyStopwatch = Stopwatch.StartNew();
+        _turnStopwatch                 = Stopwatch.StartNew();
+        _firstAudioLatencyStopwatch    = Stopwatch.StartNew(); // For first audio playback
+        _firstLlmTokenLatencyStopwatch = Stopwatch.StartNew(); // For first LLM token
+        _firstTtsChunkLatencyStopwatch = Stopwatch.StartNew(); // For first TTS chunk (if applicable)
+
         _metrics.IncrementTurnsStarted(SessionId);
 
         _llmFinishReason   = CompletionReason.Completed;
@@ -539,6 +554,12 @@ public partial class ConversationSession : IConversationSession
             {
                 await _stateMachine.FireAsync(ConversationTrigger.TtsRequestSent);
             }
+            else
+            {
+                _firstTtsChunkLatencyStopwatch?.Stop();
+                _firstTtsChunkLatencyStopwatch     = null;
+                _currentTurnFirstTtsChunkLatencyMs = null;
+            }
         }
         catch (Exception ex)
         {
@@ -549,9 +570,9 @@ public partial class ConversationSession : IConversationSession
 
     private async Task CancelCurrentTurnProcessingAsync()
     {
-        if ( _currentTurnCts == null && _responseGenerationTask == null )
+        if ( _currentTurnCts == null )
         {
-            _logger.LogTrace("{SessionId} | No active turn processing to cancel.", SessionId);
+            _logger.LogDebug("{SessionId} | No active turn processing to cancel.", SessionId);
 
             return;
         }
@@ -572,24 +593,19 @@ public partial class ConversationSession : IConversationSession
             }
         }
 
-        if ( _responseGenerationTask is { IsCompleted: false } )
+        if ( turnIdBeingCancelled.HasValue )
         {
-            _logger.LogTrace("{SessionId} | Waiting briefly for response generation task cancellation acknowledgment (Turn {TurnId}).", SessionId, turnIdBeingCancelled);
-            try
-            {
-                await Task.WhenAny(_responseGenerationTask, Task.Delay(TimeSpan.FromMilliseconds(500))); // Short timeout
-                _logger.LogTrace("{SessionId} | Response generation task wait completed or timed out (Turn {TurnId}).", SessionId, turnIdBeingCancelled);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _logger.LogWarning(ex, "{SessionId} | Exception while waiting for response generation task cancellation (Turn {TurnId}). Task Status: {Status}", SessionId, turnIdBeingCancelled, _responseGenerationTask.Status);
-            }
+            await WaitForTaskCancellationAsync(_llmTask, "LLM response generation", turnIdBeingCancelled.Value);
+            await WaitForTaskCancellationAsync(_ttsTask, "TTS generation", turnIdBeingCancelled.Value);
+            await WaitForTaskCancellationAsync(_audioTask, "Audio processing", turnIdBeingCancelled.Value);
         }
 
         _currentTurnCts?.Dispose();
-        _currentTurnCts         = null;
-        _currentTurnId          = null;
-        _responseGenerationTask = null;
+        _currentTurnCts = null;
+        _currentTurnId  = null;
+        _llmTask        = null;
+        _ttsTask        = null;
+        _audioTask      = null;
 
         _context?.AbortTurn();
 
@@ -601,16 +617,42 @@ public partial class ConversationSession : IConversationSession
         _ttsStopwatch?.Stop();
         _audioPlaybackStopwatch?.Stop();
         _firstAudioLatencyStopwatch?.Stop();
+        _firstLlmTokenLatencyStopwatch?.Stop();
+        _firstTtsChunkLatencyStopwatch?.Stop();
+
         _turnStopwatch                  = null;
         _llmStopwatch                   = null;
         _ttsStopwatch                   = null;
         _audioPlaybackStopwatch         = null;
         _firstAudioLatencyStopwatch     = null;
+        _firstLlmTokenLatencyStopwatch  = null;
+        _firstTtsChunkLatencyStopwatch  = null;
         _currentTurnFirstAudioLatencyMs = null;
         _sttStartTime                   = null;
 
         _currentLlmChannel = null;
         _currentTtsChannel = null;
+    }
+
+    private async Task WaitForTaskCancellationAsync(Task? task, string taskName, Guid turnIdBeingCancelled, int timeoutMilliseconds = 250)
+    {
+        if ( task is { IsCompleted: false } )
+        {
+            _logger.LogTrace("{SessionId} | Waiting briefly for {TaskName} task cancellation acknowledgment (Turn {TurnId}).", SessionId, taskName, turnIdBeingCancelled);
+            try
+            {
+                await Task.WhenAny(task, Task.Delay(TimeSpan.FromMilliseconds(timeoutMilliseconds)));
+                _logger.LogTrace("{SessionId} | {TaskName} task wait completed or timed out (Turn {TurnId}).", SessionId, taskName, turnIdBeingCancelled);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(ex, "{SessionId} | Exception while waiting for {TaskName} task cancellation (Turn {TurnId}). Task Status: {Status}", SessionId, taskName, turnIdBeingCancelled, task.Status);
+            }
+        }
+        else
+        {
+            _logger.LogTrace("{SessionId} | {TaskName} task was null or already completed (Turn {TurnId}). No wait needed.", SessionId, taskName, turnIdBeingCancelled);
+        }
     }
 
     private async Task HandleInterruptionAsync(IInputEvent inputEvent)
@@ -740,7 +782,7 @@ public partial class ConversationSession : IConversationSession
 
         _currentLlmChannel = Channel.CreateUnbounded<LlmChunkEvent>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
 
-        _ = _chatEngine.GetStreamingChatResponseAsync(_context, outputWriter, turnId.Value, SessionId, cancellationToken: turnCts.Token);
+        _llmTask = _chatEngine.GetStreamingChatResponseAsync(_context, outputWriter, turnId.Value, SessionId, cancellationToken: turnCts.Token);
     }
 
     private void HandleTtsStreamRequest()
@@ -759,11 +801,11 @@ public partial class ConversationSession : IConversationSession
 
         _currentTtsChannel = Channel.CreateUnbounded<TtsChunkEvent>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
 
-        _ = _ttsEngine.SynthesizeStreamingAsync(outputChannelReader, outputChannelWriter, turnId.Value, SessionId, cancellationToken: turnCts.Token);
+        _ttsTask = _ttsEngine.SynthesizeStreamingAsync(outputChannelReader, outputChannelWriter, turnId.Value, SessionId, cancellationToken: turnCts.Token);
 
         if ( _outputAdapter is IAudioOutputAdapter audioOutput )
         {
-            _ = audioOutput.SendAsync(_currentTtsChannel, outputChannelWriter, turnId.Value, turnCts.Token);
+            _audioTask = audioOutput.SendAsync(_currentTtsChannel, outputChannelWriter, turnId.Value, turnCts.Token);
         }
     }
 
@@ -786,6 +828,14 @@ public partial class ConversationSession : IConversationSession
             _logger.LogWarning("{SessionId} | HandleLlmStreamChunkReceived called without a valid TurnId.", SessionId);
 
             return;
+        }
+
+        if ( _firstLlmTokenLatencyStopwatch != null )
+        {
+            _firstLlmTokenLatencyStopwatch.Stop();
+            _currentTurnFirstLlmTokenLatencyMs = _firstLlmTokenLatencyStopwatch.Elapsed.TotalMilliseconds;
+            _logger.LogDebug("{SessionId} | {TurnId} | ⏱️ | First LLM [{LatencyMs:N0} ms]", SessionId, turnId.Value, _currentTurnFirstLlmTokenLatencyMs.Value);
+            _firstLlmTokenLatencyStopwatch = null;
         }
 
         _context?.AppendToTurn(ASSISTANT_PARTICIPANT.Id, chunkEvent.Chunk);
@@ -812,6 +862,14 @@ public partial class ConversationSession : IConversationSession
             _logger.LogWarning("{SessionId} | HandleTtsStreamChunkReceived called without a valid TurnId.", SessionId);
 
             return;
+        }
+
+        if ( _firstTtsChunkLatencyStopwatch != null )
+        {
+            _firstTtsChunkLatencyStopwatch.Stop();
+            _currentTurnFirstTtsChunkLatencyMs = _firstTtsChunkLatencyStopwatch.Elapsed.TotalMilliseconds;
+            _logger.LogDebug("{SessionId} | {TurnId} | ⏱️ | First TTS [{LatencyMs:N0} ms]", SessionId, turnId.Value, _currentTurnFirstTtsChunkLatencyMs.Value);
+            _firstTtsChunkLatencyStopwatch = null;
         }
 
         await outputWriter.WriteAsync(chunkEvent, turnCts.Token);
@@ -897,27 +955,38 @@ public partial class ConversationSession : IConversationSession
         var completedTurnId = _currentTurnId;
         var turnDuration    = _turnStopwatch?.Elapsed.TotalMilliseconds;
 
-        if ( completedTurnId.HasValue && _currentTurnFirstAudioLatencyMs.HasValue && turnDuration.HasValue )
+        if ( completedTurnId.HasValue && turnDuration.HasValue )
         {
+            var llmTime   = _currentTurnFirstLlmTokenLatencyMs ?? 0;
+            var ttsTime   = _currentTurnFirstTtsChunkLatencyMs ?? 0;
+            var audioTime = _currentTurnFirstAudioLatencyMs ?? 0;
+
             _logger.LogInformation(
-                                   "{SessionId} | {TurnId} | ⏱️ | First Audio [{LatencyMs:N0} ms] | Total Duration [{DurationMs:N0} ms]",
+                                   "{SessionId} | {TurnId} | ⏱️ | LLM @{LlmMs:N0}ms ⇢ TTS @{TtsMs:N0}ms ⇢ AUDIO @{AudioMs:N0}ms | TOTAL @{TotalMs:N0}ms",
                                    SessionId,
                                    completedTurnId.Value,
-                                   _currentTurnFirstAudioLatencyMs.Value,
-                                   turnDuration.Value
+                                   llmTime,
+                                   ttsTime - llmTime,
+                                   audioTime - ttsTime,
+                                   audioTime
                                   );
         }
 
         CommitChanges(false);
 
-        _currentTurnId                  = null;
-        _turnStopwatch                  = null;
-        _llmStopwatch                   = null;
-        _ttsStopwatch                   = null;
-        _audioPlaybackStopwatch         = null;
-        _firstAudioLatencyStopwatch     = null;
-        _currentTurnFirstAudioLatencyMs = null;
-        _sttStartTime                   = null;
+        _currentTurnId                 = null;
+        _turnStopwatch                 = null;
+        _llmStopwatch                  = null;
+        _ttsStopwatch                  = null;
+        _audioPlaybackStopwatch        = null;
+        _firstAudioLatencyStopwatch    = null;
+        _firstLlmTokenLatencyStopwatch = null;
+        _firstTtsChunkLatencyStopwatch = null;
+
+        _currentTurnFirstAudioLatencyMs    = null;
+        _currentTurnFirstLlmTokenLatencyMs = null;
+        _currentTurnFirstTtsChunkLatencyMs = null;
+        _sttStartTime                      = null;
 
         _currentLlmChannel?.Writer.TryComplete();
         _currentTtsChannel?.Writer.TryComplete();

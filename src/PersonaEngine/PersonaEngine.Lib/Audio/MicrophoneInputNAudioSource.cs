@@ -1,3 +1,6 @@
+using System.Buffers;
+using System.Collections.Concurrent;
+
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -23,11 +26,11 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
 
     private bool _isDisposed = false;
 
-    private WaveInEvent? _microphoneIn;
-
     private CancellationTokenSource? _recordingCts;
 
     private bool _wasRecordingBeforeReconfigure = false;
+
+    private WaveInEvent? _waveIn;
 
     public MicrophoneInputNAudioSource(
         ILogger<MicrophoneInputNAudioSource>     logger,
@@ -178,23 +181,23 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
 
             try
             {
-                _microphoneIn = new WaveInEvent { DeviceNumber = deviceNumber, WaveFormat = new WaveFormat(16000, 16, 1) };
+                _waveIn = new WaveInEvent { DeviceNumber = deviceNumber, WaveFormat = new WaveFormat(16000, 16, 1), BufferMilliseconds = 100 };
 
-                if (!IsInitialized)
+                if ( !IsInitialized )
                 {
                     Initialize(new AudioSourceHeader { BitsPerSample = 16, Channels = 1, SampleRate = 16000 });
                 }
 
-                _microphoneIn.DataAvailable    += WaveIn_DataAvailable;
-                _microphoneIn.RecordingStopped += MicrophoneIn_RecordingStopped;
+                _waveIn.DataAvailable    += WaveIn_DataAvailable;
+                _waveIn.RecordingStopped += WaveInRecordingStopped;
 
                 _logger.LogInformation("Microphone initialized with DeviceNumber: {DeviceNumber}, WaveFormat: {WaveFormat}",
-                                       _microphoneIn.DeviceNumber, _microphoneIn.WaveFormat);
+                                       _waveIn.DeviceNumber, _waveIn.WaveFormat);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to initialize WaveInEvent with DeviceNumber {DeviceNumber} and options {@Options}", deviceNumber, options);
-                _microphoneIn = null;
+                _waveIn = null;
             }
         }
     }
@@ -237,7 +240,7 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
 
     private void StartRecordingInternal()
     {
-        if ( _microphoneIn == null )
+        if ( _waveIn == null )
         {
             _logger.LogError("Cannot start recording, microphone is not initialized (likely due to previous error).");
 
@@ -247,7 +250,7 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
         try
         {
             _recordingCts = new CancellationTokenSource();
-            _microphoneIn.StartRecording();
+            _waveIn.StartRecording();
             _logger.LogInformation("Microphone recording started.");
         }
         catch (Exception ex)
@@ -262,7 +265,7 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
 
     private void StopInternal()
     {
-        if ( _microphoneIn == null || _recordingCts == null || _recordingCts.IsCancellationRequested )
+        if ( _waveIn == null || _recordingCts == null || _recordingCts.IsCancellationRequested )
         {
             return;
         }
@@ -271,8 +274,8 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
         try
         {
             _recordingCts.Cancel();
-            _microphoneIn?.StopRecording();
-            
+            _waveIn?.StopRecording();
+
             _logger.LogInformation("Microphone recording stopped.");
         }
         catch (Exception ex)
@@ -288,26 +291,24 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
 
     private void WaveIn_DataAvailable(object? sender, WaveInEventArgs e)
     {
-        // Use Task.Run to avoid blocking the NAudio callback thread
-        // Especially important if WriteData involves significant processing or locking
-        Task.Run(() =>
-                 {
-                     if ( _recordingCts is not { IsCancellationRequested: false } )
-                     {
-                         return;
-                     }
+        if ( _recordingCts is not { IsCancellationRequested: false } )
+        {
+            return;
+        }
 
-                     // Create a copy of the buffer data if WriteData needs the Memory<byte>
-                     // beyond the scope of this event handler, as NAudio might reuse the buffer.
-                     // If WriteData processes it immediately and synchronously, AsMemory might be okay.
-                     // Using ToArray() creates a safe copy.
-                     var bufferCopy = new byte[e.BytesRecorded];
-                     Buffer.BlockCopy(e.Buffer, 0, bufferCopy, 0, e.BytesRecorded);
-                     WriteData(bufferCopy.AsMemory());
-                 });
+        var bufferCopy = ArrayPool<byte>.Shared.Rent(e.BytesRecorded);
+        try
+        {
+            Buffer.BlockCopy(e.Buffer, 0, bufferCopy, 0, e.BytesRecorded);
+            WriteData(bufferCopy.AsMemory());
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(bufferCopy);
+        }
     }
 
-    private void MicrophoneIn_RecordingStopped(object? sender, StoppedEventArgs e)
+    private void WaveInRecordingStopped(object? sender, StoppedEventArgs e)
     {
         _logger.LogDebug("MicrophoneIn_RecordingStopped event received.");
         if ( e.Exception != null )
@@ -322,23 +323,23 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
 
     private void DisposeMicrophoneInstance()
     {
-        if ( _microphoneIn == null )
+        if ( _waveIn == null )
         {
             return;
         }
 
         _logger.LogDebug("Disposing existing WaveInEvent instance.");
-        _microphoneIn.DataAvailable    -= WaveIn_DataAvailable;
-        _microphoneIn.RecordingStopped -= MicrophoneIn_RecordingStopped;
+        _waveIn.DataAvailable    -= WaveIn_DataAvailable;
+        _waveIn.RecordingStopped -= WaveInRecordingStopped;
 
         if ( _recordingCts is { IsCancellationRequested: false } )
         {
             _logger.LogWarning("Disposing microphone instance while it was potentially still marked as recording. Stopping first.");
             StopInternal();
         }
-        
-        _microphoneIn.Dispose();
-        _microphoneIn = null;
+
+        _waveIn.Dispose();
+        _waveIn = null;
     }
 
     protected override void Dispose(bool disposing)
