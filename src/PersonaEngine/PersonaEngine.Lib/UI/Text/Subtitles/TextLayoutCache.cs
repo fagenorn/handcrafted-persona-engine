@@ -4,37 +4,36 @@ using FontStashSharp;
 
 namespace PersonaEngine.Lib.UI.Text.Subtitles;
 
-public class TextLayoutCache
+public record TextLayoutCache
 {
     private readonly Dictionary<string, Vector2> _cache = new();
 
     private readonly DynamicSpriteFont _font;
 
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
 
-    public TextLayoutCache(DynamicSpriteFont font, float sideMargin, int viewportWidth, int viewportHeight)
+    private readonly float _sideMargin;
+
+    private int _viewportWidth,
+                _viewportHeight;
+
+    public TextLayoutCache(DynamicSpriteFont font, float sideMargin, int initialWidth, int initialHeight)
     {
-        _font          = font;
-        SideMargin     = sideMargin;
-        ViewportWidth  = viewportWidth;
-        ViewportHeight = viewportHeight;
-        LineHeight     = _font.MeasureString("Ay").Y;
+        _font       = font;
+        _sideMargin = sideMargin;
+        UpdateViewport(initialWidth, initialHeight);
+        LineHeight = _font.MeasureString("Ay").Y;
     }
 
-    public float SideMargin { get; private set; }
-
-    public int ViewportWidth { get; private set; }
-
-    public int ViewportHeight { get; private set; }
-
-    public float AvailableWidth => ViewportWidth - 2 * SideMargin;
+    public float AvailableWidth { get; private set; }
 
     public float LineHeight { get; private set; }
 
     public void UpdateViewport(int width, int height)
     {
-        ViewportWidth  = width;
-        ViewportHeight = height;
+        _viewportWidth  = width;
+        _viewportHeight = height;
+        AvailableWidth  = _viewportWidth - 2 * _sideMargin;
     }
 
     public Vector2 MeasureText(string text)

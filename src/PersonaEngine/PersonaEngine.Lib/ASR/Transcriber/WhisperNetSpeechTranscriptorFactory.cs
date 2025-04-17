@@ -55,7 +55,6 @@ public sealed class WhisperSpeechTranscriptorFactory : ISpeechTranscriptorFactor
         {
             currentBuilder = currentBuilder.ApplyTemplate(options.Template.Value);
         }
-        
 
         var processor = currentBuilder.Build();
 

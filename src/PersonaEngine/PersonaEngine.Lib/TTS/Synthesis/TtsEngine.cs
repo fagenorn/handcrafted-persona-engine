@@ -142,6 +142,14 @@ public class TtsEngine : ITtsEngine
                 {
                     ApplyAudioFilters(segment);
 
+                    if ( firstChunk )
+                    {
+                        var firstChunkEvent = new TtsStreamStartEvent(sessionId, turnId, DateTimeOffset.UtcNow);
+                        await outputWriter.WriteAsync(firstChunkEvent, cancellationToken).ConfigureAwait(false);
+
+                        firstChunk = false;
+                    }
+                    
                     var chunkEvent = new TtsChunkEvent(sessionId, turnId, DateTimeOffset.UtcNow, segment);
                     await outputWriter.WriteAsync(chunkEvent, cancellationToken).ConfigureAwait(false);
                 }

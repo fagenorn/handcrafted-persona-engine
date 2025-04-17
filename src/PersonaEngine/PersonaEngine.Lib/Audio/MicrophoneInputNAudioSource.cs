@@ -78,8 +78,6 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
 
             if ( _recordingCts == null || _recordingCts.IsCancellationRequested )
             {
-                _logger.LogWarning("StopRecording called, but recording is not active.");
-
                 return;
             }
 

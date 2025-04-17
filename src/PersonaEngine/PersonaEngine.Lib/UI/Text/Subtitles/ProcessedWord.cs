@@ -2,7 +2,7 @@
 
 namespace PersonaEngine.Lib.UI.Text.Subtitles;
 
-public class ProcessedWord
+public record ProcessedWord
 {
     public ProcessedWord(string text, float startTime, float duration, Vector2 size)
     {
@@ -23,7 +23,7 @@ public class ProcessedWord
 
     public float Duration { get; }
 
-    public float AnimationProgress { get; private set; } = 0f;
+    public float AnimationProgress { get; set; } = 0f;
 
     public bool HasStarted(float currentTime) { return currentTime >= StartTime; }
 

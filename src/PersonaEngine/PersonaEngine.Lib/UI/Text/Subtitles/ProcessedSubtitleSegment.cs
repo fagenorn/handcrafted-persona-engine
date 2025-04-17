@@ -2,20 +2,20 @@
 
 namespace PersonaEngine.Lib.UI.Text.Subtitles;
 
-public class ProcessedSubtitleSegment
+public record ProcessedSubtitleSegment
 {
-    public ProcessedSubtitleSegment(AudioSegment audioSegment, string fullText, float startTime)
+    public ProcessedSubtitleSegment(AudioSegment originalSegment, string fullText, float segmentStartTime)
     {
-        AudioSegment = audioSegment;
-        FullText     = fullText;
-        StartTime    = startTime;
+        OriginalSegment  = originalSegment;
+        FullText         = fullText;
+        SegmentStartTime = segmentStartTime;
     }
 
-    public AudioSegment AudioSegment { get; }
+    public AudioSegment OriginalSegment { get; }
 
     public string FullText { get; }
 
-    public float StartTime { get; }
+    public float SegmentStartTime { get; }
 
     public List<ProcessedSubtitleLine> Lines { get; } = new();
 }

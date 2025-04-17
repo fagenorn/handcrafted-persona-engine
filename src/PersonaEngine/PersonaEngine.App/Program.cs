@@ -2,18 +2,9 @@
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 using PersonaEngine.Lib;
-using PersonaEngine.Lib.ASR.Transcriber;
-using PersonaEngine.Lib.Audio;
-using PersonaEngine.Lib.Core.Conversation.Abstractions.Configuration;
-using PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Input;
-using PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Output;
-using PersonaEngine.Lib.Core.Conversation.Implementations.Metrics;
-using PersonaEngine.Lib.Core.Conversation.Implementations.Session;
-using PersonaEngine.Lib.LLM;
-using PersonaEngine.Lib.TTS.Synthesis;
+using PersonaEngine.Lib.Core;
 
 using Serilog;
 using Serilog.Events;
@@ -22,7 +13,7 @@ namespace PersonaEngine.App;
 
 internal static class Program
 {
-    private static async Task Main(string[] args)
+    private static async Task Main()
     {
         Console.OutputEncoding = Encoding.UTF8;
 
@@ -43,28 +34,9 @@ internal static class Program
         services.AddApp(config);
 
         var serviceProvider = services.BuildServiceProvider();
-
-        //     public ConversationSession(ILogger logger, IConversationContext context, Guid sessionId, ConversationOptions options, IChatEngine chatEngine, ITtsEngine ttsEngine, IAggregatedStreamingAudioPlayer audioPlayer)
-
-        var mic     = serviceProvider.GetRequiredService<IMicrophone>();
-        var rt      = serviceProvider.GetRequiredService<IRealtimeSpeechTranscriptor>();
-        var logger2 = serviceProvider.GetRequiredService<ILogger<MicrophoneInputAdapter>>();
-        var ce      = serviceProvider.GetRequiredService<IChatEngine>();
-        var te      = serviceProvider.GetRequiredService<ITtsEngine>();
-        // var sp      = serviceProvider.GetRequiredService<IAggregatedStreamingAudioPlayer>();
-        var logger  = serviceProvider.GetRequiredService<ILogger<ConversationSession>>();
-        var logge3  = serviceProvider.GetRequiredService<ILogger<PortaudioOutputAdapter>>();
-        var cm      = serviceProvider.GetRequiredService<ConversationMetrics>();
-        var options = new ConversationOptions();
-        var au      = new PortaudioOutputAdapter(logge3);
-
-        var conversationSession = new ConversationSession(logger, Guid.NewGuid(), options, ce, te, [new MicrophoneInputAdapter(mic, rt, logger2)], au, cm);
-        await conversationSession.RunAsync(CancellationToken.None);
-
-        Console.ReadLine();
-
-        // var window = serviceProvider.GetRequiredService<AvatarApp>();
-        // window.Run();
+        
+        var window = serviceProvider.GetRequiredService<AvatarApp>();
+        window.Run();
 
         await serviceProvider.DisposeAsync();
     }

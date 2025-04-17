@@ -6,8 +6,9 @@ using FontStashSharp;
 
 using Microsoft.Extensions.Options;
 
-using PersonaEngine.Lib.Audio.Player;
 using PersonaEngine.Lib.Configuration;
+using PersonaEngine.Lib.Core.Conversation.Abstractions.Adapters;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
 using PersonaEngine.Lib.TTS.Synthesis;
 using PersonaEngine.Lib.UI.Text.Rendering;
 
@@ -19,6 +20,8 @@ namespace PersonaEngine.Lib.UI.Text.Subtitles;
 
 public class SubtitleRenderer : IRenderComponent
 {
+    private readonly IAudioProgressNotifier _audioNotifier;
+
     private readonly SubtitleOptions _config;
 
     private readonly FontProvider _fontProvider;
@@ -27,7 +30,7 @@ public class SubtitleRenderer : IRenderComponent
 
     private IAnimationStrategy _animationStrategy;
 
-    private IStreamingAudioPlayerHost? _audioPlayer;
+    private TimeSpan _currentPlaybackTime = TimeSpan.Zero;
 
     private bool _disposed;
 
@@ -50,11 +53,13 @@ public class SubtitleRenderer : IRenderComponent
 
     private List<ProcessedSubtitleLine> _visibleLines = new();
 
-    public SubtitleRenderer(IOptions<SubtitleOptions> config, IStreamingAudioPlayerHost audioPlayer, FontProvider fontProvider)
+    public SubtitleRenderer(IOptions<SubtitleOptions> config, FontProvider fontProvider, IAudioProgressNotifier audioNotifier)
     {
-        _config       = config.Value;
-        _fontProvider = fontProvider;
-        SubscribeToAudioPlayer(audioPlayer);
+        _config        = config.Value;
+        _fontProvider  = fontProvider;
+        _audioNotifier = audioNotifier;
+
+        SubscribeToAudioNotifier();
     }
 
     public bool UseSpout => true;
@@ -85,12 +90,7 @@ public class SubtitleRenderer : IRenderComponent
 
     public void Update(float deltaTime)
     {
-        if ( _audioPlayer == null )
-        {
-            return;
-        }
-
-        var currentTime = _audioPlayer.CurrentTime;
+        var currentTime = (float)_currentPlaybackTime.TotalSeconds;
 
         _segmentManager.Update(currentTime, deltaTime);
         _visibleLines = _segmentManager.GetVisibleLines(currentTime);
@@ -106,12 +106,7 @@ public class SubtitleRenderer : IRenderComponent
 
     public void Render(float deltaTime)
     {
-        if ( _audioPlayer == null )
-        {
-            return;
-        }
-
-        var currentTime = _audioPlayer.CurrentTime;
+        var currentTime = (float)_currentPlaybackTime.TotalSeconds;
 
         _textRenderer.Begin();
 
@@ -124,7 +119,7 @@ public class SubtitleRenderer : IRenderComponent
                     continue;
                 }
 
-                var progress = word.IsComplete(currentTime) ? 1.0f : word.AnimationProgress;
+                var progress = word.AnimationProgress;
                 var scale    = _animationStrategy.CalculateScale(progress);
                 var color    = _animationStrategy.CalculateColor(_highlightColor, _normalColor, progress);
 
@@ -152,6 +147,14 @@ public class SubtitleRenderer : IRenderComponent
         if ( !_disposed )
         {
             _textRenderer.Dispose();
+
+            _audioNotifier.ChunkPlaybackStarted -= OnChunkPlaybackStarted;
+            _audioNotifier.ChunkPlaybackEnded   -= OnChunkPlaybackEnded;
+            _audioNotifier.PlaybackProgress     -= OnPlaybackProgress;
+
+            _pendingSegments.Clear();
+            _visibleLines.Clear();
+
             _disposed = true;
         }
     }
@@ -162,7 +165,7 @@ public class SubtitleRenderer : IRenderComponent
         _viewportHeight = _config.Height;
         _layoutCache.UpdateViewport(_viewportWidth, _viewportHeight);
 
-        if ( _audioPlayer != null && _visibleLines.Count > 0 )
+        if ( _visibleLines.Count != 0 )
         {
             _segmentManager.PositionLines(
                                           _visibleLines,
@@ -176,22 +179,28 @@ public class SubtitleRenderer : IRenderComponent
         _textRenderer.OnViewportChanged(_viewportWidth, _viewportHeight);
     }
 
-    public void SubscribeToAudioPlayer(IStreamingAudioPlayerHost audioPlayer)
+    private void SubscribeToAudioNotifier()
     {
-        _audioPlayer                     =  audioPlayer ?? throw new ArgumentNullException(nameof(audioPlayer));
-        _audioPlayer.OnPlaybackStarted   += OnPlaybackStarted;
-        _audioPlayer.OnPlaybackCompleted += OnPlaybackCompleted;
+        _audioNotifier.ChunkPlaybackStarted -= OnChunkPlaybackStarted;
+        _audioNotifier.ChunkPlaybackEnded   -= OnChunkPlaybackEnded;
+        _audioNotifier.PlaybackProgress     -= OnPlaybackProgress;
+
+        _audioNotifier.ChunkPlaybackStarted += OnChunkPlaybackStarted;
+        _audioNotifier.ChunkPlaybackEnded   += OnChunkPlaybackEnded;
+        _audioNotifier.PlaybackProgress     += OnPlaybackProgress;
     }
 
-    private void OnPlaybackStarted(object? sender, AudioPlaybackEventArgs e)
+    private void OnChunkPlaybackStarted(object? sender, AudioChunkPlaybackStartedEvent e)
     {
-        _pendingSegments.Enqueue(e.Segment);
-        ProcessPendingSegmentsAsync();
+        _pendingSegments.Enqueue(e.Chunk);
+        Task.Run(ProcessPendingSegmentsAsync);
     }
 
-    private void OnPlaybackCompleted(object? sender, AudioPlaybackEventArgs e) { _segmentManager.RemoveSegment(e.Segment); }
+    private void OnChunkPlaybackEnded(object? sender, AudioChunkPlaybackEndedEvent e) { _segmentManager.RemoveSegment(e.Chunk); }
 
-    private async void ProcessPendingSegmentsAsync()
+    private void OnPlaybackProgress(object? sender, AudioPlaybackProgressEvent e) { _currentPlaybackTime = e.CurrentPlaybackTime; }
+
+    private async Task ProcessPendingSegmentsAsync()
     {
         while ( _pendingSegments.TryDequeue(out var audioSegment) )
         {
@@ -202,11 +211,8 @@ public class SubtitleRenderer : IRenderComponent
 
     private ProcessedSubtitleSegment ProcessAudioSegment(AudioSegment audioSegment)
     {
-        var segmentStartTime = _audioPlayer?.CurrentTime ?? 0f;
-        if ( audioSegment.Tokens.Count > 0 && audioSegment.Tokens[0].StartTs.HasValue )
-        {
-            segmentStartTime += (float)audioSegment.Tokens[0].StartTs.Value;
-        }
+        var basePlaybackTime          = (float)_currentPlaybackTime.TotalSeconds;
+        var segmentEffectiveStartTime = basePlaybackTime;
 
         var textLength  = audioSegment.Tokens.Sum(t => t.Text.Length + t.Whitespace.Length);
         var textBuilder = new StringBuilder(textLength);
@@ -217,118 +223,138 @@ public class SubtitleRenderer : IRenderComponent
         }
 
         var fullText = textBuilder.ToString();
-        var segment  = new ProcessedSubtitleSegment(audioSegment, fullText, segmentStartTime);
+        var segment  = new ProcessedSubtitleSegment(audioSegment, fullText, segmentEffectiveStartTime);
 
-        var currentLine      = new ProcessedSubtitleLine(0);
-        var currentLineWidth = 0f;
+        var currentLine          = new ProcessedSubtitleLine(0);
+        var currentLineWidth     = 0f;
+        var defaultTokenDuration = _config.AnimationDuration > 0 ? _config.AnimationDuration : 0.5f;
 
-        // Use for loop instead of foreach to access tokens by index
         for ( var i = 0; i < audioSegment.Tokens.Count; i++ )
         {
             var token       = audioSegment.Tokens[i];
             var displayText = token.Text + token.Whitespace;
             var tokenSize   = _layoutCache.MeasureText(displayText);
 
-            if ( currentLineWidth + tokenSize.X > _layoutCache.AvailableWidth && currentLine.Words.Any() )
+            if ( currentLineWidth > 0 && currentLineWidth + tokenSize.X > _layoutCache.AvailableWidth )
             {
                 segment.Lines.Add(currentLine);
                 currentLine      = new ProcessedSubtitleLine(segment.Lines.Count);
                 currentLineWidth = 0f;
             }
 
-            // Determine token timing based on the specific cases
-            float tokenStart,
-                  tokenDuration;
+            float wordStartTimeOffset;
+            float wordDuration;
 
-            // Case 1: Token has its own timestamps
+            // Case 1: Token has explicit start and end timestamps.
             if ( token is { StartTs: not null, EndTs: not null } )
             {
-                tokenStart    = (float)token.StartTs.Value;
-                tokenDuration = (float)(token.EndTs.Value - token.StartTs.Value);
+                wordStartTimeOffset = (float)token.StartTs.Value;
+                wordDuration        = Math.Max(0.01f, (float)(token.EndTs.Value - token.StartTs.Value));
             }
-            // Case 2: Single token with no timestamps
-            else if ( audioSegment.Tokens.Count == 1 && !token.StartTs.HasValue )
+            // Case 2: Token has only start timestamp.
+            else if ( token.StartTs.HasValue )
             {
-                tokenStart    = 0f;
-                tokenDuration = audioSegment.DurationInSeconds;
-            }
-            // Case 3: First token with no start timestamp and not by itself
-            else if ( i == 0 && !token.StartTs.HasValue )
-            {
-                tokenStart = 0f;
-
-                // If next token has a start time, use that as end
+                wordStartTimeOffset = (float)token.StartTs.Value;
+                // Estimate duration: time until next token starts, or default duration.
                 if ( i + 1 < audioSegment.Tokens.Count && audioSegment.Tokens[i + 1].StartTs.HasValue )
                 {
-                    tokenDuration = (float)audioSegment.Tokens[i + 1].StartTs.Value;
+                    wordDuration = Math.Max(0.01f, (float)audioSegment.Tokens[i + 1].StartTs!.Value - wordStartTimeOffset);
                 }
                 else
                 {
-                    tokenDuration = _config.AnimationDuration;
+                    wordDuration = defaultTokenDuration;
                 }
             }
-            // Case 4: Token with missing timestamps, but not the first
-            else
+            // Case 3: Token has only end timestamp (less common, treat start as previous end).
+            else if ( token.EndTs.HasValue )
             {
-                var prevToken = audioSegment.Tokens[i - 1];
-
-                // Determine start time based on previous token
-                if ( !token.StartTs.HasValue )
+                wordDuration = defaultTokenDuration; // Can't calculate duration accurately
+                if ( i > 0 )
                 {
-                    // Use previous token's end time if available
+                    var prevToken = audioSegment.Tokens[i - 1];
                     if ( prevToken.EndTs.HasValue )
                     {
-                        tokenStart = (float)prevToken.EndTs.Value;
+                        wordStartTimeOffset = (float)prevToken.EndTs.Value;
                     }
-                    // Use previous token's start time + duration if end not available
                     else if ( prevToken.StartTs.HasValue )
                     {
-                        var prevDuration = _config.AnimationDuration;
-                        if ( prevToken.EndTs.HasValue )
+                        var prevDuration = defaultTokenDuration;
+                        if ( i > 0 && audioSegment.Tokens[i - 1].EndTs.HasValue )
                         {
-                            prevDuration = (float)(prevToken.EndTs.Value - prevToken.StartTs.Value);
+                            prevDuration = Math.Max(0.01f, (float)(audioSegment.Tokens[i - 1].EndTs!.Value - audioSegment.Tokens[i - 1].StartTs!.Value));
+                        }
+                        else if ( i < audioSegment.Tokens.Count - 1 && audioSegment.Tokens[i + 1].StartTs.HasValue )
+                        {
+                            prevDuration = Math.Max(0.01f, (float)(audioSegment.Tokens[i + 1].StartTs!.Value - prevToken.StartTs.Value));
                         }
 
-                        tokenStart = (float)prevToken.StartTs.Value + prevDuration;
+                        wordStartTimeOffset = (float)prevToken.StartTs.Value + prevDuration;
                     }
                     else
                     {
-                        tokenStart = 0f;
+                        wordStartTimeOffset = (currentLine.Words.LastOrDefault()?.StartTime ?? segmentEffectiveStartTime) + (currentLine.Words.LastOrDefault()?.Duration ?? 0) - segmentEffectiveStartTime; // Relative offset
                     }
                 }
                 else
                 {
-                    tokenStart = (float)token.StartTs.Value;
+                    wordStartTimeOffset = 0f;
                 }
 
-                // Determine duration
-                if ( token.EndTs.HasValue )
+                if ( segmentEffectiveStartTime + wordStartTimeOffset > (float)token.EndTs.Value )
                 {
-                    tokenDuration = (float)(token.EndTs.Value - (token.StartTs.HasValue ? token.StartTs.Value : 0));
+                    wordDuration = 0.01f;
                 }
-                // If next token has start time, use that to calculate end
-                else if ( i + 1 < audioSegment.Tokens.Count && audioSegment.Tokens[i + 1].StartTs.HasValue )
+                // This case is tricky, maybe estimate based on EndTs - StartTs? But StartTs is unknown.
+                // Sticking to default duration might be safest.
+            }
+            // Case 4: Token has no timestamps.
+            else
+            {
+                wordDuration = defaultTokenDuration;
+                if ( i > 0 )
                 {
-                    tokenDuration = (float)audioSegment.Tokens[i + 1].StartTs.Value - tokenStart;
+                    var prevToken = audioSegment.Tokens[i - 1];
+                    if ( prevToken.EndTs.HasValue )
+                    {
+                        wordStartTimeOffset = (float)prevToken.EndTs.Value;
+                    }
+                    else if ( prevToken.StartTs.HasValue )
+                    {
+                        var prevDuration = defaultTokenDuration;
+                        if ( prevToken.EndTs.HasValue )
+                        {
+                            prevDuration = Math.Max(0.01f, (float)(prevToken.EndTs.Value - prevToken.StartTs.Value));
+                        }
+                        else if ( i < audioSegment.Tokens.Count - 1 && audioSegment.Tokens[i + 1].StartTs.HasValue )
+                        {
+                            prevDuration = Math.Max(0.01f, (float)(audioSegment.Tokens[i + 1].StartTs!.Value - prevToken.StartTs.Value));
+                        }
+
+                        wordStartTimeOffset = (float)prevToken.StartTs.Value + prevDuration;
+                    }
+                    else
+                    {
+                        wordStartTimeOffset = (currentLine.Words.LastOrDefault()?.StartTime ?? segmentEffectiveStartTime) + (currentLine.Words.LastOrDefault()?.Duration ?? 0) - segmentEffectiveStartTime; // Relative offset
+                    }
                 }
-                // Use previous token's duration if available
-                else if ( prevToken.EndTs.HasValue && prevToken.StartTs.HasValue )
-                {
-                    tokenDuration = (float)(prevToken.EndTs.Value - prevToken.StartTs.Value);
-                }
-                // Default fallback duration
                 else
                 {
-                    tokenDuration = _config.AnimationDuration;
+                    wordStartTimeOffset = 0f;
                 }
             }
 
-            var word = new ProcessedWord(displayText, segmentStartTime + tokenStart, tokenDuration, tokenSize);
+            wordDuration = Math.Max(0.01f, wordDuration);
+            var word = new ProcessedWord(
+                                         displayText,
+                                         segmentEffectiveStartTime + wordStartTimeOffset,
+                                         wordDuration,
+                                         tokenSize);
+
             currentLine.AddWord(word);
             currentLineWidth += tokenSize.X;
         }
 
-        if ( currentLine.Words.Any() )
+        if ( currentLine.Words.Count != 0 )
         {
             segment.Lines.Add(currentLine);
         }

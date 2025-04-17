@@ -20,9 +20,8 @@
         <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.2"/>
         <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions"
                           Version="9.0.2"/>
-        <PackageReference Include="Microsoft.ML.OnnxRuntime.Extensions" Version="0.13.0"/>
-        <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.20.1"/>
-        <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" Version="0.6.0"/>
+        <PackageReference Include="Microsoft.ML.OnnxRuntime.Extensions" Version="0.14.0" />
+        <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.21.0" />
         <PackageReference Include="Microsoft.ML.Tokenizers" Version="1.0.2"/>
         <PackageReference Include="Microsoft.ML.Tokenizers.Data.Cl100kBase" Version="1.0.2"/>
         <PackageReference Include="Microsoft.SemanticKernel.Abstractions" Version="1.40.0"/>
@@ -43,6 +42,7 @@
     </ItemGroup>
 
     <ItemGroup>
+        <Folder Include="Core\Conversation\Implementations\Events\Input\" />
         <Folder Include="Resources\Live2D\Avatars\"/>
         <Folder Include="Resources\Live2D\runtime\"/>
         <Folder Include="Resources\Models\kokoro\"/>

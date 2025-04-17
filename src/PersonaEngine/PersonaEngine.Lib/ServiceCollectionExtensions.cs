@@ -7,17 +7,20 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.ML.OnnxRuntime;
 using Microsoft.SemanticKernel;
 
 using PersonaEngine.Lib.ASR.Transcriber;
 using PersonaEngine.Lib.ASR.VAD;
 using PersonaEngine.Lib.Audio;
-using PersonaEngine.Lib.Audio.Player;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.Core;
-using PersonaEngine.Lib.Core.Conversation;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Adapters;
+using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Input;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Output;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Metrics;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Session;
 using PersonaEngine.Lib.Live2D;
 using PersonaEngine.Lib.Live2D.Behaviour;
 using PersonaEngine.Lib.Live2D.Behaviour.Emotion;
@@ -45,10 +48,11 @@ public static class ServiceCollectionExtensions
         services.AddConversation(configuration, configureKernel);
         services.AddUI(configuration);
         services.AddLive2D(configuration);
-        // services.AddSystemAudioPlayer();
-        // services.AddVBANStreamingPlayer();
+        services.AddSystemAudioPlayer();
 
         services.AddSingleton<AvatarApp>();
+
+        OrtEnv.Instance().EnvLogLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR;
 
         return services;
     }
@@ -64,7 +68,7 @@ public static class ServiceCollectionExtensions
         services.AddChatEngineSystem(configuration);
 
         services.AddConversationPipeline(configuration);
-        // services.AddSingleton<IStartupTask>(x => x.GetRequiredService<ConversationManager>());
+
         services.AddSingleton<ProfanityDetector>();
 
         return services;
@@ -73,67 +77,12 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddConversationPipeline(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton<ConversationMetrics>();
-        // // 1. Core Services & Channels (Singleton)
-        // services.AddSingleton<IChannelRegistry, ChannelRegistry>();
-        // services.AddSingleton<IConversationOrchestrator, ConversationOrchestrator>();
-        // services.AddSingleton<ILlmProcessor, LlmProcessor>();
-        // services.AddSingleton<IAudioOutputService, AudioOutputService>();
-        //
-        // // 2. Register Context Manager & Options
-        // services.Configure<ContextManagerOptions>(configuration.GetSection("Config:ContextManager"));
-        // services.AddSingleton<IContextManager, ContextManager>();
-        //
-        // // 3. Register Strategies (Register default implementation)
-        // services.AddSingleton<ITurnTakingStrategy, ProcessImmediatelyStrategy>();
-        // services.AddSingleton<IOutputFormattingStrategy, DefaultOutputFormattingStrategy>();
-        //
-        // // 4. Background Processing Services (Register as Singletons)
-        // services.AddSingleton<IUtteranceAggregator, UtteranceAggregator>();
-        // services.AddSingleton<IBargeInDetector, BargeInDetector>();
-        //
-        // // 5. Input Adapters (Configure and Register)
-        // // Configure options for TranscriptionService from appsettings.json
-        // services.Configure<TranscriptionServiceOptions>(configuration.GetSection("Config:InputAdapters:Microphone1"));
-        //
-        // services.AddSingleton<TranscriptionService>();
-        // services.AddSingleton<IInputAdapter>(sp => sp.GetRequiredService<TranscriptionService>());
-        // services.AddSingleton<IStartupTask>(sp => sp.GetRequiredService<TranscriptionService>());
-        //
-        // // --- Add registration for other IInputAdapters here when created ---
-        //
-        // // 6. Output Adapters (Register and Run as Hosted Services)
-        // services.AddSingleton<AudioOutputAdapter>();
-        // services.AddSingleton<IOutputAdapter>(sp => sp.GetRequiredService<AudioOutputAdapter>());
-        // services.AddSingleton<IStartupTask>(sp => sp.GetRequiredService<AudioOutputAdapter>());
-        //
-        // // services.AddSingleton<ConsoleOutputAdapter>();                                            
-        // // services.AddSingleton<IOutputAdapter>(sp => sp.GetRequiredService<ConsoleOutputAdapter>());
-        // // services.AddSingleton<IStartupTask>(sp => sp.GetRequiredService<ConsoleOutputAdapter>());
-        //
-        // // --- Add registration for other IOutputAdapters here when created ---
-        //
-        // // 7. Register background services that need starting (as IStartupTask)
-        //
-        // // Modify UtteranceAggregator, BargeInDetector, ConversationOrchestrator to implement IStartupTask
-        // // Add StartAsync/StopAsync to them that call the existing start/stop logic.
-        // // Example for UtteranceAggregator:
-        // // services.AddSingleton<UtteranceAggregator>(); // Register concrete type
-        // // services.AddSingleton<IUtteranceAggregator>(sp => sp.GetRequiredService<UtteranceAggregator>());
-        // // services.AddHostedService(sp => sp.GetRequiredService<UtteranceAggregator>()); // Run as hosted service
-        // // (Requires UtteranceAggregator to implement IHostedService)
-        //
-        // // *** TODO: Modify UtteranceAggregator, BargeInDetector, ConversationOrchestrator to implement IHostedService ***
-        // // This involves adding StartAsync/StopAsync methods matching IHostedService signature
-        // // which internally call the existing Start/Stop methods.
-        //
-        // // --- TEMPORARY WORKAROUND (if not modifying internal services yet) ---
-        // // Create a simple IStartupTask to start the internal components
-        // services.AddSingleton<IStartupTask, InternalConversationServicesManager>();
-        //
-        // // 8. Configuration for Detectors/Aggregators
-        // services.Configure<BargeInDetectorOptions>(configuration.GetSection("Config:BargeInDetector"));
-        // // Add configuration for UtteranceAggregator silence timeout if needed
-        
+
+        services.AddSingleton<IInputAdapter, MicrophoneInputAdapter>();
+
+        services.AddSingleton<IConversationSessionFactory, ConversationSessionFactory>();
+        services.AddSingleton<IConversationOrchestrator, ConversationOrchestrator>();
+
         return services;
     }
 
@@ -187,11 +136,8 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddSystemAudioPlayer(this IServiceCollection services)
     {
-        services.AddSingleton<PortAudioStreamingPlayer>();
-        services.AddSingleton<AggregatedStreamingAudioPlayer>();
-        services.AddSingleton<IAggregatedStreamingAudioPlayer>(provider => provider.GetRequiredService<AggregatedStreamingAudioPlayer>());
-        services.AddSingleton<IStreamingAudioPlayer>(provider => provider.GetRequiredService<PortAudioStreamingPlayer>());
-        services.AddSingleton<IStreamingAudioPlayerHost>(provider => provider.GetRequiredService<PortAudioStreamingPlayer>());
+        services.AddSingleton<IOutputAdapter, PortaudioOutputAdapter>();
+        services.AddSingleton<IAudioProgressNotifier, AudioProgressNotifier>();
 
         return services;
     }
@@ -227,6 +173,8 @@ public static class ServiceCollectionExtensions
 
                                   return kernelBuilder.Build();
                               });
+
+        services.AddSingleton<ITextFilter, NameTextFilter>();
 
         return services;
     }
@@ -344,20 +292,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<MicrophoneConfigEditor>();
 
         services.AddSingleton<IStartupTask, ConfigSectionRegistrationTask>();
-
-        return services;
-    }
-
-    public static IServiceCollection AddVBANStreamingPlayer(
-        this IServiceCollection services)
-    {
-        // Register the audio player
-        services.AddSingleton<IStreamingAudioPlayer>(sp =>
-                                                         VBANAudioPlayer.Create(
-                                                                                "127.0.0.1",
-                                                                                6980,
-                                                                                "TTSAudioVBAN"
-                                                                               ));
 
         return services;
     }

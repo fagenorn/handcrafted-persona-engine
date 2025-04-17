@@ -12,7 +12,6 @@ using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Context;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Common;
-using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Input;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Metrics;
 using PersonaEngine.Lib.LLM;
@@ -26,17 +25,17 @@ public partial class ConversationSession : IConversationSession
 {
     private static readonly ParticipantInfo ASSISTANT_PARTICIPANT = new("ARIA_ASSISTANT_BOT", "Aria", ChatMessageRole.Assistant);
 
-    public ConversationSession(ILogger logger, Guid sessionId, ConversationOptions options, IChatEngine chatEngine, ITtsEngine ttsEngine, IEnumerable<IInputAdapter> inputAdapters, IOutputAdapter outputAdapter, ConversationMetrics metrics)
+    public ConversationSession(ILogger logger, IChatEngine chatEngine, ITtsEngine ttsEngine, IEnumerable<IInputAdapter> inputAdapters, IOutputAdapter outputAdapter, ConversationMetrics metrics, Guid sessionId, ConversationOptions options)
     {
         _logger     = logger;
-        SessionId   = sessionId;
-        _options    = options;
         _chatEngine = chatEngine;
         _ttsEngine  = ttsEngine;
 
         _inputAdapters.AddRange(inputAdapters);
         _outputAdapter = outputAdapter;
         _metrics       = metrics;
+        SessionId      = sessionId;
+        _options       = options;
 
         _inputChannel       = Channel.CreateUnbounded<IInputEvent>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
         _inputChannelWriter = _inputChannel.Writer;
@@ -213,7 +212,7 @@ public partial class ConversationSession : IConversationSession
         }
         catch (OperationCanceledException)
         {
-            _logger.LogInformation("{SessionId} | Input event processing loop cancelled.", SessionId);
+            _logger.LogDebug("{SessionId} | Input event processing loop cancelled.", SessionId);
         }
         catch (ChannelClosedException)
         {
@@ -348,11 +347,11 @@ public partial class ConversationSession : IConversationSession
         }
         catch (OperationCanceledException)
         {
-            _logger.LogInformation("{SessionId} | Output event processing loop cancelled.", SessionId);
+            _logger.LogDebug("{SessionId} | Output event processing loop cancelled.", SessionId);
         }
         catch (ChannelClosedException)
         {
-            _logger.LogInformation("{SessionId} | Output channel closed, ending output event processing loop.", SessionId);
+            _logger.LogDebug("{SessionId} | Output channel closed, ending output event processing loop.", SessionId);
         }
         catch (Exception ex)
         {

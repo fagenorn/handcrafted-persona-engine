@@ -74,7 +74,6 @@ public sealed class MicrophoneInputAdapter(
         var localSessionId = _sessionId.Value;
 
         microphone.StartRecording();
-        logger.LogInformation("Microphone recording started. Starting transcription task.");
 
         _transcriptionTask = Task.Run(async () => await TranscriptionJob(localSessionId, localWriter, localCt), localCt);
 
@@ -88,7 +87,7 @@ public sealed class MicrophoneInputAdapter(
             return;
         }
 
-        logger.LogInformation("Stopping microphone recording and transcription task.");
+        logger.LogDebug("Stopping microphone recording and transcription task.");
         microphone.StopRecording();
 
         if ( _transcriptionCts is { IsCancellationRequested: false } )
@@ -121,7 +120,7 @@ public sealed class MicrophoneInputAdapter(
         _inputWriter      = null;
         _sessionId        = null;
 
-        logger.LogInformation("Adapter stopped.");
+        logger.LogDebug("Adapter stopped.");
     }
 
     public async ValueTask DisposeAsync()
@@ -140,7 +139,7 @@ public sealed class MicrophoneInputAdapter(
 
     private async ValueTask TranscriptionJob(Guid sessionId, ChannelWriter<IInputEvent> writer, CancellationToken ct)
     {
-        logger.LogInformation("Transcription job starting for session {SessionId}.", sessionId);
+        logger.LogDebug("Transcription job starting for session {SessionId}.", sessionId);
         try
         {
             var eventsLoop = speechTranscriptor.TranscribeAsync(microphone, ct);
@@ -162,7 +161,7 @@ public sealed class MicrophoneInputAdapter(
         }
         catch (OperationCanceledException)
         {
-            logger.LogInformation("Transcription job cancelled for session {SessionId}.", sessionId);
+            logger.LogDebug("Transcription job cancelled for session {SessionId}.", sessionId);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

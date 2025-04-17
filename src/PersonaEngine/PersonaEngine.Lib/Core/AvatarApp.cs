@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Options;
 
 using PersonaEngine.Lib.Configuration;
+using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
 using PersonaEngine.Lib.UI;
 using PersonaEngine.Lib.UI.Common;
 using PersonaEngine.Lib.UI.GUI;
@@ -16,6 +17,8 @@ namespace PersonaEngine.Lib.Core;
 public class AvatarApp : IDisposable
 {
     private readonly IOptions<AvatarAppConfig> _config;
+
+    private readonly IConversationOrchestrator _conversationOrchestrator;
 
     private readonly IReadOnlyList<IRenderComponent> _regularComponents;
 
@@ -34,12 +37,13 @@ public class AvatarApp : IDisposable
     private ImGuiController _imGui;
 
     private IInputContext _inputContext;
-
+    
     private SpoutRegistry _spoutRegistry;
 
-    public AvatarApp(IOptions<AvatarAppConfig> config, IEnumerable<IRenderComponent> renderComponents, IEnumerable<IStartupTask> startupTasks)
+    public AvatarApp(IOptions<AvatarAppConfig> config, IEnumerable<IRenderComponent> renderComponents, IEnumerable<IStartupTask> startupTasks, IConversationOrchestrator conversationOrchestrator)
     {
-        _config = config;
+        _config                   = config;
+        _conversationOrchestrator = conversationOrchestrator;
 
         var allComponents = renderComponents.OrderByDescending(x => x.Priority).ToList();
 
@@ -107,6 +111,8 @@ public class AvatarApp : IDisposable
         {
             InitializeComponents(componentGroup);
         }
+
+        _ = _conversationOrchestrator.StartNewSessionAsync();
     }
 
     private void InitializeComponents(IEnumerable<IRenderComponent> components)

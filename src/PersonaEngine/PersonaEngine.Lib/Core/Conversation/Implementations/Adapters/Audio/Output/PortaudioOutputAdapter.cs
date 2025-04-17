@@ -7,8 +7,8 @@ using PersonaEngine.Lib.Audio.Player;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Adapters;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Common;
-using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Input;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
+using PersonaEngine.Lib.TTS.Synthesis;
 
 using PortAudioSharp;
 
@@ -16,7 +16,7 @@ using Stream = PortAudioSharp.Stream;
 
 namespace PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Output;
 
-public class PortaudioOutputAdapter(ILogger<PortaudioOutputAdapter> logger) : IAudioOutputAdapter
+public class PortaudioOutputAdapter(ILogger<PortaudioOutputAdapter> logger, IAudioProgressNotifier progressNotifier) : IAudioOutputAdapter
 {
     private const int DefaultSampleRate = 24000;
 
@@ -30,17 +30,32 @@ public class PortaudioOutputAdapter(ILogger<PortaudioOutputAdapter> logger) : IA
 
     private ChannelReader<TtsChunkEvent>? _currentReader;
 
+    private Guid _currentTurnId;
+
+    private long _framesOfChunkPlayed;
+
     private TaskCompletionSource<bool>? _playbackCompletion;
 
     private CancellationTokenSource? _playbackCts;
 
     private volatile bool _producerCompleted;
 
+    private Channel<IAudioProgressEvent>? _progressChannel;
+
     private Guid _sessionId;
 
     public ValueTask DisposeAsync()
     {
-        Console.WriteLine("PortaudioOutputAdapter: DisposeAsync called");
+        try
+        {
+            _audioStream = null;
+
+            PortAudio.Terminate();
+        }
+        catch
+        {
+            /* ignored */
+        }
 
         return ValueTask.CompletedTask;
     }
@@ -101,71 +116,46 @@ public class PortaudioOutputAdapter(ILogger<PortaudioOutputAdapter> logger) : IA
 
     public ValueTask StartAsync(CancellationToken cancellationToken)
     {
-        if ( _audioStream == null )
-        {
-            throw new InvalidOperationException("Audio stream is not initialized.");
-        }
-
-        if ( _audioStream.IsActive )
-        {
-            return ValueTask.CompletedTask;
-        }
-
-        try
-        {
-            // _audioStream.Start();
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to start PortAudio stream.");
-
-            throw new AudioException("Failed to start audio playback stream.", ex);
-        }
+        // Don't start it here, SendAsync will handle it.
 
         return ValueTask.CompletedTask;
     }
 
     public ValueTask StopAsync(CancellationToken cancellationToken)
     {
-        if ( _audioStream is not { IsActive: true } )
-        {
-            return ValueTask.CompletedTask;
-        }
-
-        try
-        {
-            // _audioStream.Stop();
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error stopping PortAudio stream.");
-
-            throw new AudioException("Failed to stop audio playback stream.", ex);
-        }
+        // Don't stop it here, SendAsync's cleanup or cancellation will handle it.
+        // If a hard stop independent of SendAsync is needed, cancellation of SendAsync's token is the way.
 
         return ValueTask.CompletedTask;
     }
 
     public async Task SendAsync(ChannelReader<TtsChunkEvent> inputReader, ChannelWriter<IOutputEvent> outputWriter, Guid turnId, CancellationToken cancellationToken = default)
     {
-        var completedReason = CompletionReason.Completed;
-        var firstChunk      = true;
-
         if ( _audioStream == null )
         {
             throw new InvalidOperationException("Audio stream is not initialized.");
         }
 
+        _currentTurnId = turnId;
+        _currentReader = inputReader;
+
+        _progressChannel = Channel.CreateBounded<IAudioProgressEvent>(new BoundedChannelOptions(10) { SingleReader = true, SingleWriter = true });
+
+        _playbackCts        = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _playbackCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var       completedReason  = CompletionReason.Completed;
+        var       firstChunk       = true;
+        var       localPlaybackCts = _playbackCts;
+        var       localCompletion  = _playbackCompletion;
+        using var eventLoopCts     = new CancellationTokenSource();
+        var       progressPumpTask = ProgressEventsLoop(eventLoopCts.Token);
+
         try
         {
-            _producerCompleted  = false;
-            _playbackCts        = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            _playbackCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _currentReader      = inputReader;
-
             _audioStream.Start();
 
-            while ( await inputReader.WaitToReadAsync(cancellationToken).ConfigureAwait(false) )
+            while ( await inputReader.WaitToReadAsync(localPlaybackCts.Token).ConfigureAwait(false) )
             {
                 if ( !firstChunk )
                 {
@@ -173,24 +163,30 @@ public class PortaudioOutputAdapter(ILogger<PortaudioOutputAdapter> logger) : IA
                 }
 
                 var firstChunkEvent = new AudioPlaybackStartedEvent(_sessionId, turnId, DateTimeOffset.UtcNow);
-                await outputWriter.WriteAsync(firstChunkEvent, cancellationToken).ConfigureAwait(false);
+                await outputWriter.WriteAsync(firstChunkEvent, localPlaybackCts.Token).ConfigureAwait(false);
 
                 firstChunk = false;
             }
 
             _producerCompleted = true;
 
-            await _playbackCompletion.Task.ConfigureAwait(false);
+            await localCompletion.Task.ConfigureAwait(false);
+            await progressPumpTask.ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
             completedReason = CompletionReason.Cancelled;
+
+            eventLoopCts.CancelAfter(250);
+
+            await localCompletion.Task.ConfigureAwait(false);
+            await progressPumpTask.ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             completedReason = CompletionReason.Error;
 
-            await outputWriter.WriteAsync(new ErrorOutputEvent(_sessionId, turnId, DateTimeOffset.UtcNow, ex), cancellationToken).ConfigureAwait(false);
+            await outputWriter.WriteAsync(new ErrorOutputEvent(_sessionId, turnId, DateTimeOffset.UtcNow, ex), CancellationToken.None).ConfigureAwait(false);
         }
         finally
         {
@@ -198,7 +194,36 @@ public class PortaudioOutputAdapter(ILogger<PortaudioOutputAdapter> logger) : IA
 
             if ( !firstChunk )
             {
-                await outputWriter.WriteAsync(new AudioPlaybackEndedEvent(_sessionId, turnId, DateTimeOffset.UtcNow, completedReason), cancellationToken).ConfigureAwait(false);
+                await outputWriter.WriteAsync(new AudioPlaybackEndedEvent(_sessionId, turnId, DateTimeOffset.UtcNow, completedReason), CancellationToken.None).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private async ValueTask ProgressEventsLoop(CancellationToken ct = default)
+    {
+        var eventsReader = _progressChannel!.Reader;
+
+        await foreach ( var progressEvent in eventsReader.ReadAllAsync(ct).ConfigureAwait(false) )
+        {
+            if ( ct.IsCancellationRequested )
+            {
+                break;
+            }
+
+            switch ( progressEvent )
+            {
+                case AudioChunkPlaybackStartedEvent startedArgs:
+                    progressNotifier.RaiseChunkStarted(this, startedArgs);
+
+                    break;
+                case AudioChunkPlaybackEndedEvent endedArgs:
+                    progressNotifier.RaiseChunkEnded(this, endedArgs);
+
+                    break;
+                case AudioPlaybackProgressEvent progressArgs:
+                    progressNotifier.RaiseProgress(this, progressArgs);
+
+                    break;
             }
         }
     }
@@ -207,59 +232,77 @@ public class PortaudioOutputAdapter(ILogger<PortaudioOutputAdapter> logger) : IA
     {
         _audioStream?.Stop();
 
+        _currentTurnId = Guid.Empty;
+        _currentReader = null;
+
+        _progressChannel?.Writer.TryComplete();
+        _producerCompleted   = false;
+        _framesOfChunkPlayed = 0;
+        _currentBuffer       = null;
+
         _playbackCts?.Cancel();
         _playbackCts?.Dispose();
         _playbackCts = null;
-
-        _currentReader     = null;
-        _currentBuffer     = null;
-        _producerCompleted = false;
 
         Array.Clear(_frameBuffer, 0, DefaultFrameBufferSize);
     }
 
     private StreamCallbackResult AudioCallback(IntPtr input, IntPtr output, uint framecount, ref StreamCallbackTimeInfo timeinfo, StreamCallbackFlags statusflags, IntPtr userdataptr)
     {
-        var framesRequested           = (int)framecount;
-        var currentReader             = _currentReader;
-        var currentPlaybackCts        = _playbackCts;
-        var currentPlaybackCompletion = _playbackCompletion;
-        var ct                        = currentPlaybackCts?.Token ?? CancellationToken.None;
+        var framesRequested = (int)framecount;
+        var framesWritten   = 0;
 
-        if ( currentReader == null )
+        var turnId             = _currentTurnId;
+        var reader             = _currentReader;
+        var completionSource   = _playbackCompletion;
+        var currentPlaybackCts = _playbackCts;
+        var ct                 = currentPlaybackCts?.Token ?? CancellationToken.None;
+        var progressWriter     = _progressChannel!.Writer;
+
+        if ( reader == null )
         {
-            currentPlaybackCompletion?.TrySetResult(false);
+            completionSource?.TrySetResult(false);
+            progressWriter.TryComplete();
 
             return StreamCallbackResult.Complete;
         }
 
-        var framesWritten = 0;
         while ( framesWritten < framesRequested )
         {
             if ( ct.IsCancellationRequested )
             {
-                currentPlaybackCompletion?.TrySetResult(false);
+                FillSilence();
+                completionSource?.TrySetResult(false);
+
+                if ( _currentBuffer != null )
+                {
+                    progressWriter.TryWrite(new AudioChunkPlaybackEndedEvent(_sessionId, turnId, DateTimeOffset.UtcNow, _currentBuffer.Segment));
+                }
+
+                progressWriter.TryComplete();
 
                 return StreamCallbackResult.Complete;
             }
 
             if ( _currentBuffer == null )
             {
-                if ( !currentReader.TryRead(out var chunk) )
+                if ( reader.TryRead(out var chunk) )
+                {
+                    _currentBuffer = new AudioBuffer(chunk.Chunk.AudioData, chunk.Chunk);
+                    progressWriter.TryWrite(new AudioChunkPlaybackStartedEvent(_sessionId, turnId, DateTimeOffset.UtcNow, chunk.Chunk));
+                }
+                else
                 {
                     if ( _producerCompleted )
                     {
-                        currentPlaybackCompletion?.TrySetResult(true);
                         FillSilence();
+                        completionSource?.TrySetResult(true);
+                        progressWriter.TryComplete();
 
                         return StreamCallbackResult.Complete;
                     }
 
                     FillSilence();
-                }
-                else
-                {
-                    _currentBuffer = new AudioBuffer(chunk.Chunk.AudioData);
                 }
             }
 
@@ -277,22 +320,40 @@ public class PortaudioOutputAdapter(ILogger<PortaudioOutputAdapter> logger) : IA
 
             if ( _currentBuffer.IsFinished )
             {
-                _currentBuffer = null;
+                progressWriter.TryWrite(new AudioChunkPlaybackEndedEvent(_sessionId, turnId, DateTimeOffset.UtcNow, _currentBuffer.Segment));
+                _framesOfChunkPlayed = 0;
+                _currentBuffer       = null;
             }
         }
 
         Marshal.Copy(_frameBuffer, 0, output, framesRequested);
 
+        _framesOfChunkPlayed += framesRequested;
+        var currentTime = TimeSpan.FromSeconds((double)_framesOfChunkPlayed / DefaultSampleRate);
+        progressWriter.TryWrite(new AudioPlaybackProgressEvent(_sessionId, turnId, DateTimeOffset.UtcNow, currentTime));
+
         if ( _currentBuffer == null && _producerCompleted )
         {
-            currentPlaybackCompletion?.TrySetResult(true);
+            completionSource?.TrySetResult(true);
+            if ( _currentBuffer != null )
+            {
+                progressWriter.TryWrite(new AudioChunkPlaybackEndedEvent(_sessionId, turnId, DateTimeOffset.UtcNow, _currentBuffer.Segment));
+            }
+
+            progressWriter.TryComplete();
 
             return StreamCallbackResult.Complete;
         }
 
         if ( ct.IsCancellationRequested )
         {
-            currentPlaybackCompletion?.TrySetResult(false);
+            completionSource?.TrySetResult(false);
+            if ( _currentBuffer != null )
+            {
+                progressWriter.TryWrite(new AudioChunkPlaybackEndedEvent(_sessionId, turnId, DateTimeOffset.UtcNow, _currentBuffer.Segment));
+            }
+
+            progressWriter.TryComplete();
 
             return StreamCallbackResult.Complete;
         }
@@ -310,9 +371,11 @@ public class PortaudioOutputAdapter(ILogger<PortaudioOutputAdapter> logger) : IA
         }
     }
 
-    private sealed class AudioBuffer(Memory<float> data)
+    private sealed class AudioBuffer(Memory<float> data, AudioSegment segment)
     {
         public Memory<float> Data { get; } = data;
+
+        public AudioSegment Segment { get; } = segment;
 
         public int Position { get; private set; } = 0;
 

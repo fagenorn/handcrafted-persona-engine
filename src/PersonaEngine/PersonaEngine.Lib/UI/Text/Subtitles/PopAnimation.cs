@@ -17,13 +17,13 @@ public class PopAnimation : IAnimationStrategy
         return new Vector2(scale, scale);
     }
 
-    public FSColor CalculateColor(FSColor startColor, FSColor endColor, float progress)
+    public FSColor CalculateColor(FSColor highlight, FSColor normal, float progress)
     {
-        return new FSColor(
-                           (byte)(startColor.R + (endColor.R - startColor.R) * progress),
-                           (byte)(startColor.G + (endColor.G - startColor.G) * progress),
-                           (byte)(startColor.B + (endColor.B - startColor.B) * progress),
-                           (byte)(startColor.A + (endColor.A - startColor.A) * progress)
-                          );
+        var r = (byte)(highlight.R + (normal.R - highlight.R) * progress);
+        var g = (byte)(highlight.G + (normal.G - highlight.G) * progress);
+        var b = (byte)(highlight.B + (normal.B - highlight.B) * progress);
+        var a = (byte)(highlight.A + (normal.A - highlight.A) * progress);
+
+        return new FSColor(r, g, b, a);
     }
 }

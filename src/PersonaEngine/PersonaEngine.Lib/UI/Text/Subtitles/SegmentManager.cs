@@ -1,5 +1,4 @@
-﻿using System.Collections.Concurrent;
-using System.Numerics;
+﻿using System.Numerics;
 
 using PersonaEngine.Lib.TTS.Synthesis;
 
@@ -7,50 +6,58 @@ namespace PersonaEngine.Lib.UI.Text.Subtitles;
 
 public class SegmentManager
 {
-    private readonly ConcurrentDictionary<ProcessedSubtitleLine, LineData> _lineMap = new();
+    private readonly List<ProcessedSubtitleSegment> _activeSegments = new();
 
-    private readonly Lock _lockObject = new();
+    private readonly Lock _lock = new();
 
     private readonly int _maxVisibleLines;
-
-    private readonly List<ProcessedSubtitleSegment> _segments = new();
-
-    private Queue<LineData> _lineQueue = new();
 
     public SegmentManager(int maxVisibleLines) { _maxVisibleLines = Math.Max(1, maxVisibleLines); }
 
     public void AddSegment(ProcessedSubtitleSegment segment)
     {
-        lock (_lockObject)
+        lock (_lock)
         {
-            _segments.Add(segment);
+            _activeSegments.Add(segment);
         }
     }
 
-    public void RemoveSegment(AudioSegment audioSegment)
+    public void RemoveSegment(AudioSegment segmentToRemove)
     {
-        lock (_lockObject)
+        lock (_lock)
         {
-            var segmentIndex = _segments.FindIndex(s => s.AudioSegment == audioSegment);
-            if ( segmentIndex >= 0 )
-            {
-                var segment = _segments[segmentIndex];
-                _segments.RemoveAt(segmentIndex);
+            _activeSegments.RemoveAll(s => ReferenceEquals(s.OriginalSegment, segmentToRemove));
+        }
+    }
 
-                // Remove lines from dictionary and queue
-                var needRebuildQueue = false;
+    public void Update(float currentTime, float deltaTime)
+    {
+        lock (_lock) // Ensure thread safety when iterating
+        {
+            foreach ( var segment in _activeSegments )
+            {
                 foreach ( var line in segment.Lines )
                 {
-                    if ( _lineMap.TryRemove(line, out _) )
+                    foreach ( var word in line.Words )
                     {
-                        needRebuildQueue = true;
+                        if ( word.HasStarted(currentTime) )
+                        {
+                            if ( !word.IsComplete(currentTime) )
+                            {
+                                // Calculate progress based on how much time has passed since start
+                                var elapsed = currentTime - word.StartTime;
+                                word.AnimationProgress = Math.Clamp(elapsed / word.Duration, 0f, 1f);
+                            }
+                            else
+                            {
+                                word.AnimationProgress = 1f; // Ensure it stays at 1 when complete
+                            }
+                        }
+                        else
+                        {
+                            word.AnimationProgress = 0f; // Not started yet
+                        }
                     }
-                }
-
-                if ( needRebuildQueue )
-                {
-                    var newQueue = new Queue<LineData>(_lineQueue.Where(data => !segment.Lines.Contains(data.Line)));
-                    _lineQueue = newQueue;
                 }
             }
         }
@@ -58,34 +65,33 @@ public class SegmentManager
 
     public List<ProcessedSubtitleLine> GetVisibleLines(float currentTime)
     {
-        lock (_lockObject)
+        var visibleLines = new List<ProcessedSubtitleLine>();
+        lock (_lock)
         {
-            UpdateLineQueue(currentTime);
-
-            return _lineQueue.Select(data => data.Line).ToList();
-        }
-    }
-
-    private void UpdateLineQueue(float currentTime)
-    {
-        foreach ( var segment in _segments )
-        {
-            foreach ( var line in segment.Lines )
+            for ( var i = _activeSegments.Count - 1; i >= 0; i-- )
             {
-                if ( !_lineMap.ContainsKey(line) && line.HasStarted(currentTime) )
-                {
-                    if ( _lineQueue.Count >= _maxVisibleLines )
-                    {
-                        var removedLine = _lineQueue.Dequeue();
-                        _lineMap.TryRemove(removedLine.Line, out _);
-                    }
+                var segment = _activeSegments[i];
 
-                    var lineData = new LineData(line, currentTime);
-                    _lineQueue.Enqueue(lineData);
-                    _lineMap[line] = lineData;
+                for ( var j = segment.Lines.Count - 1; j >= 0; j-- )
+                {
+                    var line = segment.Lines[j];
+
+                    if ( line.Words.Count != 0 && line.Words[0].HasStarted(currentTime) )
+                    {
+                        visibleLines.Add(line);
+                        if ( visibleLines.Count >= _maxVisibleLines )
+                        {
+                            goto EndLoop;
+                        }
+                    }
                 }
             }
         }
+
+        EndLoop:
+        visibleLines.Reverse();
+
+        return visibleLines;
     }
 
     public void PositionLines(
@@ -94,74 +100,25 @@ public class SegmentManager
         int                         viewportHeight,
         float                       bottomMargin,
         float                       lineHeight,
-        float                       lineSpacing)
+        float                       interSegmentSpacing)
     {
-        if ( lines.Count == 0 )
-        {
-            return;
-        }
-
-        var currentY = viewportHeight - bottomMargin - lineHeight / 2;
+        var currentY = viewportHeight - bottomMargin - lineHeight;
 
         for ( var i = lines.Count - 1; i >= 0; i-- )
         {
-            var line       = lines[i];
-            var totalWidth = line.Words.Sum(w => w.Size.X);
-            var startX     = (viewportWidth - totalWidth) / 2f;
+            var line           = lines[i];
+            var totalLineWidth = line.LineWidth;
+            var currentX       = (viewportWidth - totalLineWidth) / 2f;
 
             foreach ( var word in line.Words )
             {
-                word.Position =  new Vector2(startX + word.Size.X / 2, currentY);
-                startX        += word.Size.X;
+                var wordCenterX = currentX + word.Size.X / 2f;
+                var wordCenterY = currentY + lineHeight / 2f;
+                word.Position =  new Vector2(wordCenterX, wordCenterY);
+                currentX      += word.Size.X;
             }
 
-            currentY -= lineHeight + lineSpacing;
+            currentY -= lineHeight + interSegmentSpacing;
         }
-    }
-
-    public void Update(float currentTime, float deltaTime)
-    {
-        lock (_lockObject)
-        {
-            var completedSegments = new List<ProcessedSubtitleSegment>();
-
-            foreach ( var segment in _segments )
-            {
-                foreach ( var line in segment.Lines )
-                {
-                    foreach ( var word in line.Words )
-                    {
-                        word.UpdateAnimationProgress(currentTime, deltaTime);
-                    }
-                }
-
-                // Check if segment is complete
-                if ( segment.Lines.All(l => l.Words.All(w => w.IsComplete(currentTime))) )
-                {
-                    completedSegments.Add(segment);
-                }
-            }
-
-            // Remove completed segments
-            foreach ( var segment in completedSegments )
-            {
-                _segments.Remove(segment);
-            }
-
-            UpdateLineQueue(currentTime);
-        }
-    }
-
-    private class LineData
-    {
-        public LineData(ProcessedSubtitleLine line, float currentTime)
-        {
-            Line      = line;
-            AddedTime = currentTime;
-        }
-
-        public ProcessedSubtitleLine Line { get; }
-
-        public float AddedTime { get; }
     }
 }

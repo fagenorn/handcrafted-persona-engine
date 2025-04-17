@@ -38,10 +38,6 @@ public class SpoutManager : IDisposable
             _spoutSender.Dispose();
             Console.WriteLine($"Failed to create Spout Sender '{config.OutputName}'.");
         }
-        else
-        {
-            Console.WriteLine($"Spout Sender '{config.OutputName}' created successfully.");
-        }
     }
 
     public void Dispose()
@@ -89,7 +85,6 @@ public class SpoutManager : IDisposable
         _gl.BindFramebuffer(GLEnum.Framebuffer, 0);
 
         _customFboInitialized = true;
-        Console.WriteLine($"Custom framebuffer initialized with dimensions {_config.Width}x{_config.Height}");
     }
 
     /// <summary>

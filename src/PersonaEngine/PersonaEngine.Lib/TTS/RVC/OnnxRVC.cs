@@ -28,11 +28,11 @@ public class OnnxRVC : IDisposable
                                              InterOpNumThreads      = Environment.ProcessorCount,
                                              IntraOpNumThreads      = Environment.ProcessorCount,
                                              GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-                                             LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL
+                                             LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR
                                          };
 
         options.AppendExecutionProvider_CUDA();
-
+        
         _model    = new InferenceSession(modelPath, options);
         _hopSize  = hopsize;
         _vecModel = new ContentVec(vecPath);

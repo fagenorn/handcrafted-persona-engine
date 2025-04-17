@@ -1,11 +1,14 @@
 ﻿using System.Diagnostics;
 using System.Numerics;
+using System.Threading.Channels;
 
 using Hexa.NET.ImGui;
 using Hexa.NET.ImGui.Widgets.Dialogs;
 
-using PersonaEngine.Lib.Audio.Player;
 using PersonaEngine.Lib.Configuration;
+using PersonaEngine.Lib.Core.Conversation.Abstractions.Adapters;
+using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
 using PersonaEngine.Lib.TTS.RVC;
 using PersonaEngine.Lib.TTS.Synthesis;
 
@@ -16,9 +19,7 @@ namespace PersonaEngine.Lib.UI.GUI;
 /// </summary>
 public class TtsConfigEditor : ConfigSectionEditorBase
 {
-    private readonly IStreamingAudioPlayer _audioPlayer;
-
-    private readonly IStreamingAudioPlayerHost _audioPlayerHost;
+    private readonly IAudioOutputAdapter _audioPlayer;
 
     private readonly IRVCVoiceProvider _rvcProvider;
 
@@ -73,26 +74,24 @@ public class TtsConfigEditor : ConfigSectionEditorBase
     private bool _useBritishEnglish;
 
     public TtsConfigEditor(
-        IUiConfigurationManager         configManager,
-        IEditorStateManager             stateManager,
-        ITtsEngine                      ttsEngine,
-        IStreamingAudioPlayerHost       audioPlayerHost,
-        IAggregatedStreamingAudioPlayer audioPlayer,
-        IKokoroVoiceProvider            voiceProvider,
-        IUiThemeManager                 themeManager, IRVCVoiceProvider rvcProvider)
+        IUiConfigurationManager configManager,
+        IEditorStateManager     stateManager,
+        ITtsEngine              ttsEngine,
+        IOutputAdapter          audioPlayer,
+        IKokoroVoiceProvider    voiceProvider,
+        IUiThemeManager         themeManager, IRVCVoiceProvider rvcProvider)
         : base(configManager, stateManager)
     {
-        _ttsEngine       = ttsEngine;
-        _audioPlayer     = audioPlayer;
-        _audioPlayerHost = audioPlayerHost;
-        _voiceProvider   = voiceProvider;
-        _themeManager    = themeManager;
-        _rvcProvider     = rvcProvider;
+        _ttsEngine     = ttsEngine;
+        _audioPlayer   = (IAudioOutputAdapter)audioPlayer;
+        _voiceProvider = voiceProvider;
+        _themeManager  = themeManager;
+        _rvcProvider   = rvcProvider;
 
         LoadConfiguration();
 
-        _audioPlayerHost.OnPlaybackStarted   += OnPlaybackStarted;
-        _audioPlayerHost.OnPlaybackCompleted += OnPlaybackCompleted;
+        // _audioPlayerHost.OnPlaybackStarted   += OnPlaybackStarted;
+        // _audioPlayerHost.OnPlaybackCompleted += OnPlaybackCompleted;
     }
 
     public override string SectionKey => "TTS";
@@ -188,8 +187,8 @@ public class TtsConfigEditor : ConfigSectionEditorBase
     public override void Dispose()
     {
         // Unsubscribe from audio player events
-        _audioPlayerHost.OnPlaybackStarted   -= OnPlaybackStarted;
-        _audioPlayerHost.OnPlaybackCompleted -= OnPlaybackCompleted;
+        // _audioPlayerHost.OnPlaybackStarted   -= OnPlaybackStarted;
+        // _audioPlayerHost.OnPlaybackCompleted -= OnPlaybackCompleted;
 
         // Cancel any active playback
         StopPlayback();
@@ -353,16 +352,24 @@ public class TtsConfigEditor : ConfigSectionEditorBase
 
             var options = _currentVoiceOptions;
 
-            async IAsyncEnumerable<string> Wrap(string text) { yield return text; }
+            var llmInput    = Channel.CreateUnbounded<LlmChunkEvent>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+            var audioOutput = Channel.CreateUnbounded<TtsChunkEvent>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+            var audioEvents = Channel.CreateUnbounded<IOutputEvent>(new UnboundedChannelOptions { SingleReader  = true, SingleWriter = true }); // Tts Started/Tts Ended - Audio Started/Audio Ended
+
+            await llmInput.Writer.WriteAsync(new LlmChunkEvent(Guid.Empty, Guid.Empty, DateTimeOffset.UtcNow, _testText), _playbackOperation.CancellationSource.Token);
+            llmInput.Writer.Complete();
 
             // Generate and play audio
-            var audioStream = _ttsEngine.SynthesizeStreamingAsync(
-                                                                  Wrap(_testText),
-                                                                  options,
-                                                                  _playbackOperation.CancellationSource.Token
-                                                                 );
+            _ = _ttsEngine.SynthesizeStreamingAsync(
+                                                    llmInput,
+                                                    audioEvents,
+                                                    Guid.Empty,
+                                                    Guid.Empty,
+                                                    options,
+                                                    _playbackOperation.CancellationSource.Token
+                                                   );
 
-            await _audioPlayer.StartPlaybackAsync(audioStream, _playbackOperation.CancellationSource.Token);
+            await _audioPlayer.SendAsync(audioOutput, audioEvents, Guid.Empty, _playbackOperation.CancellationSource.Token);
         }
         catch (OperationCanceledException)
         {
