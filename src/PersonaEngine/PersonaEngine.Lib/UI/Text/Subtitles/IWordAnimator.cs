@@ -4,7 +4,10 @@ using FontStashSharp;
 
 namespace PersonaEngine.Lib.UI.Text.Subtitles;
 
-public interface IAnimationStrategy
+/// <summary>
+///     Interface for defining word animation strategies (scale, color).
+/// </summary>
+public interface IWordAnimator
 {
     Vector2 CalculateScale(float progress);
 
