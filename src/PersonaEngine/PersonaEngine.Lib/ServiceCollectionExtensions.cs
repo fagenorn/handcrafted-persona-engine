@@ -7,14 +7,20 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.ML.OnnxRuntime;
 using Microsoft.SemanticKernel;
 
 using PersonaEngine.Lib.ASR.Transcriber;
 using PersonaEngine.Lib.ASR.VAD;
 using PersonaEngine.Lib.Audio;
-using PersonaEngine.Lib.Audio.Player;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.Core;
+using PersonaEngine.Lib.Core.Conversation.Abstractions.Adapters;
+using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Input;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Output;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Metrics;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Session;
 using PersonaEngine.Lib.Live2D;
 using PersonaEngine.Lib.Live2D.Behaviour;
 using PersonaEngine.Lib.Live2D.Behaviour.Emotion;
@@ -43,9 +49,10 @@ public static class ServiceCollectionExtensions
         services.AddUI(configuration);
         services.AddLive2D(configuration);
         services.AddSystemAudioPlayer();
-        // services.AddVBANStreamingPlayer();
 
         services.AddSingleton<AvatarApp>();
+
+        OrtEnv.Instance().EnvLogLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR;
 
         return services;
     }
@@ -60,9 +67,21 @@ public static class ServiceCollectionExtensions
 #pragma warning restore SKEXP0010
         services.AddChatEngineSystem(configuration);
 
-        services.AddSingleton<ConversationManager>();
-        services.AddSingleton<IStartupTask>(x => x.GetRequiredService<ConversationManager>());
+        services.AddConversationPipeline(configuration);
+
         services.AddSingleton<ProfanityDetector>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddConversationPipeline(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddSingleton<ConversationMetrics>();
+
+        services.AddSingleton<IInputAdapter, MicrophoneInputAdapter>();
+
+        services.AddSingleton<IConversationSessionFactory, ConversationSessionFactory>();
+        services.AddSingleton<IConversationOrchestrator, ConversationOrchestrator>();
 
         return services;
     }
@@ -100,7 +119,6 @@ public static class ServiceCollectionExtensions
                                                                var realTimeOptions = new RealtimeOptions();
 
                                                                return new RealtimeTranscriptor(
-                                                                                               // new WhisperOnnxSpeechTranscriptorFactory(ModelUtils.GetModelPath(ModelType.WhisperOnnxGpuFp32)),
                                                                                                new WhisperSpeechTranscriptorFactory(ModelUtils.GetModelPath(ModelType.WhisperGgmlTurbov3)),
                                                                                                sp.GetRequiredService<IVadDetector>(),
                                                                                                new WhisperSpeechTranscriptorFactory(ModelUtils.GetModelPath(ModelType.WhisperGgmlTiny)),
@@ -117,11 +135,8 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddSystemAudioPlayer(this IServiceCollection services)
     {
-        services.AddSingleton<PortAudioStreamingPlayer>();
-        services.AddSingleton<AggregatedStreamingAudioPlayer>();
-        services.AddSingleton<IAggregatedStreamingAudioPlayer>(provider => provider.GetRequiredService<AggregatedStreamingAudioPlayer>());
-        services.AddSingleton<IStreamingAudioPlayer>(provider => provider.GetRequiredService<PortAudioStreamingPlayer>());
-        services.AddSingleton<IStreamingAudioPlayerHost>(provider => provider.GetRequiredService<PortAudioStreamingPlayer>());
+        services.AddSingleton<IOutputAdapter, PortaudioOutputAdapter>();
+        services.AddSingleton<IAudioProgressNotifier, AudioProgressNotifier>();
 
         return services;
     }
@@ -157,6 +172,8 @@ public static class ServiceCollectionExtensions
 
                                   return kernelBuilder.Build();
                               });
+
+        services.AddSingleton<ITextFilter, NameTextFilter>();
 
         return services;
     }
@@ -274,20 +291,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<MicrophoneConfigEditor>();
 
         services.AddSingleton<IStartupTask, ConfigSectionRegistrationTask>();
-
-        return services;
-    }
-
-    public static IServiceCollection AddVBANStreamingPlayer(
-        this IServiceCollection services)
-    {
-        // Register the audio player
-        services.AddSingleton<IStreamingAudioPlayer>(sp =>
-                                                         VBANAudioPlayer.Create(
-                                                                                "127.0.0.1",
-                                                                                6980,
-                                                                                "TTSAudioVBAN"
-                                                                               ));
 
         return services;
     }

@@ -1,11 +1,17 @@
 ﻿using System.Diagnostics;
-using System.Runtime.CompilerServices;
-using System.Text;
 using System.Text.Json;
+using System.Threading.Channels;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
+
+using OpenAI.Chat;
+
+using PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
+using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Common;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
 
 namespace PersonaEngine.Lib.LLM;
 
@@ -16,8 +22,6 @@ public class SemanticKernelChatEngine : IChatEngine
     private readonly ILogger<SemanticKernelChatEngine> _logger;
 
     private readonly SemaphoreSlim _semaphore = new(1, 1);
-
-    private Guid? _metadataMsgId;
 
     public SemanticKernelChatEngine(
         Kernel                            kernel,
@@ -47,55 +51,58 @@ public class SemanticKernelChatEngine : IChatEngine
         }
     }
 
-    public IAsyncEnumerable<string> GetStreamingChatResponseAsync(
-        ChatMessage              userInput,
-        InjectionMetadata?       injectionMetadata = null,
-        PromptExecutionSettings? executionSettings = null,
-        CancellationToken        cancellationToken = default)
-    {
-        return GetStreamingChatResponseWithHistoryAsync(userInput, HistoryManager, injectionMetadata, executionSettings, cancellationToken);
-    }
-
-    /// <summary>
-    ///     Gets a streaming chat response using the provided chat history manager.
-    ///     This allows using a specific history context for the chat (e.g., for per-user history in Discord).
-    /// </summary>
-    public async IAsyncEnumerable<string> GetStreamingChatResponseWithHistoryAsync(
-        ChatMessage                                userInput,
-        IChatHistoryManager                        historyManager,
-        InjectionMetadata?                         injectionMetadata = null,
-        PromptExecutionSettings?                   executionSettings = null,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async Task<CompletionReason> GetStreamingChatResponseAsync(
+        IConversationContext        context,
+        ChannelWriter<IOutputEvent> outputWriter,
+        Guid                        turnId,
+        Guid                        sessionId,
+        PromptExecutionSettings?    executionSettings = null,
+        CancellationToken           cancellationToken = default)
     {
         await _semaphore.WaitAsync(cancellationToken);
-
-        if ( injectionMetadata != null )
-        {
-            var injectionJson = CreateInjectionJson(injectionMetadata);
-            if ( _metadataMsgId.HasValue && historyManager.UpdateMessage(_metadataMsgId.Value, injectionJson) )
-            {
-                // Update successful
-            }
-            else
-            {
-                _metadataMsgId = historyManager.AddUserMessage(injectionJson);
-            }
-        }
-
-        var userMsgId = historyManager.AddUserMessage($"[{userInput.speaker}]{userInput.content.Trim()}");
-
-        var cleanupNeeded = true;
-        var stopwatch     = Stopwatch.StartNew();
+        var completedReason = CompletionReason.Completed;
+        var firstChunk      = true;
 
         try
         {
-            var chunkCount         = 0;
-            var rawResponseBuilder = new StringBuilder();
-            var pendingBuffer      = string.Empty;
-            var prefixProcessed    = false;
+            HistoryManager.Clear();
+
+            var history = context.GetProjectedHistory();
+            foreach ( var historyItem in history )
+            {
+                foreach ( var participantResponse in historyItem.ParticipantResponses )
+                {
+                    var input = participantResponse.Value;
+                    if ( input.Role == ChatMessageRole.Assistant )
+                    {
+                        HistoryManager.AddAssistantMessage($"{input.FinalText}");
+                    }
+                    else
+                    {
+                        HistoryManager.AddUserMessage($"[{context.Participants[participantResponse.Key].Name}]{input.FinalText}");
+                    }
+                }
+            }
+
+            // if ( injectionMetadata != null )
+            // {
+            //     var injectionJson = CreateInjectionJson(injectionMetadata);
+            //     if ( _metadataMsgId.HasValue && historyManager.UpdateMessage(_metadataMsgId.Value, injectionJson) )
+            //     {
+            //         // Update successful
+            //     }
+            //     else
+            //     {
+            //         _metadataMsgId = historyManager.AddUserMessage(injectionJson);
+            //     }
+            // }
+
+            var stopwatch = Stopwatch.StartNew();
+
+            var chunkCount = 0;
 
             var streamingResponse = _chatCompletionService.GetStreamingChatMessageContentsAsync(
-                                                                                                historyManager.ChatHistory,
+                                                                                                HistoryManager.ChatHistory,
                                                                                                 executionSettings,
                                                                                                 null,
                                                                                                 cancellationToken);
@@ -106,64 +113,45 @@ public class SemanticKernelChatEngine : IChatEngine
 
                 chunkCount++;
                 var content = chunk.Content ?? string.Empty;
-                rawResponseBuilder.Append(content);
 
-                if ( !prefixProcessed )
+                if ( firstChunk )
                 {
-                    pendingBuffer += content;
+                    var firstChunkEvent = new LlmStreamStartEvent(sessionId, turnId, DateTimeOffset.UtcNow);
+                    await outputWriter.WriteAsync(firstChunkEvent, cancellationToken).ConfigureAwait(false);
 
-                    if ( pendingBuffer.Length > 0 && pendingBuffer[0] == '[' )
-                    {
-                        var closingBracketIndex = pendingBuffer.IndexOf(']');
-                        if ( closingBracketIndex < 0 )
-                        {
-                            continue;
-                        }
-
-                        pendingBuffer   = pendingBuffer[(closingBracketIndex + 1)..];
-                        prefixProcessed = true;
-                        if ( string.IsNullOrEmpty(pendingBuffer) )
-                        {
-                            continue;
-                        }
-
-                        _logger.LogTrace("Received chunk {ChunkNumber}: {ChunkLength} characters", chunkCount, pendingBuffer.Length);
-
-                        yield return pendingBuffer;
-                        pendingBuffer = string.Empty;
-                    }
-                    else
-                    {
-                        _logger.LogTrace("Received chunk {ChunkNumber}: {ChunkLength} characters", chunkCount, pendingBuffer.Length);
-
-                        yield return pendingBuffer;
-                        pendingBuffer = string.Empty;
-                    }
+                    firstChunk = false;
                 }
-                else
-                {
-                    _logger.LogTrace("Received chunk {ChunkNumber}: {ChunkLength} characters", chunkCount, content.Length);
 
-                    yield return content;
-                }
+                var chunkEvent = new LlmChunkEvent(sessionId, turnId, DateTimeOffset.UtcNow, content);
+                await outputWriter.WriteAsync(chunkEvent, cancellationToken).ConfigureAwait(false);
+
+                _logger.LogTrace("Received chunk {ChunkNumber}: {ChunkLength} characters", chunkCount, content.Length);
             }
 
-            historyManager.AddAssistantMessage(rawResponseBuilder.ToString());
             stopwatch.Stop();
             _logger.LogInformation("Chat response streaming completed. Total chunks: {ChunkCount}, Total time: {ElapsedMs}ms", chunkCount, stopwatch.ElapsedMilliseconds);
+        }
+        catch (OperationCanceledException)
+        {
+            completedReason = CompletionReason.Cancelled;
+        }
+        catch (Exception ex)
+        {
+            completedReason = CompletionReason.Error;
 
-            cleanupNeeded = false;
+            await outputWriter.WriteAsync(new ErrorOutputEvent(sessionId, turnId, DateTimeOffset.UtcNow, ex), cancellationToken).ConfigureAwait(false);
         }
         finally
         {
-            if ( cleanupNeeded )
+            if ( !firstChunk )
             {
-                _logger.LogWarning("Cleaning up user message due to cancellation or error.");
-                historyManager.RemoveMessage(userMsgId);
+                await outputWriter.WriteAsync(new LlmStreamEndEvent(sessionId, turnId, DateTimeOffset.UtcNow, completedReason), cancellationToken).ConfigureAwait(false);
             }
 
             _semaphore.Release();
         }
+
+        return completedReason;
     }
 
     /// <summary>

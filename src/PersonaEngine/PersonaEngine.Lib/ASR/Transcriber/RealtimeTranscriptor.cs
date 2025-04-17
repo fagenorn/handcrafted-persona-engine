@@ -10,7 +10,7 @@ using PersonaEngine.Lib.Audio;
 
 namespace PersonaEngine.Lib.ASR.Transcriber;
 
-internal class RealtimeTranscriptor : IRealtimeSpeechTranscriptor, IDisposable
+internal class RealtimeTranscriptor : IRealtimeSpeechTranscriptor, IAsyncDisposable
 {
     private readonly object cacheLock = new();
 
@@ -27,6 +27,10 @@ internal class RealtimeTranscriptor : IRealtimeSpeechTranscriptor, IDisposable
     private readonly Dictionary<string, ISpeechTranscriptor> transcriptorCache;
 
     private readonly IVadDetector vadDetector;
+
+    private TimeSpan _lastDuration = TimeSpan.Zero;
+
+    private TimeSpan _processedDuration = TimeSpan.Zero;
 
     private bool isDisposed;
 
@@ -50,23 +54,23 @@ internal class RealtimeTranscriptor : IRealtimeSpeechTranscriptor, IDisposable
                         options, realtimeOptions);
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         if ( isDisposed )
         {
             return;
         }
 
-        lock (cacheLock)
+        // lock (cacheLock)
+        // {
+        logger.LogInformation("Disposing {Count} cached transcriptors", transcriptorCache.Count);
+        foreach ( var transcriptor in transcriptorCache.Values )
         {
-            logger.LogInformation("Disposing {Count} cached transcriptors", transcriptorCache.Count);
-            foreach ( var transcriptor in transcriptorCache.Values )
-            {
-                transcriptor.Dispose();
-            }
-
-            transcriptorCache.Clear();
+            await transcriptor.DisposeAsync();
         }
+
+        transcriptorCache.Clear();
+        // }
 
         isDisposed = true;
         GC.SuppressFinalize(this);
@@ -92,30 +96,27 @@ internal class RealtimeTranscriptor : IRealtimeSpeechTranscriptor, IDisposable
 
         yield return new RealtimeSessionStarted(sessionId);
 
-        var processedDuration = TimeSpan.Zero;
-        var lastDuration      = TimeSpan.Zero;
-
         try
         {
             while ( !source.IsFlushed )
             {
                 var currentDuration = source.Duration;
 
-                if ( currentDuration == lastDuration )
+                if ( currentDuration == _lastDuration )
                 {
-                    await source.WaitForNewSamplesAsync(lastDuration + realtimeOptions.ProcessingInterval, cancellationToken);
+                    await source.WaitForNewSamplesAsync(_lastDuration + realtimeOptions.ProcessingInterval, cancellationToken);
 
                     continue;
                 }
 
                 logger.LogTrace("Processing new audio segment: Current={Current}ms, Last={Last}ms, Delta={Delta}ms",
                                 currentDuration.TotalMilliseconds,
-                                lastDuration.TotalMilliseconds,
-                                (currentDuration - lastDuration).TotalMilliseconds);
+                                _lastDuration.TotalMilliseconds,
+                                (currentDuration - _lastDuration).TotalMilliseconds);
 
-                lastDuration = currentDuration;
+                _lastDuration = currentDuration;
                 var segmentStopwatch = Stopwatch.StartNew();
-                var slicedSource     = new SliceAudioSource(source, processedDuration, currentDuration - processedDuration);
+                var slicedSource     = new SliceAudioSource(source, _processedDuration, currentDuration - _processedDuration);
 
                 VadSegment? lastNonFinalSegment = null;
                 VadSegment? recognizingSegment  = null;
@@ -140,7 +141,7 @@ internal class RealtimeTranscriptor : IRealtimeSpeechTranscriptor, IDisposable
                     var transcribingEvents = TranscribeSegments(
                                                                 speechTranscriptorFactory,
                                                                 source,
-                                                                processedDuration,
+                                                                _processedDuration,
                                                                 segment.StartTime,
                                                                 segment.Duration,
                                                                 promptBuilder,
@@ -178,7 +179,7 @@ internal class RealtimeTranscriptor : IRealtimeSpeechTranscriptor, IDisposable
                     var transcribingEvents = TranscribeSegments(
                                                                 recognizingSpeechTranscriptorFactory ?? speechTranscriptorFactory,
                                                                 source,
-                                                                processedDuration,
+                                                                _processedDuration,
                                                                 recognizingSegment.StartTime,
                                                                 recognizingSegment.Duration,
                                                                 promptBuilder,
@@ -192,7 +193,7 @@ internal class RealtimeTranscriptor : IRealtimeSpeechTranscriptor, IDisposable
                     }
                 }
 
-                HandleSegmentProcessing(source, ref processedDuration, lastNonFinalSegment, recognizingSegment, lastDuration);
+                HandleSegmentProcessing(source, ref _processedDuration, lastNonFinalSegment, recognizingSegment, _lastDuration);
 
                 logger.LogTrace("Segment processing completed in {ElapsedTime}ms",
                                 segmentStopwatch.ElapsedMilliseconds);
@@ -202,9 +203,9 @@ internal class RealtimeTranscriptor : IRealtimeSpeechTranscriptor, IDisposable
             var lastEvents = TranscribeSegments(
                                                 speechTranscriptorFactory,
                                                 source,
-                                                processedDuration,
+                                                _processedDuration,
                                                 TimeSpan.Zero,
-                                                source.Duration - processedDuration,
+                                                source.Duration - _processedDuration,
                                                 promptBuilder,
                                                 detectedLanguage,
                                                 sessionId,
@@ -230,7 +231,7 @@ internal class RealtimeTranscriptor : IRealtimeSpeechTranscriptor, IDisposable
         }
         finally
         {
-            CleanupSession(sessionId);
+            await CleanupSessionAsync(sessionId);
         }
     }
 
@@ -340,23 +341,25 @@ internal class RealtimeTranscriptor : IRealtimeSpeechTranscriptor, IDisposable
         }
     }
 
-    private void CleanupSession(string sessionId)
+    private async ValueTask CleanupSessionAsync(string sessionId)
     {
-        lock (cacheLock)
-        {
-            var keysToRemove = transcriptorCache.Keys
-                                                .Where(k => k.StartsWith($"{sessionId}_"))
-                                                .ToList();
+        // lock (cacheLock)
+        // {
+        var keysToRemove = transcriptorCache.Keys
+                                            .Where(k => k.StartsWith($"{sessionId}_"))
+                                            .ToList();
 
-            foreach ( var key in keysToRemove )
+        foreach ( var key in keysToRemove )
+        {
+            if ( !transcriptorCache.TryGetValue(key, out var transcriptor) )
             {
-                if ( transcriptorCache.TryGetValue(key, out var transcriptor) )
-                {
-                    transcriptor.Dispose();
-                    transcriptorCache.Remove(key);
-                }
+                continue;
             }
+
+            await transcriptor.DisposeAsync();
+            transcriptorCache.Remove(key);
         }
+        // }
     }
 
     private ConcatAudioSource GetSilenceAddedSource(IAudioSource source, TimeSpan paddedStart, TimeSpan paddedDuration)

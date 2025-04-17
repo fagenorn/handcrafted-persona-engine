@@ -50,7 +50,8 @@ public class CrepeOnnx : IF0Predictor
                                              ExecutionMode          = ExecutionMode.ORT_PARALLEL,
                                              InterOpNumThreads      = Environment.ProcessorCount,
                                              IntraOpNumThreads      = Environment.ProcessorCount,
-                                             GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL
+                                             GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
+                                             LogSeverityLevel       = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL
                                          };
 
         options.AppendExecutionProvider_CPU();

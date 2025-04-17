@@ -78,8 +78,6 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
 
             if ( _recordingCts == null || _recordingCts.IsCancellationRequested )
             {
-                _logger.LogWarning("StopRecording called, but recording is not active.");
-
                 return;
             }
 
@@ -132,6 +130,11 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
         lock (_lock)
         {
             if ( _isDisposed )
+            {
+                return;
+            }
+
+            if ( newOptions.DeviceName == _currentOptions.DeviceName )
             {
                 return;
             }
@@ -269,6 +272,7 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
         {
             _recordingCts.Cancel();
             _microphoneIn?.StopRecording();
+            
             _logger.LogInformation("Microphone recording stopped.");
         }
         catch (Exception ex)
@@ -313,7 +317,6 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
             // For now, just log it. Reconfiguration might fix it later.
         }
 
-        Flush();
         _logger.LogDebug("Microphone stream flushed after stopping.");
     }
 
@@ -333,7 +336,7 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
             _logger.LogWarning("Disposing microphone instance while it was potentially still marked as recording. Stopping first.");
             StopInternal();
         }
-
+        
         _microphoneIn.Dispose();
         _microphoneIn = null;
     }
@@ -355,6 +358,8 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
 
                 StopInternal();
                 DisposeMicrophoneInstance();
+
+                Flush();
 
                 _recordingCts?.Dispose();
                 _recordingCts = null;

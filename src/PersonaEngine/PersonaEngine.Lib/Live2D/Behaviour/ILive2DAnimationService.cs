@@ -10,13 +10,6 @@ namespace PersonaEngine.Lib.Live2D.Behaviour;
 public interface ILive2DAnimationService : IDisposable
 {
     /// <summary>
-    ///     Subscribes the animation service to the current audio player host.
-    ///     The service will receive events from the source to drive Live2D parameter changes.
-    /// </summary>
-    /// <param name="audioPlayerHost">The source object providing events and data</param>
-    void SubscribeToAudioPlayerHost(IStreamingAudioPlayerHost audioPlayerHost);
-
-    /// <summary>
     ///     Starts the animation processing. This activates the service to
     ///     begin listening for events and modifying parameters.
     /// </summary>

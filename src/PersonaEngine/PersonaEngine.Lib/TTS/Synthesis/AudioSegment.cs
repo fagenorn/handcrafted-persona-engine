@@ -1,6 +1,6 @@
 ﻿namespace PersonaEngine.Lib.TTS.Synthesis;
 
-public class AudioSegment
+public record AudioSegment
 {
     public AudioSegment(Memory<float> audioData, int sampleRate, IReadOnlyList<Token> tokens)
     {

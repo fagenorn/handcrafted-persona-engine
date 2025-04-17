@@ -185,7 +185,8 @@ public class OnnxAudioSynthesizer : IAudioSynthesizer
                                                     ExecutionMode          = ExecutionMode.ORT_PARALLEL,
                                                     InterOpNumThreads      = Math.Max(1, Environment.ProcessorCount / 2),
                                                     IntraOpNumThreads      = Math.Max(1, Environment.ProcessorCount / 2),
-                                                    GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL
+                                                    GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
+                                                    LogSeverityLevel       = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL,
                                                 };
 
         // Add CUDA provider if available

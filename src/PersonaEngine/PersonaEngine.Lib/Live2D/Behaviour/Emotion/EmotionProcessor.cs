@@ -36,11 +36,11 @@ public class EmotionProcessor : ITextFilter
     /// <summary>
     ///     Processes text to extract emotion tags and remove them from the text
     /// </summary>
-    public Task<TextFilterResult> ProcessAsync(string text, CancellationToken cancellationToken = default)
+    public ValueTask<TextFilterResult> ProcessAsync(string text, CancellationToken cancellationToken = default)
     {
         if ( string.IsNullOrEmpty(text) )
         {
-            return Task.FromResult(new TextFilterResult { ProcessedText = text });
+            return ValueTask.FromResult(new TextFilterResult { ProcessedText = text });
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -80,10 +80,10 @@ public class EmotionProcessor : ITextFilter
         // Create result
         var result = new TextFilterResult { ProcessedText = processedText, Metadata = new Dictionary<string, object> { ["Emotions"] = emotions } };
 
-        return Task.FromResult(result);
+        return ValueTask.FromResult(result);
     }
 
-    public Task PostProcessAsync(TextFilterResult textFilterResult, AudioSegment segment, CancellationToken cancellationToken = default)
+    public ValueTask PostProcessAsync(TextFilterResult textFilterResult, AudioSegment segment, CancellationToken cancellationToken = default)
     {
         if ( textFilterResult.Metadata.TryGetValue("Emotions", out var emotionsObj) &&
              emotionsObj is List<EmotionMarker> emotions )
@@ -91,7 +91,7 @@ public class EmotionProcessor : ITextFilter
             MapEmotionsToSegment(segment, emotions);
         }
 
-        return Task.CompletedTask;
+        return ValueTask.CompletedTask;
     }
 
     /// <summary>

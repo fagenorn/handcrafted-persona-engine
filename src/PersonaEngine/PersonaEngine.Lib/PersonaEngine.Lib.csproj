@@ -20,9 +20,8 @@
         <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.2"/>
         <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions"
                           Version="9.0.2"/>
-        <PackageReference Include="Microsoft.ML.OnnxRuntime.Extensions" Version="0.13.0"/>
-        <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.20.1"/>
-        <PackageReference Include="Microsoft.ML.OnnxRuntimeGenAI.Cuda" Version="0.6.0"/>
+        <PackageReference Include="Microsoft.ML.OnnxRuntime.Extensions" Version="0.14.0" />
+        <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.21.0" />
         <PackageReference Include="Microsoft.ML.Tokenizers" Version="1.0.2"/>
         <PackageReference Include="Microsoft.ML.Tokenizers.Data.Cl100kBase" Version="1.0.2"/>
         <PackageReference Include="Microsoft.SemanticKernel.Abstractions" Version="1.40.0"/>
@@ -30,11 +29,14 @@
         <PackageReference Include="Microsoft.SemanticKernel.Core" Version="1.40.0"/>
         <PackageReference Include="Microsoft.SemanticKernel.Yaml" Version="1.40.0"/>
         <PackageReference Include="NAudio" Version="2.2.1"/>
+        <PackageReference Include="Polly" Version="8.5.2" />
+        <PackageReference Include="Polly.Contrib.WaitAndRetry" Version="1.1.1" />
         <PackageReference Include="PortAudioSharp2" Version="1.0.4"/>
         <PackageReference Include="Silk.NET" Version="2.22.0"/>
         <PackageReference Include="Silk.NET.Input.Extensions" Version="2.22.0"/>
         <PackageReference Include="SixLabors.ImageSharp" Version="3.1.7"/>
         <PackageReference Include="Spout.NETCore" Version="1.0.0"/>
+        <PackageReference Include="Stateless" Version="5.17.0" />
         <PackageReference Include="System.Runtime.Caching" Version="9.0.2"/>
         <PackageReference Include="Whisper.net" Version="1.8.1" />
         <PackageReference Include="Whisper.net.Runtime.Cuda.Windows" Version="1.8.1" />
@@ -42,6 +44,7 @@
     </ItemGroup>
 
     <ItemGroup>
+        <Folder Include="Core\Conversation\Implementations\Events\Input\" />
         <Folder Include="Resources\Live2D\Avatars\"/>
         <Folder Include="Resources\Live2D\runtime\"/>
         <Folder Include="Resources\Models\kokoro\"/>
@@ -124,5 +127,12 @@
         <Content Include="Resources\Imgs\**\*">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Remove="Core\Conversation\Services\InMemoryChannelRegistry.cs" />
+      <Compile Remove="Core\Conversation\Services\ConversationSessionFactory.cs" />
+      <Compile Remove="Core\Conversation\Models\ConversationTrigger.cs" />
+      <Compile Remove="Core\Conversation\Interfaces\IConversationSessionFactory.cs" />
     </ItemGroup>
 </Project>

@@ -1,10 +1,14 @@
 ﻿using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading.Channels;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 using PersonaEngine.Lib.Configuration;
+using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Common;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
 using PersonaEngine.Lib.LLM;
 
 namespace PersonaEngine.Lib.TTS.Synthesis;
@@ -15,8 +19,6 @@ namespace PersonaEngine.Lib.TTS.Synthesis;
 public class TtsEngine : ITtsEngine
 {
     private readonly IList<IAudioFilter> _audioFilters;
-
-    private readonly ITtsCache _cache;
 
     private readonly ILogger<TtsEngine> _logger;
 
@@ -38,7 +40,6 @@ public class TtsEngine : ITtsEngine
         ITextProcessor                      textProcessor,
         IPhonemizer                         phonemizer,
         IAudioSynthesizer                   synthesizer,
-        ITtsCache                           cache,
         IOptionsMonitor<KokoroVoiceOptions> options,
         IEnumerable<IAudioFilter>           audioFilters,
         IEnumerable<ITextFilter>            textFilters,
@@ -47,7 +48,6 @@ public class TtsEngine : ITtsEngine
         _textProcessor = textProcessor ?? throw new ArgumentNullException(nameof(textProcessor));
         _phonemizer    = phonemizer ?? throw new ArgumentNullException(nameof(phonemizer));
         _synthesizer   = synthesizer ?? throw new ArgumentNullException(nameof(synthesizer));
-        _cache         = cache ?? throw new ArgumentNullException(nameof(cache));
         _options       = options;
         _audioFilters  = audioFilters.OrderByDescending(x => x.Priority).ToList();
         _textFilters   = textFilters.OrderByDescending(x => x.Priority).ToList();
@@ -65,6 +65,115 @@ public class TtsEngine : ITtsEngine
 
         _throttle.Dispose();
         _disposed = true;
+    }
+
+    public async Task<CompletionReason> SynthesizeStreamingAsync(
+        ChannelReader<LlmChunkEvent> inputReader,
+        ChannelWriter<IOutputEvent>  outputWriter,
+        Guid                         turnId,
+        Guid                         sessionId,
+        KokoroVoiceOptions?          options           = null,
+        CancellationToken            cancellationToken = default
+    )
+    {
+        var textBuffer      = new StringBuilder(4096);
+        var completedReason = CompletionReason.Completed;
+        var firstChunk      = true;
+
+        try
+        {
+            await foreach ( var (_, _, _, textChunk) in inputReader.ReadAllAsync(cancellationToken).ConfigureAwait(false) )
+            {
+                if ( cancellationToken.IsCancellationRequested )
+                {
+                    break;
+                }
+
+                if ( string.IsNullOrEmpty(textChunk) )
+                {
+                    continue;
+                }
+
+                textBuffer.Append(textChunk);
+                var currentText = textBuffer.ToString();
+
+                var processedText = await _textProcessor.ProcessAsync(currentText, cancellationToken);
+                var sentences     = processedText.Sentences;
+
+                if ( sentences.Count <= 1 )
+                {
+                    continue;
+                }
+
+                // Process all sentences except the last one(which might be incomplete)
+                for ( var i = 0; i < sentences.Count - 1; i++ )
+                {
+                    var sentence = sentences[i].Trim();
+                    if ( string.IsNullOrWhiteSpace(sentence) )
+                    {
+                        continue;
+                    }
+
+                    await foreach ( var segment in ProcessSentenceAsync(sentence, options, cancellationToken) )
+                    {
+                        ApplyAudioFilters(segment);
+
+                        if ( firstChunk )
+                        {
+                            var firstChunkEvent = new TtsStreamStartEvent(sessionId, turnId, DateTimeOffset.UtcNow);
+                            await outputWriter.WriteAsync(firstChunkEvent, cancellationToken).ConfigureAwait(false);
+
+                            firstChunk = false;
+                        }
+
+                        var chunkEvent = new TtsChunkEvent(sessionId, turnId, DateTimeOffset.UtcNow, segment);
+                        await outputWriter.WriteAsync(chunkEvent, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+
+                textBuffer.Clear();
+                textBuffer.Append(sentences[^1]);
+            }
+
+            var remainingText = textBuffer.ToString().Trim();
+            if ( !string.IsNullOrEmpty(remainingText) )
+            {
+                await foreach ( var segment in ProcessSentenceAsync(remainingText, options, cancellationToken) )
+                {
+                    ApplyAudioFilters(segment);
+
+                    if ( firstChunk )
+                    {
+                        var firstChunkEvent = new TtsStreamStartEvent(sessionId, turnId, DateTimeOffset.UtcNow);
+                        await outputWriter.WriteAsync(firstChunkEvent, cancellationToken).ConfigureAwait(false);
+
+                        firstChunk = false;
+                    }
+                    
+                    var chunkEvent = new TtsChunkEvent(sessionId, turnId, DateTimeOffset.UtcNow, segment);
+                    await outputWriter.WriteAsync(chunkEvent, cancellationToken).ConfigureAwait(false);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            completedReason = CompletionReason.Cancelled;
+        }
+        catch (Exception ex)
+        {
+            completedReason = CompletionReason.Error;
+
+            await outputWriter.WriteAsync(new ErrorOutputEvent(sessionId, turnId, DateTimeOffset.UtcNow, ex), cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if ( !firstChunk )
+            {
+                await outputWriter.WriteAsync(new TtsStreamEndEvent(sessionId, turnId, DateTimeOffset.UtcNow, completedReason), cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        return completedReason;
     }
 
     /// <summary>
@@ -128,7 +237,7 @@ public class TtsEngine : ITtsEngine
             {
                 continue;
             }
-            
+
             // Append to buffer
             textBuffer.Append(textChunk);
             var currentText = textBuffer.ToString();

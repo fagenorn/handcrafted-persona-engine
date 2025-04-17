@@ -1,6 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
 
-using PersonaEngine.Lib.Audio.Player;
 using PersonaEngine.Lib.Live2D.App;
 using PersonaEngine.Lib.Live2D.Framework.Motion;
 
@@ -94,7 +93,7 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
                 _isIdleAnimationAvailable = true;
             }
         }
-        
+
         if ( _isIdleAnimationAvailable )
         {
             _logger.LogDebug("Idle motion group '{IdleGroup}' is configured and available in the model.", IDLE_MOTION_GROUP);
@@ -105,7 +104,7 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
         }
 
         _eyeParamsValid = false;
-        
+
         try
         {
             // An invalid index (usually -1) means the parameter doesn't exist.
@@ -154,16 +153,6 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
     }
 
     #region ILive2DAnimationService Implementation
-
-    /// <summary>
-    ///     Subscribes to audio player events.
-    ///     Currently, this service does not interact with audio events.
-    /// </summary>
-    /// <param name="audioPlayerHost">The audio player host.</param>
-    public void SubscribeToAudioPlayerHost(IStreamingAudioPlayerHost audioPlayerHost)
-    {
-        // No action needed in this implementation.
-    }
 
     /// <summary>
     ///     Starts the service with the specified Live2D model.
@@ -289,13 +278,10 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
             {
                 _logger.LogDebug("Successfully started idle motion.");
             }
-            else
-            {
-                // _logger.LogWarning("Failed to start idle motion for group '{IdleGroup}'. The group might be empty or invalid.", IDLE_MOTION_GROUP);
-                // Optionally disable idle animations if it fails consistently?
-                // We don't because sometimes this occurs when another animation with the same or higher priority is also playing.
-                // _isIdleAnimationAvailable = false;
-            }
+            // _logger.LogWarning("Failed to start idle motion for group '{IdleGroup}'. The group might be empty or invalid.", IDLE_MOTION_GROUP);
+            // Optionally disable idle animations if it fails consistently?
+            // We don't because sometimes this occurs when another animation with the same or higher priority is also playing.
+            // _isIdleAnimationAvailable = false;
         }
         catch (Exception ex)
         {
