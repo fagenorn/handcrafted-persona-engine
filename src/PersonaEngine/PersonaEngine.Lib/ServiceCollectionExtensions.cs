@@ -119,7 +119,6 @@ public static class ServiceCollectionExtensions
                                                                var realTimeOptions = new RealtimeOptions();
 
                                                                return new RealtimeTranscriptor(
-                                                                                               // new WhisperOnnxSpeechTranscriptorFactory(ModelUtils.GetModelPath(ModelType.WhisperOnnxGpuFp32)),
                                                                                                new WhisperSpeechTranscriptorFactory(ModelUtils.GetModelPath(ModelType.WhisperGgmlTurbov3)),
                                                                                                sp.GetRequiredService<IVadDetector>(),
                                                                                                new WhisperSpeechTranscriptorFactory(ModelUtils.GetModelPath(ModelType.WhisperGgmlTiny)),
