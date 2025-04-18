@@ -287,9 +287,9 @@ public class ChatEditor : ConfigSectionEditorBase
 
             ImGui.PushStyleColor(ImGuiCol.ChildBg, bgColor);
             ImGui.PushStyleColor(ImGuiCol.Text, textColor);
-            
+
             // --- Render Bubble ---
-            var   childId          = $"msg_{turn.TurnId}_{message.MessageId}";
+            var childId = $"msg_{turn.TurnId}_{message.MessageId}";
             ImGui.BeginChild(childId, new Vector2(bubbleWidth, bubbleHeight), ImGuiChildFlags.Borders, ImGuiWindowFlags.None);
             {
                 if ( isUserMessage )
@@ -340,13 +340,12 @@ public class ChatEditor : ConfigSectionEditorBase
         }
 
         var viewport = ImGui.GetMainViewport();
-        ImGui.SetNextWindowPos(viewport.Pos / 2, ImGuiCond.Appearing, new Vector2(0.5f, 0.5f));
+        ImGui.SetNextWindowPos(viewport.Pos + viewport.Size * 0.5f, ImGuiCond.Appearing, new Vector2(0.5f, 0.5f));
         ImGui.SetNextWindowSize(new Vector2(500, 0), ImGuiCond.Appearing);
 
-        if ( ImGui.BeginPopupModal("Edit Message", ref _showEditPopup, ImGuiWindowFlags.NoResize | ImGuiWindowFlags.AlwaysAutoResize) )
+        if ( ImGui.BeginPopupModal("Edit Message", ImGuiWindowFlags.NoResize) )
         {
-            ImGui.Text("Edit Message Content:");
-            ImGui.InputTextMultiline("##edit_content", ref _editMessageContent, 1024 * 4, new Vector2(-1, 150));
+            ImGui.InputTextMultiline("##edit_content", ref _editMessageContent, 1024 * 4, new Vector2(0, 150));
 
             ImGui.Spacing();
             ImGui.Separator();
@@ -404,9 +403,9 @@ public class ChatEditor : ConfigSectionEditorBase
         }
 
         var viewport = ImGui.GetMainViewport();
-        ImGui.SetNextWindowPos(viewport.Pos / 2, ImGuiCond.Appearing, new Vector2(0.5f, 0.5f));
+        ImGui.SetNextWindowPos(viewport.Pos + viewport.Size * 0.5f, ImGuiCond.Appearing, new Vector2(0.5f, 0.5f));
 
-        if ( ImGui.BeginPopupModal("Confirm Clear", ref _showConfirmClearPopup, ImGuiWindowFlags.NoResize | ImGuiWindowFlags.AlwaysAutoResize) )
+        if ( ImGui.BeginPopupModal("Confirm Clear", ImGuiWindowFlags.NoResize | ImGuiWindowFlags.AlwaysAutoResize) )
         {
             ImGui.TextWrapped("Are you sure you want to clear the entire conversation history?");
             ImGui.TextWrapped("This action cannot be undone.");

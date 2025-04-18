@@ -163,7 +163,7 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
 
             if ( string.IsNullOrEmpty(output) )
             {
-                _logger.LogWarning("Empty output from espeak-ng for word {Word}", word);
+                _logger.LogDebug("Empty output from espeak-ng for word {Word}", word);
                 _needProcessReset = true;
 
                 return (null, null);
