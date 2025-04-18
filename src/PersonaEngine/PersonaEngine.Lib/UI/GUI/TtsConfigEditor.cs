@@ -353,23 +353,34 @@ public class TtsConfigEditor : ConfigSectionEditorBase
             var options = _currentVoiceOptions;
 
             var llmInput    = Channel.CreateUnbounded<LlmChunkEvent>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
-            var audioOutput = Channel.CreateUnbounded<TtsChunkEvent>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+            var ttsOutput   = Channel.CreateUnbounded<IOutputEvent>(new UnboundedChannelOptions { SingleReader  = true, SingleWriter = true });
+            var audioInput  = Channel.CreateUnbounded<TtsChunkEvent>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
             var audioEvents = Channel.CreateUnbounded<IOutputEvent>(new UnboundedChannelOptions { SingleReader  = true, SingleWriter = true }); // Tts Started/Tts Ended - Audio Started/Audio Ended
 
             await llmInput.Writer.WriteAsync(new LlmChunkEvent(Guid.Empty, Guid.Empty, DateTimeOffset.UtcNow, _testText), _playbackOperation.CancellationSource.Token);
             llmInput.Writer.Complete();
 
-            // Generate and play audio
+            _ = Task.Run(async () =>
+                         {
+                             await foreach(var ttsOut in ttsOutput.Reader.ReadAllAsync(_playbackOperation.CancellationSource.Token))
+                             {
+                                 if ( ttsOut is TtsChunkEvent ttsChunk )
+                                 {
+                                     await audioInput.Writer.WriteAsync(ttsChunk, _playbackOperation.CancellationSource.Token);
+                                 }
+                             }
+                         });
+
             _ = _ttsEngine.SynthesizeStreamingAsync(
                                                     llmInput,
-                                                    audioEvents,
+                                                    ttsOutput,
                                                     Guid.Empty,
                                                     Guid.Empty,
                                                     options,
                                                     _playbackOperation.CancellationSource.Token
                                                    );
 
-            await _audioPlayer.SendAsync(audioOutput, audioEvents, Guid.Empty, _playbackOperation.CancellationSource.Token);
+            await _audioPlayer.SendAsync(audioInput, audioEvents, Guid.Empty, _playbackOperation.CancellationSource.Token);
         }
         catch (OperationCanceledException)
         {
