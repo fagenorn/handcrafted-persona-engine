@@ -334,118 +334,167 @@ Simplest way on Windows.
 <img src="assets/mascot_cog.png" width="150" alt="Mascot with Cog">
 </div>
 
-> [!NOTE]
+> [!TIP]
 > Always back up `appsettings.json` before making significant changes. Ensure correct JSON syntax (commas, quotes, braces `{}`, brackets `[]`).
 
-Primary control panel JSON file in the main application folder (or `./publish` if built). Open with text editor. Changes usually require restart, **except for `Tts` and `RouletteWheel` sections (editable live via Control UI).**
+> [!NOTE]
+> Changes sometimes require restart,**except for sections editable live via Control UI.**
 
-Structure (default values shown):
+Primary control panel JSON file in the main application folder (or `./publish` if built). Open with text editor.
 
-```json
+```javascript
 {
   "Config": {
-    "Window": { // Basic window settings (less relevant due to Spout)
-      "Width": 1920,
-      "Height": 1080,
-      "Title": "Persona Engine",
-      "Fullscreen": false
+    // Basic window settings (less relevant if using Spout for output)
+    "Window": {
+      "Width": 1920,             // Initial window width in pixels.
+      "Height": 1080,            // Initial window height in pixels.
+      "Title": "Persona Engine", // Text displayed in the window title bar.
+      "Fullscreen": false        // Whether the application should start in fullscreen mode.
     },
-    "Llm": { // Large Language Model connection (MANDATORY)
-      "TextApiKey": "gsk_...", // API Key (if required, else "")
-      "TextModel": "llama-3.1-70b-versatile", // Model name (MANDATORY)
-      "TextEndpoint": "https://api.groq.com/openai/v1", // API URL (MANDATORY)
-      "VisionApiKey": "sk-...", // API Key for Vision model (if used)
-      "VisionModel": "...", // Vision model name
-      "VisionEndpoint": "http://..." // Vision model API URL
+
+    // Large Language Model (LLM) connection settings (MANDATORY)
+    "Llm": {
+      "TextApiKey": "sk-...",      // API Key for the text generation LLM (if required by the endpoint, otherwise can be empty).
+      "TextModel": "fagenorn/aria-gguf/aria15.q4_k_m.gguf", // Name or path of the text generation model to use (MANDATORY). This could be an online model identifier or a local file path.
+      "TextEndpoint": "http://192.168.1.227:8080/v1", // API URL endpoint for the text generation LLM (MANDATORY). This could be a public API or a local server address.
+      "VisionApiKey": "sk-...",   // API Key for the vision/multimodal LLM (if used and required).
+      "VisionModel": "qwen2.5-vl-3b-instruct", // Name or path of the vision model to use (if vision capabilities are enabled).
+      "VisionEndpoint": "http://192.168.1.174:8080/v1" // API URL endpoint for the vision model (if used).
     },
-    "Tts": { // Text-to-Speech (Live Editable via UI)
-      "EspeakPath": "espeak-ng", // Path to espeak-ng install or "espeak-ng" if in PATH (MANDATORY)
-      "Voice": { // Base TTS settings
-        "DefaultVoice": "en_custom_2", // kokoro voice model name
-        "UseBritishEnglish": false, // Pronunciation pref
-        "DefaultSpeed": 1.0, // Speech rate (Live Editable)
-        "MaxPhonemeLength": 510, // Internal buffer
-        "SampleRate": 24000, // Audio sample rate
-        "TrimSilence": false // Trim silence from ends
+
+    // Automatic Speech Recognition (ASR) settings
+    "Asr": {
+      "TtsMode": 1,               // Controls the balance between performance and accuracy for ASR processing. Maps to: 0=Performant, 1=Balanced, 2=Precise.
+      "WhisperPrompt": "Aria, Joobel", // Optional prompt to guide the Whisper ASR model for better recognition of specific names or terms.
+      "VadThreshold": 0.5,        // Voice Activity Detection (VAD) threshold. Higher values require a louder signal to be considered speech (0.0 to 1.0).
+      "VadThresholdGap": 0.15,    // Determines the negative threshold (VadThreshold - VadThresholdGap). Speech detection continues if the probability is between the negative threshold and the main threshold, helping to avoid cutting off mid-sentence.
+      "VadMinSpeechDuration": 250, // Minimum duration (in milliseconds) of audio required to be considered speech.
+      "VadMinSilenceDuration": 450 // Minimum duration (in milliseconds) of silence required to mark the end of speech.
+    },
+
+    // Microphone input settings
+    "Microphone": {
+      "DeviceName": ""           // Specifies the desired microphone device name. If empty, the system's default microphone will be used.
+    },
+
+    // Text-to-Speech (TTS) settings (Many options are Live Editable via UI)
+    "Tts": {
+      "EspeakPath": "espeak-ng", // Path to the espeak-ng executable or command name if it's in the system's PATH (MANDATORY for espeak-based TTS).
+      "Voice": {                 // Base TTS voice settings
+        "DefaultVoice": "en_custom_2", // The primary voice model name used for TTS (e.g., an espeak or custom model identifier).
+        "UseBritishEnglish": false, // Pronunciation preference (primarily affects espeak). Set to true for British English pronunciation rules.
+        "DefaultSpeed": 1.0,        // Default speech rate multiplier (1.0 = normal speed). 
+        "MaxPhonemeLength": 510,    // Internal buffer size for phoneme processing. Adjust only if experiencing issues with very long sentences.
+        "SampleRate": 24000,      // Audio sample rate in Hz for the generated speech.
+        "TrimSilence": false      // Whether to automatically trim leading/trailing silence from generated audio.
       },
-      "Rvc": { // Real-time Voice Cloning (Optional)
-        "DefaultVoice": "KasumiVA", // RVC .onnx model name (in Resources/Models/rvc/voice/)
-        "Enabled": true, // Enable/Disable RVC (Live Editable)
-        "HopSize": 64, // RVC processing param
-        "SpeakerId": 0, // Speaker ID in RVC model
-        "F0UpKey": 1 // Pitch shift (semitones) (Live Editable)
+      "Rvc": {                   // Real-time Voice Cloning (RVC) settings (Optional)
+        "DefaultVoice": "KasumiVA", // Name of the RVC .onnx model file (located in Resources/Models/rvc/voice/).
+        "Enabled": true,          // Enable or disable RVC processing. 
+        "HopSize": 64,            // RVC processing parameter affecting performance and quality.
+        "SpeakerId": 0,           // Target speaker ID within the RVC model (if the model supports multiple speakers).
+        "F0UpKey": 1              // Pitch shift amount in semitones applied by RVC. 
       }
     },
-    "Subtitle": { // Subtitle appearance
-      "Font": "DynaPuff_Condensed-Bold.ttf", // Font file (in Resources/Fonts/)
-      "FontSize": 125,
-      "Color": "#FFf8f6f7", // Text color (ARGB Hex)
-      "HighlightColor": "#FFc4251e", // Highlight color
-      "BottomMargin": 250, // Pixels from bottom
-      "SideMargin": 30, // Pixels from sides
-      "InterSegmentSpacing": 10, // Space between lines
-      "MaxVisibleLines": 2, // Max lines shown
-      "AnimationDuration": 0.3, // Fade in/out (seconds)
-      "Width": 1080, // Canvas width
-      "Height": 1920 // Canvas height
+
+    // Subtitle appearance settings
+    "Subtitle": {
+      "Font": "DynaPuff_Condensed-Bold.ttf", // Font file name (must exist in Resources/Fonts/).
+      "FontSize": 125,            // Font size in points.
+      "Color": "#FFf8f6f7",       // Text color in ARGB Hex format (Alpha, Red, Green, Blue).
+      "HighlightColor": "#FFc4251e", // Color used for highlighting words as they are spoken (ARGB Hex).
+      "BottomMargin": 250,        // Distance in pixels from the bottom edge of the output canvas.
+      "SideMargin": 30,           // Distance in pixels from the left and right edges of the output canvas.
+      "InterSegmentSpacing": 10,  // Vertical space in pixels between lines of subtitles.
+      "MaxVisibleLines": 2,       // Maximum number of subtitle lines displayed simultaneously.
+      "AnimationDuration": 0.3,   // Duration in seconds for the fade-in/fade-out animation of subtitles.
+      "StrokeThickness": 3,       // Thickness of the text outline/stroke in pixels (helps with readability).
+      "Width": 1080,              // Width of the canvas where subtitles are rendered. Should match Spout output if used.
+      "Height": 1920              // Height of the canvas where subtitles are rendered. Should match Spout output if used.
     },
-    "Live2D": { // Live2D model settings
-      "ModelPath": "Resources/Live2D/Avatars", // Base path
-      "ModelName": "aria", // Folder name to load (MANDATORY)
-      "Width": 1080, // Render target width
-      "Height": 1920 // Render target height
+
+    // Live2D model settings
+    "Live2D": {
+      "ModelPath": "Resources/Live2D/Avatars", // Base directory containing Live2D model folders.
+      "ModelName": "aria",        // Name of the specific Live2D model folder to load (MANDATORY).
+      "Width": 1080,              // Width of the render target for the Live2D model. Should match Spout output if used.
+      "Height": 1920              // Height of the render target for the Live2D model. Should match Spout output if used.
     },
-    "SpoutConfigs": [ // Spout video outputs (MANDATORY for output)
+
+    // Spout video output configurations (MANDATORY for sending video to other apps like OBS)
+    "SpoutConfigs": [
       {
-        "OutputName": "Live2D", // Name OBS sees (MANDATORY)
-        "Width": 1080,
-        "Height": 1920
+        "OutputName": "Live2D",   // Name of the Spout sender that OBS or other software will see (MANDATORY). This one typically carries the Live2D avatar.
+        "Width": 1080,            // Width of this Spout output stream.
+        "Height": 1920            // Height of this Spout output stream.
       },
       {
-        "OutputName": "RouletteWheel", // Separate stream for wheel (Optional)
-        "Width": 1080,
-        "Height": 1080
+        "OutputName": "RouletteWheel", // Optional separate Spout sender for elements like the roulette wheel.
+        "Width": 1080,            // Width of this Spout output stream.
+        "Height": 1080            // Height of this Spout output stream.
       }
+      // Add more Spout outputs here if needed
     ],
-    "Vision": { // Experimental screen awareness
-      "WindowTitle": "Microsoft Edge", // Window title to capture
-      "Enabled": false, // Enable/Disable
-      "CaptureInterval": "00:00:59", // How often (HH:MM:SS)
-      "CaptureMinPixels": 50176, // Min window size
-      "CaptureMaxPixels": 4194304 // Max window size
+
+    // Experimental screen awareness / vision input settings
+    "Vision": {
+      "WindowTitle": "Microsoft Edge", // Title of the window to capture for vision analysis.
+      "Enabled": false,           // Enable or disable screen capture and analysis.
+      "CaptureInterval": "00:00:59", // How often to capture the screen (formatted as HH:MM:SS).
+      "CaptureMinPixels": 50176,  // Minimum window size (Width * Height) in pixels to be considered for capture.
+      "CaptureMaxPixels": 4194304 // Maximum window size (Width * Height) in pixels to be considered for capture.
     },
-    "RouletteWheel": { // Experimental roulette wheel (Live Editable via UI)
-      "Font": "DynaPuff_Condensed-Bold.ttf",
-      "FontSize": 24,
-      "TextColor": "#FFFFFF",
-      "TextScale": 1.0,
-      "TextStroke": 2.0,
-      "AdaptiveText": true,
-      "RadialTextOrientation": true,
-      "SectionLabels": [ "Yes", "No" ], // Wheel sections (Live Editable)
-      "SpinDuration": 8.0, // Spin animation time (Live Editable)
-      "MinRotations": 5.0, // Min rotations during spin (Live Editable)
-      "WheelSizePercentage": 1.0, // Size relative to spout output
-      "Width": 1080, // Render target width
-      "Height": 1080, // Render target height
-      "PositionMode": "Anchored", // Positioning
-      "ViewportAnchor": "Center", // Anchor point
-      "PositionXPercentage": 0.5, // X pos (0-1)
-      "PositionYPercentage": 0.5, // Y pos (0-1)
-      "AnchorOffsetX": 0,
-      "AnchorOffsetY": 0,
-      "AbsolutePositionX": 0,
-      "AbsolutePositionY": 0,
-      "Enabled": false, // Enable/Disable wheel (Live Editable)
-      "RotationDegrees": -90.0, // Initial rotation
-      "AnimateToggle": true, // Animate show/hide
-      "AnimationDuration": 0.5 // Show/hide anim time
+
+    // Experimental Roulette Wheel settings (Live Editable via UI)
+    "RouletteWheel": {
+      "Font": "DynaPuff_Condensed-Bold.ttf", // Font file name for wheel text (in Resources/Fonts/).
+      "FontSize": 24,             // Font size for section labels.
+      "TextColor": "#FFFFFF",     // Color of the text on the wheel (ARGB Hex).
+      "TextScale": 1.0,           // Scaling factor for the text size.
+      "TextStroke": 2.0,          // Thickness of the text outline/stroke.
+      "AdaptiveText": true,       // Automatically adjust text size to fit sections.
+      "RadialTextOrientation": true, // Orient text radially outwards from the center. If false, text is horizontal.
+      "SectionLabels": [ "Yes", "No" ], // List of strings defining the sections on the wheel. 
+      "SpinDuration": 8.0,        // Duration of the spinning animation in seconds. 
+      "MinRotations": 5.0,        // Minimum number of full rotations during the spin animation. 
+      "WheelSizePercentage": 1.0, // Size of the wheel relative to its Spout output dimensions (0.0 to 1.0).
+      "Width": 1080,              // Width of the render target for the wheel. Should match Spout output if used.
+      "Height": 1080,             // Height of the render target for the wheel. Should match Spout output if used.
+      "PositionMode": "Anchored", // Positioning method ("Anchored" or "Absolute").
+      "ViewportAnchor": "Center", // Anchor point within the viewport ("TopLeft", "Center", "BottomRight", etc.). Used with "Anchored" PositionMode.
+      "PositionXPercentage": 0.5, // Horizontal position (0.0 to 1.0) relative to the anchor. Used with "Anchored" PositionMode.
+      "PositionYPercentage": 0.5, // Vertical position (0.0 to 1.0) relative to the anchor. Used with "Anchored" PositionMode.
+      "AnchorOffsetX": 0,         // Horizontal pixel offset from the anchor point.
+      "AnchorOffsetY": 0,         // Vertical pixel offset from the anchor point.
+      "AbsolutePositionX": 0,     // Absolute horizontal pixel position from the top-left. Used with "Absolute" PositionMode.
+      "AbsolutePositionY": 0,     // Absolute vertical pixel position from the top-left. Used with "Absolute" PositionMode.
+      "Enabled": false,           // Enable or disable the roulette wheel display. 
+      "RotationDegrees": -90.0,   // Initial rotation offset of the wheel in degrees.
+      "AnimateToggle": true,      // Animate the appearance/disappearance of the wheel.
+      "AnimationDuration": 0.5    // Duration of the show/hide animation in seconds.
+    },
+
+    // Conversation flow control settings
+    "Conversation": {
+      "BargeInBehavior": 0        // Defines how user speech interrupts the AI's speech. Maps to: 0=Ignore (User cannot interrupt AI), 1=InterruptAndAppend (User can interrupt, their speech is added to the input queue).
+    },
+
+    // Context and personality settings for the LLM
+    "ConversationContext": {
+      "SystemPromptFile": "personality.txt", // Optional file path (relative to executable) containing the main system prompt/personality definition.
+      "SystemPrompt": "",         // Directly provide system prompt. If both file and direct prompt exist, the direct prompt will take precedence.
+      "CurrentContext": "You are a role playing as a caveman for some reason and can only talk in short caveman speak.", // A specific, potentially dynamic, context or instruction for the current conversation turn or session. This often provided additional guidance on what to talk about.
+      "Topics": [                 // A list of potential conversation topics the AI can be aware of or steer towards.
+        "casual conversation",
+        "technology",
+        "gaming"
+      ]
     }
   }
 }
-````
-
------
+```
+---
 
 ## <a id="usage"></a>▶️ Usage: Showtime!
 
