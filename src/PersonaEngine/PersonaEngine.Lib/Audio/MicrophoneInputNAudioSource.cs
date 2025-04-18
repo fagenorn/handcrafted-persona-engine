@@ -299,8 +299,10 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
         var bufferCopy = ArrayPool<byte>.Shared.Rent(e.BytesRecorded);
         try
         {
-            Buffer.BlockCopy(e.Buffer, 0, bufferCopy, 0, e.BytesRecorded);
-            WriteData(bufferCopy.AsMemory());
+            var sourceSpan = e.Buffer.AsSpan(0, e.BytesRecorded);
+            sourceSpan.CopyTo(bufferCopy);
+            var dataSlice  = bufferCopy.AsMemory(0, e.BytesRecorded);
+            WriteData(dataSlice);
         }
         finally
         {

@@ -302,10 +302,6 @@ public class OnnxAudioSynthesizer : IAudioSynthesizer
             {
                 tokens.Add(id);
             }
-            else
-            {
-                _logger.LogWarning("Phoneme {Phoneme} not found in mapping", phoneme);
-            }
         }
 
         return tokens;
