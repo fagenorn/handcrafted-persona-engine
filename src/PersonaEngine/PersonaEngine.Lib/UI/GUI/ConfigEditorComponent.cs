@@ -249,7 +249,7 @@ public class ConfigEditorComponent : IRenderComponent
             ImGui.SetNextWindowSize(new Vector2(600, 0));
             if ( ImGui.Begin(section.DisplayName, ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoResize) )
             {
-                if ( ImGui.CollapsingHeader(section.DisplayName, ImGuiTreeNodeFlags.DefaultOpen) )
+                if ( ImGui.CollapsingHeader(section.DisplayName, ImGuiTreeNodeFlags.None) )
                 {
                     var availWidth = ImGui.GetContentRegionAvail().X;
                     ImGui.BeginChild(sb, new Vector2(availWidth, 0), ImGuiChildFlags.AutoResizeY, ImGuiWindowFlags.HorizontalScrollbar);

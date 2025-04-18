@@ -66,6 +66,8 @@ public class ConversationContext : IConversationContext
                                                               });
     }
 
+    public event EventHandler? ConversationUpdated;
+
     public IReadOnlyDictionary<string, ParticipantInfo> Participants
     {
         get
@@ -102,6 +104,7 @@ public class ConversationContext : IConversationContext
             lock (_lock)
             {
                 _currentVisualContext = value;
+                OnConversationUpdated();
             }
         }
     }
@@ -110,7 +113,13 @@ public class ConversationContext : IConversationContext
     {
         lock (_lock)
         {
-            return _participants.TryAdd(participant.Id, participant);
+            var added = _participants.TryAdd(participant.Id, participant);
+            if ( added )
+            {
+                OnConversationUpdated();
+            }
+
+            return added;
         }
     }
 
@@ -118,7 +127,13 @@ public class ConversationContext : IConversationContext
     {
         lock (_lock)
         {
-            return _participants.Remove(participantId);
+            var removed = _participants.Remove(participantId);
+            if ( removed )
+            {
+                OnConversationUpdated();
+            }
+
+            return removed;
         }
     }
 
@@ -133,7 +148,24 @@ public class ConversationContext : IConversationContext
 
         lock (_lock)
         {
-            _cleanupStrategy.Cleanup(_history, _options, _participants);
+            if ( _cleanupStrategy.Cleanup(_history, _options, _participants) )
+            {
+                OnConversationUpdated();
+            }
+        }
+    }
+
+    public void ClearHistory()
+    {
+        lock (_lock)
+        {
+            if ( _history.Count <= 0 )
+            {
+                return;
+            }
+
+            _history.Clear();
+            OnConversationUpdated();
         }
     }
 
@@ -150,6 +182,12 @@ public class ConversationContext : IConversationContext
     #endregion
 
     #region Private Helpers
+
+    protected virtual void OnConversationUpdated()
+    {
+        var handler = ConversationUpdated;
+        handler?.Invoke(this, EventArgs.Empty);
+    }
 
     private void InternalCommitTurn(bool interrupted)
     {
@@ -199,18 +237,26 @@ public class ConversationContext : IConversationContext
             _history.Add(turn);
 
             ApplyCleanupStrategy();
+            OnConversationUpdated();
         }
 
-        InternalAbortTurn();
+        InternalAbortTurn(false);
     }
 
-    private void InternalAbortTurn()
+    private void InternalAbortTurn(bool raiseEvent = true)
     {
+        var wasActive = _currentTurnId != Guid.Empty;
+
         _currentTurnId = Guid.Empty;
         _currentMessageBuffers.Clear();
         _participantsReadyToCommit.Clear();
         _currentTurnParticipantIds.Clear();
         _turnInterrupted = false;
+
+        if ( wasActive && raiseEvent )
+        {
+            OnConversationUpdated();
+        }
     }
 
     private InteractionTurn? CreatePendingTurnSnapshot()
@@ -298,9 +344,10 @@ public class ConversationContext : IConversationContext
         {
             var turn    = _history.FirstOrDefault(t => t.TurnId == turnId);
             var message = turn?.Messages.FirstOrDefault(m => m.MessageId == messageId);
-            if ( message != null )
+            if ( message != null && message.Text != newText )
             {
                 message.Text = newText;
+                OnConversationUpdated();
 
                 return true;
             }
@@ -322,10 +369,18 @@ public class ConversationContext : IConversationContext
                     return false;
                 }
 
-                turn.Messages.Remove(messageToRemove);
+                var messageRemoved = turn.Messages.Remove(messageToRemove);
+                var turnRemoved    = false;
                 if ( turn.Messages.Count == 0 )
                 {
-                    _history.Remove(turn);
+                    turnRemoved = _history.Remove(turn);
+                }
+
+                if ( messageRemoved || turnRemoved )
+                {
+                    OnConversationUpdated();
+
+                    return true;
                 }
 
                 return true;
@@ -356,6 +411,8 @@ public class ConversationContext : IConversationContext
             {
                 if ( !_participants.ContainsKey(id) )
                 {
+                    InternalAbortTurn(false);
+
                     throw new ArgumentException($"Participant with ID '{id}' not found in the conversation context.", nameof(participantIds));
                 }
             }
@@ -394,6 +451,7 @@ public class ConversationContext : IConversationContext
             }
 
             buffer.Append(chunk);
+            OnConversationUpdated();
         }
     }
 
@@ -451,12 +509,22 @@ public class ConversationContext : IConversationContext
 
     #region History & Projection
 
+    public InteractionTurn? PendingTurn
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return CreatePendingTurnSnapshot();
+            }
+        }
+    }
+    
     public IReadOnlyList<InteractionTurn> GetProjectedHistory()
     {
         lock (_lock)
         {
-            var projectedHistory = new List<InteractionTurn>(_history.Count + 1);
-            projectedHistory.AddRange(_history);
+            var projectedHistory = new List<InteractionTurn>(_history);
 
             var pendingTurn = CreatePendingTurnSnapshot();
             if ( pendingTurn != null )

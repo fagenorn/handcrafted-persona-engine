@@ -64,6 +64,16 @@ public class ConversationOrchestrator : IConversationOrchestrator
         GC.SuppressFinalize(this);
     }
 
+    public IConversationSession GetSession(Guid sessionId)
+    {
+        if ( _activeSessions.TryGetValue(sessionId, out var sessionInfo) )
+        {
+            return sessionInfo.Session;
+        }
+
+        throw new KeyNotFoundException($"Session {sessionId} not found in active sessions.");
+    }
+
     public async Task<Guid> StartNewSessionAsync(CancellationToken cancellationToken = default)
     {
         var sessionId = Guid.NewGuid();
@@ -80,6 +90,8 @@ public class ConversationOrchestrator : IConversationOrchestrator
 
                 var sessionJob = HandleSessionCompletionAsync(session, runTask);
                 _activeSessions[session.SessionId] = (session, sessionJob);
+
+                OnSessionsUpdated();
 
                 return session.SessionId;
             }
@@ -154,6 +166,8 @@ public class ConversationOrchestrator : IConversationOrchestrator
         }
     }
 
+    public event EventHandler? SessionsUpdated;
+
     private async ValueTask HandleSessionCompletionAsync(IConversationSession session, ValueTask runTask)
     {
         try
@@ -173,6 +187,7 @@ public class ConversationOrchestrator : IConversationOrchestrator
             if ( _activeSessions.TryRemove(session.SessionId, out _) )
             {
                 _logger.LogInformation("Session {SessionId} removed from active sessions.", session.SessionId);
+                OnSessionsUpdated();
             }
             else
             {
@@ -190,4 +205,6 @@ public class ConversationOrchestrator : IConversationOrchestrator
             }
         }
     }
+
+    protected virtual void OnSessionsUpdated() { SessionsUpdated?.Invoke(this, EventArgs.Empty); }
 }

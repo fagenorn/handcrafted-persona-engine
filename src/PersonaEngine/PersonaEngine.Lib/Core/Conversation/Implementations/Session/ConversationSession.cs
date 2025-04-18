@@ -92,6 +92,8 @@ public partial class ConversationSession : IConversationSession
         _logger.LogInformation("{SessionId} | Session disposed.", SessionId);
     }
 
+    public IConversationContext Context => _context;
+
     public Guid SessionId { get; }
 
     public async ValueTask RunAsync(CancellationToken cancellationToken)
@@ -478,7 +480,7 @@ public partial class ConversationSession : IConversationSession
         try
         {
             _context.TryAddParticipant(ASSISTANT_PARTICIPANT);
-            
+
             var initInputTasks = _inputAdapters.Select(async adapter =>
                                                        {
                                                            await adapter.InitializeAsync(SessionId, _inputChannelWriter, _sessionCts.Token);

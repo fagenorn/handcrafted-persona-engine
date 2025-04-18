@@ -17,17 +17,21 @@ public class MaxTurnsCleanupStrategy : IConversationCleanupStrategy
         _maxTurns = maxTurns;
     }
 
-    public void Cleanup(List<InteractionTurn> history, ConversationContextOptions options, IReadOnlyDictionary<string, ParticipantInfo> participants)
+    public bool Cleanup(List<InteractionTurn> history, ConversationContextOptions options, IReadOnlyDictionary<string, ParticipantInfo> participants)
     {
         if ( _maxTurns == 0 || history.Count <= _maxTurns )
         {
-            return;
+            return false;
         }
 
         var turnsToRemove = history.Count - _maxTurns;
         if ( turnsToRemove > 0 )
         {
             history.RemoveRange(0, turnsToRemove);
+            
+            return true;
         }
+        
+        return false;
     }
 }

@@ -2,6 +2,8 @@
 
 public interface IConversationOrchestrator : IAsyncDisposable
 {
+    IConversationSession GetSession(Guid sessionId);
+    
     Task<Guid> StartNewSessionAsync(CancellationToken cancellationToken = default);
 
     ValueTask StopSessionAsync(Guid sessionId);
@@ -9,4 +11,6 @@ public interface IConversationOrchestrator : IAsyncDisposable
     IEnumerable<Guid> GetActiveSessionIds();
 
     ValueTask StopAllSessionsAsync();
+    
+    event EventHandler? SessionsUpdated;
 }
