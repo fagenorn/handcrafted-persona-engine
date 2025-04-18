@@ -93,17 +93,20 @@ It integrates seamlessly into streaming software like OBS Studio using Spout for
     * Loads and renders Live2D models (`.model3.json`).
     * Includes the specially rigged "Aria" model.
     * Supports emotion-driven animations (`[EMOTION:name]`) and VBridger-standard lip-sync parameters.
+    * Dedicated services for **Emotion**, **Idle**, and **Blinking** animations.
     * **See the detailed [Live2D Integration & Rigging Guide](./Live2D.md) for custom model requirements!**
 
 * 🧠 **AI-Driven Conversation:**
     * Connects to OpenAI-compatible Large Language Model (`LLM`) APIs (local or cloud).
     * Guided by your custom `personality.txt` file.
+    * Features **improved conversation context** and **session management** for more robust interactions.
     * Optimized for the optional special fine-tuned model (see [Overview](#overview)).
 
 * 🗣️ **Voice Interaction (Requires NVIDIA `GPU`):**
     * Listens via microphone (using `NAudio`/`PortAudio`).
     * Detects speech segments using Silero `VAD`.
     * Understands speech using Whisper `ASR` (via `Whisper.NET`).
+    * Includes dedicated **Barge-In Detection** to handle user interruptions more gracefully.
     * Uses a small, fast Whisper model for interruption detection and a larger, more accurate model for transcription.
 
 * 🔊 **Advanced Text-to-Speech (`TTS`) (Requires NVIDIA `GPU`):**
@@ -121,6 +124,7 @@ It integrates seamlessly into streaming software like OBS Studio using Spout for
 
 * 💬 **Control `UI` & Chat Viewer:**
     * Dedicated `UI` window for monitoring engine status.
+    * Viewing latency metrics (LLM, TTS, Audio)
     * Live adjustment of `TTS` parameters (pitch, rate) and Roulette Wheel settings.
     * View and edit the conversation history.
 
