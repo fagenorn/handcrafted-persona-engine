@@ -184,7 +184,7 @@ public class OnnxAudioSynthesizer : IAudioSynthesizer
                                                     InterOpNumThreads      = Math.Max(1, Environment.ProcessorCount / 2),
                                                     IntraOpNumThreads      = Math.Max(1, Environment.ProcessorCount / 2),
                                                     GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-                                                    LogSeverityLevel       = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL,
+                                                    LogSeverityLevel       = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL
                                                 };
 
         try
@@ -273,6 +273,10 @@ public class OnnxAudioSynthesizer : IAudioSynthesizer
 
                                                                             return mapping;
                                                                         }, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            /* Ignored */
         }
         catch (Exception ex)
         {

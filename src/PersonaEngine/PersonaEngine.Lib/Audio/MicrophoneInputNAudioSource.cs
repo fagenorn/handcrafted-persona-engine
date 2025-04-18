@@ -1,6 +1,3 @@
-using System.Buffers;
-using System.Collections.Concurrent;
-
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -296,18 +293,8 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
             return;
         }
 
-        var bufferCopy = ArrayPool<byte>.Shared.Rent(e.BytesRecorded);
-        try
-        {
-            var sourceSpan = e.Buffer.AsSpan(0, e.BytesRecorded);
-            sourceSpan.CopyTo(bufferCopy);
-            var dataSlice  = bufferCopy.AsMemory(0, e.BytesRecorded);
-            WriteData(dataSlice);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(bufferCopy);
-        }
+        var sourceSpan = e.Buffer.AsMemory(0, e.BytesRecorded);
+        WriteData(sourceSpan);
     }
 
     private void WaveInRecordingStopped(object? sender, StoppedEventArgs e)
