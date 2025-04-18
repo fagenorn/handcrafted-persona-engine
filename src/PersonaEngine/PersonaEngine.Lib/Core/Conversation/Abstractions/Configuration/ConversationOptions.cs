@@ -2,11 +2,7 @@
 
 namespace PersonaEngine.Lib.Core.Conversation.Abstractions.Configuration;
 
-public class ConversationOptions
+public record ConversationOptions
 {
     public BargeInStrategy BargeInBehavior { get; set; } = BargeInStrategy.InterruptAndAppend;
-
-    public List<string>? InitialTopics { get; set; }
-
-    public string? InitialContextDescription { get; set; }
 }

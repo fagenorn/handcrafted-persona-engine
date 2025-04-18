@@ -8,16 +8,10 @@ using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Common;
 
 namespace PersonaEngine.Lib.LLM;
 
-public record ChatMessage(string User, string Content);
-
-public record InjectionMetadata(IEnumerable<string> Topics, string Context, string VisualContext);
-
 public record VisualChatMessage(string Query, ReadOnlyMemory<byte> ImageData);
 
 public interface IChatEngine : IDisposable
 {
-    IChatHistoryManager HistoryManager { get; }
-
     Task<CompletionReason> GetStreamingChatResponseAsync(
         IConversationContext                 context,
         ChannelWriter<IOutputEvent> outputWriter,

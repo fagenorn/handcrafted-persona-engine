@@ -25,7 +25,7 @@ public partial class ConversationSession : IConversationSession
 {
     private static readonly ParticipantInfo ASSISTANT_PARTICIPANT = new("ARIA_ASSISTANT_BOT", "Aria", ChatMessageRole.Assistant);
 
-    public ConversationSession(ILogger logger, IChatEngine chatEngine, ITtsEngine ttsEngine, IEnumerable<IInputAdapter> inputAdapters, IOutputAdapter outputAdapter, ConversationMetrics metrics, Guid sessionId, ConversationOptions options)
+    public ConversationSession(ILogger logger, IChatEngine chatEngine, ITtsEngine ttsEngine, IEnumerable<IInputAdapter> inputAdapters, IOutputAdapter outputAdapter, ConversationMetrics metrics, Guid sessionId, ConversationOptions options, ConversationContext context)
     {
         _logger     = logger;
         _chatEngine = chatEngine;
@@ -36,6 +36,7 @@ public partial class ConversationSession : IConversationSession
         _metrics       = metrics;
         SessionId      = sessionId;
         _options       = options;
+        _context       = context;
 
         _inputChannel       = Channel.CreateUnbounded<IInputEvent>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
         _inputChannelWriter = _inputChannel.Writer;
@@ -434,7 +435,7 @@ public partial class ConversationSession : IConversationSession
 
     private bool _isDisposed = false;
 
-    private ConversationContext? _context;
+    private readonly ConversationContext _context;
 
     private CompletionReason _llmFinishReason = CompletionReason.Completed;
 
@@ -476,10 +477,14 @@ public partial class ConversationSession : IConversationSession
 
         try
         {
+            _context.TryAddParticipant(ASSISTANT_PARTICIPANT);
+            
             var initInputTasks = _inputAdapters.Select(async adapter =>
                                                        {
                                                            await adapter.InitializeAsync(SessionId, _inputChannelWriter, _sessionCts.Token);
                                                            await adapter.StartAsync(_sessionCts.Token);
+                                                           _context.TryAddParticipant(adapter.Participant);
+
                                                            _logger.LogDebug("{SessionId} | Input Adapter {AdapterId} initialized and started.", SessionId, adapter.AdapterId);
                                                        }).ToList();
 
@@ -491,8 +496,6 @@ public partial class ConversationSession : IConversationSession
                                            });
 
             await Task.WhenAll(initInputTasks.Concat([initOutputTasks]));
-
-            _context = new ConversationContext(_inputAdapters.Select(adapter => adapter.Participant).Concat([ASSISTANT_PARTICIPANT]).ToList());
 
             await _stateMachine.FireAsync(ConversationTrigger.InitializeComplete);
         }
@@ -509,14 +512,6 @@ public partial class ConversationSession : IConversationSession
         {
             _logger.LogWarning("{SessionId} | PrepareLlmRequestAsync received unexpected event type: {EventType}", SessionId, inputEvent.GetType().Name);
             await FireErrorAsync(new ArgumentException("Invalid event type for InputFinalized trigger.", nameof(inputEvent)), false);
-
-            return;
-        }
-
-        if ( _context is null )
-        {
-            _logger.LogWarning("{SessionId} | Context is null in PrepareLlmRequestAsync.", SessionId);
-            await FireErrorAsync(new InvalidOperationException("Context is null."));
 
             return;
         }
@@ -543,10 +538,10 @@ public partial class ConversationSession : IConversationSession
         {
             _context.StartTurn(_currentTurnId.Value, [finalizedEvent.ParticipantId, ASSISTANT_PARTICIPANT.Id]);
             _context.AppendToTurn(finalizedEvent.ParticipantId, finalizedEvent.FinalTranscript);
-            _context.CompleteTurn(finalizedEvent.ParticipantId, false);
+            _context.CompleteTurnPart(finalizedEvent.ParticipantId);
 
             var userName = _context.Participants.TryGetValue(finalizedEvent.ParticipantId, out var pInfo) ? pInfo.Name : finalizedEvent.ParticipantId;
-            _logger.LogInformation("{SessionId} | {TurnId} | 📝 | [{Speaker}] {Text}", SessionId, _currentTurnId, userName, _context.PendingChunk(finalizedEvent.ParticipantId));
+            _logger.LogInformation("{SessionId} | {TurnId} | 📝 | [{Speaker}] {Text}", SessionId, _currentTurnId, userName, _context.GetPendingMessageText(finalizedEvent.ParticipantId));
 
             await _stateMachine.FireAsync(ConversationTrigger.LlmRequestSent);
 
@@ -607,7 +602,7 @@ public partial class ConversationSession : IConversationSession
         _ttsTask        = null;
         _audioTask      = null;
 
-        _context?.AbortTurn();
+        _context.AbortTurn();
 
         _currentLlmChannel?.Writer.TryComplete(new OperationCanceledException());
         _currentTtsChannel?.Writer.TryComplete(new OperationCanceledException());
@@ -667,7 +662,7 @@ public partial class ConversationSession : IConversationSession
         }
 
         _metrics.IncrementTurnsInterrupted(SessionId, interruptedTurnId.Value);
-        _context?.CompleteTurn(ASSISTANT_PARTICIPANT.Id, true);
+        _context.CompleteTurnPart(ASSISTANT_PARTICIPANT.Id, true);
 
         CommitChanges(true);
 
@@ -763,19 +758,12 @@ public partial class ConversationSession : IConversationSession
         var turnCts      = _currentTurnCts;
         var outputWriter = _outputChannelWriter;
 
-        if ( !turnId.HasValue || turnCts is null || _context is null )
+        if ( !turnId.HasValue || turnCts is null )
         {
-            _logger.LogError("{SessionId} | HandleLlmStreamRequested called in invalid state (TurnId: {TurnId}, Cts: {Cts}, Context: {Context}).",
-                             SessionId, turnId, turnCts != null, _context != null);
+            _logger.LogError("{SessionId} | HandleLlmStreamRequested called in invalid state (TurnId: {TurnId}, Cts: {Cts}).",
+                             SessionId, turnId, turnCts != null);
 
             _ = FireErrorAsync(new InvalidOperationException("Cannot start LLM stream in invalid state."), false);
-
-            return;
-        }
-
-        if ( _context is null )
-        {
-            _logger.LogWarning("{SessionId} | Context is null in HandleLlmStreamRequested.", SessionId);
 
             return;
         }
@@ -838,7 +826,7 @@ public partial class ConversationSession : IConversationSession
             _firstLlmTokenLatencyStopwatch = null;
         }
 
-        _context?.AppendToTurn(ASSISTANT_PARTICIPANT.Id, chunkEvent.Chunk);
+        _context.AppendToTurn(ASSISTANT_PARTICIPANT.Id, chunkEvent.Chunk);
 
         await outputWriter.WriteAsync(chunkEvent, turnCts.Token);
     }
@@ -888,7 +876,7 @@ public partial class ConversationSession : IConversationSession
 
         outputWriter.TryComplete();
 
-        _context?.CompleteTurn(ASSISTANT_PARTICIPANT.Id, false);
+        _context.CompleteTurnPart(ASSISTANT_PARTICIPANT.Id);
     }
 
     private void HandleTtsStreamEnded()
@@ -996,14 +984,9 @@ public partial class ConversationSession : IConversationSession
 
     private void CommitChanges(bool interrupted)
     {
-        if ( _context == null )
-        {
-            return;
-        }
-
         foreach ( var inputAdapter in _inputAdapters )
         {
-            _context?.CompleteTurn(inputAdapter.Participant.Id, interrupted);
+            _context.CompleteTurnPart(inputAdapter.Participant.Id, interrupted);
         }
     }
 

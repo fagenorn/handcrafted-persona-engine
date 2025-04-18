@@ -1,4 +1,6 @@
-﻿namespace PersonaEngine.Lib.Configuration;
+﻿using PersonaEngine.Lib.Core.Conversation.Abstractions.Configuration;
+
+namespace PersonaEngine.Lib.Configuration;
 
 public record AvatarAppConfig
 {
@@ -21,4 +23,9 @@ public record AvatarAppConfig
     public VisionConfig Vision { get; set; } = new();
 
     public RouletteWheelOptions RouletteWheel { get; set; } = new();
+
+    public ConversationOptions Conversation { get; set; } = new();
+    
+    // This would need to be seperate per configured conversation session
+    public ConversationContextOptions ConversationContext { get; set; } = new();
 }

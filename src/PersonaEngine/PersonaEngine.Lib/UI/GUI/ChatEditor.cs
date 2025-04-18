@@ -23,7 +23,7 @@ public class ChatEditor : ConfigSectionEditorBase
 
     private Guid _insertMessageId;
 
-    private IReadOnlyList<ChatHistoryItem> _messages;
+    private IReadOnlyList<dynamic> _messages;
 
     private string _newMessageText;
 
@@ -41,12 +41,12 @@ public class ChatEditor : ConfigSectionEditorBase
         _themeManager = themeManager;
         _fontProvider = fontProvider;
 
-        _messages = _chatEngine.HistoryManager.ChatHistoryItems;
-        _chatEngine.HistoryManager.OnChatHistoryChanged += (sender, args) =>
-                                                           {
-                                                               _messages             = _chatEngine.HistoryManager.ChatHistoryItems;
-                                                               _shouldScrollToBottom = true;
-                                                           };
+        _messages = new []{new {Id = "asdasd", Content = "asdasd"}};
+        // _chatEngine.HistoryManager.OnChatHistoryChanged += (sender, args) =>
+        //                                                    {
+        //                                                        _messages             = _chatEngine.HistoryManager.ChatHistoryItems;
+        //                                                        _shouldScrollToBottom = true;
+        //                                                    };
     }
 
     public override string SectionKey => "Chat";
@@ -67,7 +67,7 @@ public class ChatEditor : ConfigSectionEditorBase
             for ( var i = 0; i < _messages.Count; i++ )
             {
                 var message     = _messages[i];
-                var isMyMessage = message.Role == AuthorRole.User;
+                var isMyMessage = false;// message.Role == AuthorRole.User;
 
                 var textSize     = ImGui.CalcTextSize(message.Content, false, maxBubbleWidth - 10 - ImGui.GetStyle().WindowPadding.X * 2);
                 var bubbleWidth  = Math.Min(textSize.X + ImGui.GetStyle().WindowPadding.X * 2, maxBubbleWidth);
@@ -109,7 +109,7 @@ public class ChatEditor : ConfigSectionEditorBase
 
                         if ( ImGui.MenuItem("Delete") )
                         {
-                            _chatEngine.HistoryManager.RemoveMessage(message.Id);
+                            // _chatEngine.HistoryManager.RemoveMessage(message.Id);
                             i--;
                         }
 
@@ -153,7 +153,7 @@ public class ChatEditor : ConfigSectionEditorBase
             {
                 if ( _editMessageId != Guid.Empty )
                 {
-                    _chatEngine.HistoryManager.UpdateMessage(_editMessageId, _editMessageContent);
+                    // _chatEngine.HistoryManager.UpdateMessage(_editMessageId, _editMessageContent);
                     _editMessageId = Guid.Empty;
                 }
 
@@ -184,7 +184,7 @@ public class ChatEditor : ConfigSectionEditorBase
         {
             if ( !string.IsNullOrWhiteSpace(inputMessage) )
             {
-                _chatEngine.HistoryManager.AddUserMessage(inputMessage);
+                // _chatEngine.HistoryManager.AddUserMessage(inputMessage);
             }
         }
 
@@ -212,7 +212,7 @@ public class ChatEditor : ConfigSectionEditorBase
 
                 if ( ImGui.Button("Yes", new Vector2(120, 0)) )
                 {
-                    _chatEngine.HistoryManager.Clear();
+                    // _chatEngine.HistoryManager.Clear();
                     ImGui.CloseCurrentPopup();
                 }
 

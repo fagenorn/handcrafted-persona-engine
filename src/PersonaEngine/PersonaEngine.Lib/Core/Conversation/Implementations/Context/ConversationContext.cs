@@ -1,56 +1,116 @@
-﻿using System.Text;
+﻿using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
 
+using Microsoft.Extensions.Options;
+using Microsoft.SemanticKernel.ChatCompletion;
+
+using OpenAI.Chat;
+
+using PersonaEngine.Lib.Core.Conversation.Abstractions.Configuration;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
+
+using ChatMessage = PersonaEngine.Lib.Core.Conversation.Abstractions.Context.ChatMessage;
 
 namespace PersonaEngine.Lib.Core.Conversation.Implementations.Context;
 
 public class ConversationContext : IConversationContext
 {
+    private readonly IConversationCleanupStrategy? _cleanupStrategy;
+
+    private readonly Dictionary<string, StringBuilder> _currentMessageBuffers = new();
+
     private readonly List<InteractionTurn> _history = new();
 
     private readonly Lock _lock = new();
 
-    private readonly HashSet<string> _readyToCommit = new();
+    private readonly IDisposable? _optionsMonitorRegistration;
 
-    private Dictionary<string, StringBuilder> _currentBuffers = new();
+    private readonly Dictionary<string, ParticipantInfo> _participants;
 
-    private Guid _currentTurnId;
+    private readonly HashSet<string> _participantsReadyToCommit = new();
+
+    private Guid _currentTurnId = Guid.Empty;
 
     private HashSet<string> _currentTurnParticipantIds = new();
 
-    private DateTimeOffset _turnStart;
+    private string? _currentVisualContext;
 
-    public ConversationContext(IEnumerable<ParticipantInfo> participants) { Participants = participants.ToDictionary(p => p.Id); }
+    private ConversationContextOptions _options;
 
-    public IReadOnlyDictionary<string, ParticipantInfo> Participants { get; private set; }
+    private bool _turnInterrupted = false;
 
-    public IEnumerable<InteractionTurn> History
+    private DateTimeOffset _turnStartTime;
+
+    public ConversationContext(
+        IEnumerable<ParticipantInfo>                initialParticipants,
+        IOptionsMonitor<ConversationContextOptions> optionsMonitor,
+        IConversationCleanupStrategy?               cleanupStrategy = null)
+    {
+        _participants    = initialParticipants.ToDictionary(p => p.Id);
+        _options         = optionsMonitor.CurrentValue;
+        _cleanupStrategy = cleanupStrategy ?? new MaxTurnsCleanupStrategy(100);
+
+        _optionsMonitorRegistration = optionsMonitor.OnChange(newOptions =>
+                                                              {
+                                                                  lock (_lock)
+                                                                  {
+                                                                      if ( newOptions.SystemPromptFile != _options.SystemPromptFile )
+                                                                      {
+                                                                          PromptUtils.ClearCache();
+                                                                      }
+
+                                                                      _options = newOptions;
+                                                                  }
+                                                              });
+    }
+
+    public IReadOnlyDictionary<string, ParticipantInfo> Participants
     {
         get
         {
             lock (_lock)
             {
-                return _history.ToList();
+                return new ReadOnlyDictionary<string, ParticipantInfo>(_participants);
             }
         }
     }
 
-    public string? CurrentVisualContext { get; private set; }
+    public IReadOnlyList<InteractionTurn> History
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _history.AsReadOnly();
+            }
+        }
+    }
+
+    public string? CurrentVisualContext
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _currentVisualContext;
+            }
+        }
+        set
+        {
+            lock (_lock)
+            {
+                _currentVisualContext = value;
+            }
+        }
+    }
 
     public bool TryAddParticipant(ParticipantInfo participant)
     {
         lock (_lock)
         {
-            if ( Participants.ContainsKey(participant.Id) )
-            {
-                return false;
-            }
-
-            var dict = Participants.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-            dict[participant.Id] = participant;
-            Participants         = dict;
-
-            return true;
+            return _participants.TryAdd(participant.Id, participant);
         }
     }
 
@@ -58,36 +118,257 @@ public class ConversationContext : IConversationContext
     {
         lock (_lock)
         {
-            if ( !Participants.ContainsKey(participantId) )
-            {
-                return false;
-            }
-
-            var dict = Participants.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-            dict.Remove(participantId);
-            Participants = dict;
-
-            return true;
+            return _participants.Remove(participantId);
         }
     }
 
-    public void SetCurrentVisualContext(string? visualContext)
+    #region Cleanup
+
+    public void ApplyCleanupStrategy()
+    {
+        if ( _cleanupStrategy == null )
+        {
+            return;
+        }
+
+        lock (_lock)
+        {
+            _cleanupStrategy.Cleanup(_history, _options, _participants);
+        }
+    }
+
+    public void Dispose() { Dispose(true); }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if ( disposing )
+        {
+            _optionsMonitorRegistration?.Dispose();
+        }
+    }
+
+    #endregion
+
+    #region Private Helpers
+
+    private void InternalCommitTurn(bool interrupted)
+    {
+        if ( _currentTurnId == Guid.Empty )
+        {
+            return;
+        }
+
+        var committedMessages = new List<ChatMessage>();
+        var endTime           = DateTimeOffset.UtcNow;
+
+        foreach ( var (participantId, buffer) in _currentMessageBuffers )
+        {
+            var text = buffer.ToString();
+
+            if ( string.IsNullOrWhiteSpace(text) || !_participants.TryGetValue(participantId, out var participantInfo) )
+            {
+                continue;
+            }
+
+            var role = participantInfo.Role;
+
+            var message = new ChatMessage(
+                                          Guid.NewGuid(),
+                                          participantId,
+                                          participantInfo.Name,
+                                          text,
+                                          _turnStartTime,
+                                          false,
+                                          role
+                                         );
+
+            committedMessages.Add(message);
+        }
+
+        if ( committedMessages.Count != 0 )
+        {
+            var turn = new InteractionTurn(
+                                           _currentTurnId,
+                                           _currentTurnParticipantIds,
+                                           _turnStartTime,
+                                           endTime,
+                                           committedMessages,
+                                           interrupted
+                                          );
+
+            _history.Add(turn);
+
+            ApplyCleanupStrategy();
+        }
+
+        InternalAbortTurn();
+    }
+
+    private void InternalAbortTurn()
+    {
+        _currentTurnId = Guid.Empty;
+        _currentMessageBuffers.Clear();
+        _participantsReadyToCommit.Clear();
+        _currentTurnParticipantIds.Clear();
+        _turnInterrupted = false;
+    }
+
+    private InteractionTurn? CreatePendingTurnSnapshot()
+    {
+        if ( _currentTurnId == Guid.Empty || _currentMessageBuffers.Count == 0 )
+        {
+            return null;
+        }
+
+        var pendingMessages = new List<ChatMessage>();
+        foreach ( var (participantId, buffer) in _currentMessageBuffers )
+        {
+            var text = buffer.ToString();
+
+            if ( string.IsNullOrWhiteSpace(text) || !_participants.TryGetValue(participantId, out var participantInfo) )
+            {
+                continue;
+            }
+
+            var role = participantInfo.Role;
+
+            var snapshotMessage = new ChatMessage(
+                                                  Guid.NewGuid(),
+                                                  participantId,
+                                                  participantInfo.Name,
+                                                  text,
+                                                  _turnStartTime,
+                                                  true,
+                                                  role
+                                                 );
+
+            pendingMessages.Add(snapshotMessage);
+        }
+
+        if ( pendingMessages.Count == 0 )
+        {
+            return null;
+        }
+
+        return new InteractionTurn(
+                                   _currentTurnId,
+                                   _currentTurnParticipantIds,
+                                   _turnStartTime,
+                                   null,
+                                   pendingMessages,
+                                   _turnInterrupted
+                                  );
+    }
+
+    private void AddMessageToSkHistory(ChatHistory skChatHistory, ChatMessage message)
+    {
+        var role    = message.Role;
+        var content = message.Text;
+
+        if ( role != ChatMessageRole.Assistant && role != ChatMessageRole.System )
+        {
+            content = $"[{message.ParticipantName}]{message.Text}";
+
+            role = ChatMessageRole.User;
+        }
+
+        skChatHistory.AddMessage(GetAuthorRole(role), content);
+    }
+
+    private AuthorRole GetAuthorRole(ChatMessageRole role)
+    {
+        return role switch {
+            ChatMessageRole.System => AuthorRole.System,
+            ChatMessageRole.Assistant => AuthorRole.Assistant,
+            ChatMessageRole.User => AuthorRole.User,
+            ChatMessageRole.Developer => AuthorRole.Developer,
+            ChatMessageRole.Tool => AuthorRole.Tool,
+            ChatMessageRole.Function => AuthorRole.Tool,
+            _ => throw new ArgumentOutOfRangeException(nameof(role), role, null)
+        };
+    }
+
+    #endregion
+
+    #region Message Management
+
+    public bool TryUpdateMessage(Guid turnId, Guid messageId, string newText)
     {
         lock (_lock)
         {
-            CurrentVisualContext = visualContext;
+            var turn    = _history.FirstOrDefault(t => t.TurnId == turnId);
+            var message = turn?.Messages.FirstOrDefault(m => m.MessageId == messageId);
+            if ( message != null )
+            {
+                message.Text = newText;
+
+                return true;
+            }
+
+            return false;
         }
     }
+
+    public bool TryDeleteMessage(Guid turnId, Guid messageId)
+    {
+        lock (_lock)
+        {
+            var turn = _history.FirstOrDefault(t => t.TurnId == turnId);
+            if ( turn != null )
+            {
+                var messageToRemove = turn.Messages.FirstOrDefault(m => m.MessageId == messageId);
+                if ( messageToRemove == null )
+                {
+                    return false;
+                }
+
+                turn.Messages.Remove(messageToRemove);
+                if ( turn.Messages.Count == 0 )
+                {
+                    _history.Remove(turn);
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+    }
+
+    #endregion
+
+    #region Turn Management
 
     public void StartTurn(Guid turnId, IEnumerable<string> participantIds)
     {
         lock (_lock)
         {
+            if ( _currentTurnId != Guid.Empty && _currentMessageBuffers.Count > 0 )
+            {
+                Debug.WriteLine($"Warning: Starting new turn {turnId} while previous turn {_currentTurnId} was pending. Aborting previous turn.");
+                InternalAbortTurn();
+            }
+
             _currentTurnId             = turnId;
-            _currentTurnParticipantIds = new HashSet<string>(participantIds);
-            _currentBuffers            = _currentTurnParticipantIds.ToDictionary(id => id, _ => new StringBuilder());
-            _readyToCommit.Clear();
-            _turnStart = DateTimeOffset.UtcNow;
+            _currentTurnParticipantIds = new HashSet<string>(participantIds.Distinct());
+
+            foreach ( var id in _currentTurnParticipantIds )
+            {
+                if ( !_participants.ContainsKey(id) )
+                {
+                    throw new ArgumentException($"Participant with ID '{id}' not found in the conversation context.", nameof(participantIds));
+                }
+            }
+
+            _currentMessageBuffers.Clear();
+            _participantsReadyToCommit.Clear();
+            _turnStartTime   = DateTimeOffset.UtcNow;
+            _turnInterrupted = false;
+
+            foreach ( var id in _currentTurnParticipantIds )
+            {
+                _currentMessageBuffers[id] = new StringBuilder();
+            }
         }
     }
 
@@ -95,41 +376,65 @@ public class ConversationContext : IConversationContext
     {
         lock (_lock)
         {
-            if ( !_currentBuffers.TryGetValue(participantId, out var buffer) )
+            if ( _currentTurnId == Guid.Empty )
             {
-                throw new InvalidOperationException($"Participant '{participantId}' is not part of the current turn (ID: {_currentTurnId}).");
+                throw new InvalidOperationException("Cannot append to turn: No turn is currently active.");
+            }
+
+            if ( !_currentTurnParticipantIds.Contains(participantId) )
+            {
+                throw new InvalidOperationException($"Participant '{participantId}' is not designated as part of the current turn (ID: {_currentTurnId}).");
+            }
+
+            if ( !_currentMessageBuffers.TryGetValue(participantId, out var buffer) )
+            {
+                buffer                                = new StringBuilder();
+                _currentMessageBuffers[participantId] = buffer;
+                Debug.WriteLine($"Warning: Buffer for participant {participantId} was missing in AppendToTurn.");
             }
 
             buffer.Append(chunk);
         }
     }
-    
-    public string PendingChunk(string participantId)
+
+    public string GetPendingMessageText(string participantId)
     {
         lock (_lock)
         {
-            if ( !_currentBuffers.TryGetValue(participantId, out var buffer) )
+            if ( _currentTurnId == Guid.Empty )
             {
-                throw new InvalidOperationException($"Participant '{participantId}' is not part of the current turn (ID: {_currentTurnId}).");
+                return string.Empty;
             }
 
-            return buffer.ToString();
+            if ( _currentMessageBuffers.TryGetValue(participantId, out var buffer) )
+            {
+                return buffer.ToString();
+            }
+
+            return string.Empty;
         }
     }
 
-    public void CompleteTurn(string participantId, bool interrupted)
+    public void CompleteTurnPart(string participantId, bool interrupted = false)
     {
         lock (_lock)
         {
-            if ( !_currentBuffers.ContainsKey(participantId) )
+            if ( _currentTurnId == Guid.Empty || !_currentTurnParticipantIds.Contains(participantId) )
             {
+                Debug.WriteLine($"Warning: CompleteTurnPart called for participant {participantId} outside of an active turn or participation.");
+
                 return;
             }
 
-            _readyToCommit.Add(participantId);
-            if ( _readyToCommit.SetEquals(_currentTurnParticipantIds) )
+            _participantsReadyToCommit.Add(participantId);
+            if ( interrupted )
             {
-                CommitTurn(interrupted);
+                _turnInterrupted = true;
+            }
+
+            if ( _participantsReadyToCommit.IsSupersetOf(_currentTurnParticipantIds) )
+            {
+                InternalCommitTurn(_turnInterrupted);
             }
         }
     }
@@ -138,67 +443,76 @@ public class ConversationContext : IConversationContext
     {
         lock (_lock)
         {
-            _currentBuffers.Clear();
-            _readyToCommit.Clear();
+            InternalAbortTurn();
         }
     }
 
-    public IEnumerable<InteractionTurn> GetProjectedHistory()
+    #endregion
+
+    #region History & Projection
+
+    public IReadOnlyList<InteractionTurn> GetProjectedHistory()
     {
         lock (_lock)
         {
-            var projectedHistory = _history.ToList();
+            var projectedHistory = new List<InteractionTurn>(_history.Count + 1);
+            projectedHistory.AddRange(_history);
 
-            if ( _currentTurnId == Guid.Empty || _currentBuffers.Count == 0 )
+            var pendingTurn = CreatePendingTurnSnapshot();
+            if ( pendingTurn != null )
             {
-                return projectedHistory;
+                projectedHistory.Add(pendingTurn);
             }
 
-            var projectedResponses = _currentBuffers.Where(x => !string.IsNullOrWhiteSpace(x.Value.ToString())).ToDictionary(
-                                                                                                                             kvp => kvp.Key,
-                                                                                                                             kvp => new LlmResponseDetails(
-                                                                                                                                                           kvp.Value.ToString(),
-                                                                                                                                                           false,
-                                                                                                                                                           Participants[kvp.Key].Role
-                                                                                                                                                          )
-                                                                                                                            );
-
-            var pendingTurnToCommit = new InteractionTurn(
-                                                          _currentTurnId,
-                                                          _currentTurnParticipantIds,
-                                                          _turnStart,
-                                                          DateTimeOffset.UtcNow,
-                                                          projectedResponses
-                                                         );
-
-            projectedHistory.Add(pendingTurnToCommit);
-
-            return projectedHistory;
+            return projectedHistory.AsReadOnly();
         }
     }
 
-    private void CommitTurn(bool interrupted)
+    public ChatHistory GetSemanticKernelChatHistory(bool includePendingTurn = true)
     {
-        var responses = _currentBuffers.Where(x => !string.IsNullOrWhiteSpace(x.Value.ToString())).ToDictionary(
-                                                                                                                kvp => kvp.Key,
-                                                                                                                kvp => new LlmResponseDetails(
-                                                                                                                                              kvp.Value.ToString(),
-                                                                                                                                              interrupted,
-                                                                                                                                              Participants[kvp.Key].Role
-                                                                                                                                             )
-                                                                                                               );
+        lock (_lock)
+        {
+            var skChatHistory = new ChatHistory();
 
-        var turn = new InteractionTurn(
-                                       _currentTurnId,
-                                       _currentTurnParticipantIds,
-                                       _turnStart,
-                                       DateTimeOffset.UtcNow,
-                                       responses
-                                      );
+            // 1. Add System Prompt (from options)
+            if ( !string.IsNullOrWhiteSpace(_options.SystemPrompt) )
+            {
+                skChatHistory.AddSystemMessage(_options.SystemPrompt);
+            }
+            else if ( !string.IsNullOrWhiteSpace(_options.SystemPromptFile) && PromptUtils.TryGetPrompt(_options.SystemPromptFile, out var systemPrompt) )
+            {
+                skChatHistory.AddSystemMessage(systemPrompt!);
+            }
 
-        _history.Add(turn);
+            // 2. Add Metadata Message
+            var metadata           = new { topics = _options.Topics, context = _options.CurrentContext ?? string.Empty, visual_context = _currentVisualContext ?? string.Empty };
+            var serializedMetadata = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            skChatHistory.AddUserMessage(serializedMetadata);
 
-        _currentBuffers.Clear();
-        _readyToCommit.Clear();
+            // 3. Add Committed History Messages
+            foreach ( var message in _history.SelectMany(turn => turn.Messages) )
+            {
+                AddMessageToSkHistory(skChatHistory, message);
+            }
+
+            // 4. Optionally Add Pending Turn Messages
+            if ( includePendingTurn )
+            {
+                var pendingTurn = CreatePendingTurnSnapshot();
+                if ( pendingTurn == null )
+                {
+                    return skChatHistory;
+                }
+
+                foreach ( var message in pendingTurn.Messages )
+                {
+                    AddMessageToSkHistory(skChatHistory, message);
+                }
+            }
+
+            return skChatHistory;
+        }
     }
+
+    #endregion
 }

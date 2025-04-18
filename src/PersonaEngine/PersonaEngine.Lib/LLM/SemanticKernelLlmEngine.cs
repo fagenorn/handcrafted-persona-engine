@@ -1,12 +1,9 @@
 ﻿using System.Diagnostics;
-using System.Text.Json;
 using System.Threading.Channels;
 
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
-
-using OpenAI.Chat;
 
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
@@ -25,17 +22,13 @@ public class SemanticKernelChatEngine : IChatEngine
 
     public SemanticKernelChatEngine(
         Kernel                            kernel,
-        IChatHistoryManager               historyManager,
         ILogger<SemanticKernelChatEngine> logger)
     {
         _logger                = logger ?? throw new ArgumentNullException(nameof(logger));
         _chatCompletionService = kernel.GetRequiredService<IChatCompletionService>("text");
-        HistoryManager         = historyManager ?? throw new ArgumentNullException(nameof(historyManager));
 
         _logger.LogInformation("SemanticKernelChatEngine initialized successfully");
     }
-
-    public IChatHistoryManager HistoryManager { get; }
 
     public void Dispose()
     {
@@ -65,44 +58,12 @@ public class SemanticKernelChatEngine : IChatEngine
 
         try
         {
-            HistoryManager.Clear();
-
-            var history = context.GetProjectedHistory();
-            foreach ( var historyItem in history )
-            {
-                foreach ( var participantResponse in historyItem.ParticipantResponses )
-                {
-                    var input = participantResponse.Value;
-                    if ( input.Role == ChatMessageRole.Assistant )
-                    {
-                        HistoryManager.AddAssistantMessage($"{input.FinalText}");
-                    }
-                    else
-                    {
-                        HistoryManager.AddUserMessage($"[{context.Participants[participantResponse.Key].Name}]{input.FinalText}");
-                    }
-                }
-            }
-
-            // if ( injectionMetadata != null )
-            // {
-            //     var injectionJson = CreateInjectionJson(injectionMetadata);
-            //     if ( _metadataMsgId.HasValue && historyManager.UpdateMessage(_metadataMsgId.Value, injectionJson) )
-            //     {
-            //         // Update successful
-            //     }
-            //     else
-            //     {
-            //         _metadataMsgId = historyManager.AddUserMessage(injectionJson);
-            //     }
-            // }
-
-            var stopwatch = Stopwatch.StartNew();
-
+            var stopwatch  = Stopwatch.StartNew();
             var chunkCount = 0;
+            var history    = context.GetSemanticKernelChatHistory();
 
             var streamingResponse = _chatCompletionService.GetStreamingChatMessageContentsAsync(
-                                                                                                HistoryManager.ChatHistory,
+                                                                                                history,
                                                                                                 executionSettings,
                                                                                                 null,
                                                                                                 cancellationToken);
@@ -153,9 +114,4 @@ public class SemanticKernelChatEngine : IChatEngine
 
         return completedReason;
     }
-
-    /// <summary>
-    ///     Creates a JSON string for metadata injection.
-    /// </summary>
-    private static string CreateInjectionJson(InjectionMetadata metadata) { return JsonSerializer.Serialize(new { topics = metadata.Topics, context = metadata.Context, visual_context = metadata.VisualContext }); }
 }

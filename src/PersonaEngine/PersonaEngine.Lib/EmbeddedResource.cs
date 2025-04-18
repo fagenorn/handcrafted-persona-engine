@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.ComponentModel;
 
 using PersonaEngine.Lib.Utils;
@@ -23,24 +24,43 @@ internal static class ModelUtils
 
 internal static class PromptUtils
 {
-    public static string GetModelPath(Promptype promptype)
-    {
-        var enumDescription = promptype.GetDescription();
-        var fullPath        = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Prompts", $"{enumDescription}");
+    private static readonly ConcurrentDictionary<string, string> PromptCache = new();
 
-        // Check file or dir exists
-        if ( !Path.Exists(fullPath) )
+    private static string GetModelPath(string filename)
+    {
+        var fullPath = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Prompts", filename);
+
+        if ( !File.Exists(fullPath) )
         {
-            throw new ApplicationException($"For {promptype} path {fullPath} doesn't exist");
+            throw new ApplicationException($"Prompt file '{filename}' not found at path: {fullPath}");
         }
 
         return fullPath;
     }
-}
 
-public enum Promptype
-{
-    [Description("personality.txt")] Personality
+    public static bool TryGetPrompt(string filename, out string? prompt)
+    {
+        if ( PromptCache.TryGetValue(filename, out prompt) )
+        {
+            return true;
+        }
+
+        try
+        {
+            var fullPath      = GetModelPath(filename);
+            var promptContent = File.ReadAllText(fullPath);
+            PromptCache.AddOrUpdate(filename, promptContent, (_, _) => promptContent);
+            prompt = promptContent;
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static void ClearCache() { PromptCache.Clear(); }
 }
 
 public enum ModelType

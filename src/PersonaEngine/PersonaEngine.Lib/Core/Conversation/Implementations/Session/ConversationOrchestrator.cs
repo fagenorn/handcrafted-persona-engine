@@ -1,10 +1,11 @@
 ﻿using System.Collections.Concurrent;
 
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Configuration;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
-using PersonaEngine.Lib.Core.Conversation.Abstractions.Strategies;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Context;
 
 namespace PersonaEngine.Lib.Core.Conversation.Implementations.Session;
 
@@ -12,16 +13,22 @@ public class ConversationOrchestrator : IConversationOrchestrator
 {
     private readonly ConcurrentDictionary<Guid, (IConversationSession Session, ValueTask RunTask)> _activeSessions = new();
 
+    private readonly IOptionsMonitor<ConversationContextOptions> _conversationContextOptions;
+
+    private readonly IOptions<ConversationOptions> _conversationOptions;
+
     private readonly ILogger<ConversationOrchestrator> _logger;
 
     private readonly CancellationTokenSource _orchestratorCts = new();
 
     private readonly IConversationSessionFactory _sessionFactory;
 
-    public ConversationOrchestrator(ILogger<ConversationOrchestrator> logger, IConversationSessionFactory sessionFactory)
+    public ConversationOrchestrator(ILogger<ConversationOrchestrator> logger, IConversationSessionFactory sessionFactory, IOptions<ConversationOptions> conversationOptions, IOptionsMonitor<ConversationContextOptions> conversationContextOptions)
     {
-        _logger         = logger;
-        _sessionFactory = sessionFactory;
+        _logger                     = logger;
+        _sessionFactory             = sessionFactory;
+        _conversationOptions        = conversationOptions;
+        _conversationContextOptions = conversationContextOptions;
     }
 
     public async ValueTask DisposeAsync()
@@ -60,9 +67,8 @@ public class ConversationOrchestrator : IConversationOrchestrator
     public async Task<Guid> StartNewSessionAsync(CancellationToken cancellationToken = default)
     {
         var sessionId = Guid.NewGuid();
-        var options   = new ConversationOptions { InitialTopics = ["life"], BargeInBehavior = BargeInStrategy.InterruptAndAppend, InitialContextDescription = "Casual discord voice chat" };
-
-        var session = _sessionFactory.CreateSession(options, sessionId);
+        var context   = new ConversationContext([], _conversationContextOptions);
+        var session   = _sessionFactory.CreateSession(context, _conversationOptions.Value, sessionId);
 
         try
         {

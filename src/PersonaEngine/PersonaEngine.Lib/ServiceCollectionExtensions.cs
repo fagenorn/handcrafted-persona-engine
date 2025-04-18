@@ -16,6 +16,7 @@ using PersonaEngine.Lib.Audio;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.Core;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Adapters;
+using PersonaEngine.Lib.Core.Conversation.Abstractions.Configuration;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Input;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Output;
@@ -143,10 +144,9 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddChatEngineSystem(this IServiceCollection services, IConfiguration configuration)
     {
-        services.Configure<ChatEngineOptions>(options => { options.SystemPrompt = File.ReadAllText(PromptUtils.GetModelPath(Promptype.Personality)); });
-
-        services.AddSingleton<IChatHistoryManagerFactory, ChatHistoryManagerFactory>();
-        services.AddSingleton<IChatHistoryManager>(sp => sp.GetRequiredService<IChatHistoryManagerFactory>().Create());
+        services.Configure<ConversationOptions>(configuration.GetSection("Config:Conversation"));
+        services.Configure<ConversationContextOptions>(configuration.GetSection("Config:ConversationContext"));
+        
         services.AddSingleton<IChatEngine, SemanticKernelChatEngine>();
         services.AddSingleton<IVisualChatEngine, VisualQASemanticKernelChatEngine>();
         services.AddSingleton<IVisualQAService, VisualQAService>();

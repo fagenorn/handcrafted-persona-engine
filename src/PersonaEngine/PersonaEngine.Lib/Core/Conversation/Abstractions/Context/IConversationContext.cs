@@ -1,10 +1,12 @@
-﻿namespace PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
+﻿using Microsoft.SemanticKernel.ChatCompletion;
+
+namespace PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
 
 public interface IConversationContext
 {
     IReadOnlyDictionary<string, ParticipantInfo> Participants { get; }
 
-    IEnumerable<InteractionTurn> History { get; }
+    IReadOnlyList<InteractionTurn> History { get; }
 
     string? CurrentVisualContext { get; }
 
@@ -12,15 +14,23 @@ public interface IConversationContext
 
     bool TryRemoveParticipant(string participantId);
     
-    void SetCurrentVisualContext(string? visualContext);
+     void StartTurn(Guid turnId, IEnumerable<string> participantIds);
 
-    public void StartTurn(Guid turnId, IEnumerable<string> participantIds);
+     void AppendToTurn(string participantId, string chunk);
 
-    public void AppendToTurn(string participantId, string chunk);
+    string GetPendingMessageText(string participantId);
+    
+    void CompleteTurnPart(string participantId, bool interrupted = false);
 
-    public void CompleteTurn(string participantId, bool interrupted);
-
-    IEnumerable<InteractionTurn> GetProjectedHistory();
+    IReadOnlyList<InteractionTurn> GetProjectedHistory();
     
     public void AbortTurn();
+    
+    ChatHistory GetSemanticKernelChatHistory(bool includePendingTurn = true);
+
+    bool TryUpdateMessage(Guid turnId, Guid messageId, string newText);
+
+    bool TryDeleteMessage(Guid turnId, Guid messageId);
+    
+    void ApplyCleanupStrategy();
 }
