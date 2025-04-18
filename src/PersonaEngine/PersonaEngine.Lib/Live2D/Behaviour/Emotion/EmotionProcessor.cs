@@ -11,31 +11,21 @@ namespace PersonaEngine.Lib.Live2D.Behaviour.Emotion;
 /// <summary>
 ///     Processor for extracting emotion tags from text before TTS synthesis
 /// </summary>
-public class EmotionProcessor : ITextFilter
+public class EmotionProcessor(IEmotionService emotionService, ILoggerFactory loggerFactory) : ITextFilter
 {
-    // Regex to match emotion tags in the format [EMOTION:emoji]
+    private const string MetadataKey = "EmotionMarkers";
+
+    private const string MarkerPrefix = "__EM";
+
+    private const string MarkerSuffix = "__";
+
     private static readonly Regex EmotionTagRegex = new(@"\[EMOTION:(.*?)\]",
                                                         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    private readonly IEmotionService _emotionService;
+    private readonly ILogger<EmotionProcessor> _logger = loggerFactory.CreateLogger<EmotionProcessor>();
 
-    private readonly ILogger<EmotionProcessor> _logger;
-
-    public EmotionProcessor(IEmotionService emotionService, ILoggerFactory loggerFactory)
-    {
-        _emotionService = emotionService ?? throw new ArgumentNullException(nameof(emotionService));
-        _logger = loggerFactory?.CreateLogger<EmotionProcessor>() ??
-                  throw new ArgumentNullException(nameof(loggerFactory));
-    }
-
-    /// <summary>
-    ///     Priority of the emotion processor (should run before other text filters)
-    /// </summary>
     public int Priority => 100;
 
-    /// <summary>
-    ///     Processes text to extract emotion tags and remove them from the text
-    /// </summary>
     public ValueTask<TextFilterResult> ProcessAsync(string text, CancellationToken cancellationToken = default)
     {
         if ( string.IsNullOrEmpty(text) )
@@ -45,107 +35,151 @@ public class EmotionProcessor : ITextFilter
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        // List to store extracted emotions with their positions
-        var emotions = new List<EmotionMarker>();
-
-        // Extract emotion tags and their positions
-        var lastIndex        = 0;
-        var cleanTextBuilder = new StringBuilder();
+        var markers              = new List<EmotionMarkerInfo>();
+        var processedTextBuilder = new StringBuilder();
+        var lastIndex            = 0;
+        var markerIndex          = 0;
 
         var matches = EmotionTagRegex.Matches(text);
+        if ( matches.Count == 0 )
+        {
+            _logger.LogTrace("No emotion tags found in the input text.");
+
+            return ValueTask.FromResult(new TextFilterResult { ProcessedText = text });
+        }
+
+        _logger.LogDebug("Found {Count} potential emotion tags.", matches.Count);
+
         foreach ( Match match in matches )
         {
-            // Add text before the emotion tag
-            cleanTextBuilder.Append(text.Substring(lastIndex, match.Index - lastIndex));
+            cancellationToken.ThrowIfCancellationRequested();
 
-            // Extract emotion emoji
-            var emoji = match.Groups[1].Value;
+            processedTextBuilder.Append(text, lastIndex, match.Index - lastIndex);
+            var emotionValue = match.Groups[1].Value;
+            if ( string.IsNullOrWhiteSpace(emotionValue) )
+            {
+                _logger.LogWarning("Found emotion tag with empty value at index {Index}. Skipping.", match.Index);
+                processedTextBuilder.Append(match.Value);
+                lastIndex = match.Index + match.Length;
 
-            // Store position and emotion
-            emotions.Add(new EmotionMarker { Position = cleanTextBuilder.Length, Emotion = emoji });
+                continue;
+            }
 
-            _logger.LogDebug("Extracted emotion {Emoji} at position {Position}", emoji, cleanTextBuilder.Length);
+            // e.g., [__EM0__](//), [__EM1__](//) This causes the phonemizer to see it as a feature and ignore it
+            var markerId    = $"{MarkerPrefix}{markerIndex++}{MarkerSuffix}";
+            var markerToken = $"[{markerId}](//)";
+            processedTextBuilder.Append(markerToken);
 
-            // Update last index
+            var markerInfo = new EmotionMarkerInfo { MarkerId = markerId, Emotion = emotionValue };
+            markers.Add(markerInfo);
+
+            _logger.LogTrace("Replaced tag '{Tag}' with marker '{Marker}' for emotion '{Emotion}'.",
+                             match.Value, markerId, emotionValue);
+
             lastIndex = match.Index + match.Length;
         }
 
-        // Add remaining text
-        cleanTextBuilder.Append(text.Substring(lastIndex));
+        processedTextBuilder.Append(text, lastIndex, text.Length - lastIndex);
+        var processedText = processedTextBuilder.ToString();
+        _logger.LogDebug("Processed text length: {Length}. Original length: {OriginalLength}.",
+                         processedText.Length, text.Length);
 
-        var processedText = cleanTextBuilder.ToString();
-        _logger.LogDebug("Processed text from length {OriginalLength} to {ProcessedLength}",
-                         text.Length, processedText.Length);
+        var metadata = new Dictionary<string, object>();
+        if ( markers.Count != 0 )
+        {
+            metadata[MetadataKey] = markers;
+        }
 
-        // Create result
-        var result = new TextFilterResult { ProcessedText = processedText, Metadata = new Dictionary<string, object> { ["Emotions"] = emotions } };
+        var result = new TextFilterResult { ProcessedText = processedText, Metadata = metadata };
 
         return ValueTask.FromResult(result);
     }
 
     public ValueTask PostProcessAsync(TextFilterResult textFilterResult, AudioSegment segment, CancellationToken cancellationToken = default)
     {
-        if ( textFilterResult.Metadata.TryGetValue("Emotions", out var emotionsObj) &&
-             emotionsObj is List<EmotionMarker> emotions )
+        if ( !segment.Tokens.Any() ||
+             !textFilterResult.Metadata.TryGetValue(MetadataKey, out var markersObj) ||
+             markersObj is not List<EmotionMarkerInfo> markers || markers.Count == 0 )
         {
-            MapEmotionsToSegment(segment, emotions);
+            _logger.LogTrace("No emotion markers found in metadata or segment/tokens are missing/empty for segment Id {SegmentId}. Skipping post-processing.", segment?.Id);
+
+            return ValueTask.CompletedTask;
+        }
+
+        _logger.LogDebug("Starting emotion post-processing for segment Id {SegmentId} with {MarkerCount} markers.", segment.Id, markers.Count);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var emotionTimings   = new List<EmotionTiming>();
+        var processedMarkers = new HashSet<string>();
+        var allMarkersFound  = false;
+
+        var markerDict = markers.ToDictionary(m => m.MarkerId, m => m.Emotion);
+
+        foreach ( var token in segment.Tokens )
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            foreach ( var (markerId, emotion) in markerDict )
+            {
+                if ( processedMarkers.Contains(markerId) || !token.Text.Contains(markerId) )
+                {
+                    continue;
+                }
+
+                // Usually okay, the only case wher StartTS is 0 is if it's the first token.
+                var timestamp = token.StartTs ?? 0;
+
+                emotionTimings.Add(new EmotionTiming { Timestamp = timestamp, Emotion = emotion });
+                processedMarkers.Add(markerId);
+                token.Text = string.Empty;
+
+                _logger.LogDebug("Mapped emotion '{Emotion}' (from marker '{Marker}') to timestamp {Timestamp:F2}s based on token '{TokenText}'.",
+                                 emotion, markerId, timestamp, token.Text);
+
+                if ( processedMarkers.Count == markers.Count )
+                {
+                    _logger.LogDebug("All {Count} markers have been processed. Exiting token scan early.", markers.Count);
+                    allMarkersFound = true;
+
+                    break;
+                }
+            }
+
+            if ( allMarkersFound )
+            {
+                break;
+            }
+        }
+
+        if ( emotionTimings.Count != 0 )
+        {
+            _logger.LogInformation("Registering {Count} timed emotions for segment Id {SegmentId}.", emotionTimings.Count, segment.Id);
+            try
+            {
+                emotionService.RegisterEmotions(segment.Id, emotionTimings);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error registering emotions for segment Id {SegmentId}.", segment.Id);
+            }
+        }
+        else
+        {
+            _logger.LogWarning("Could not map any emotion markers to timestamps for segment Id {SegmentId}. This might happen if markers were removed by later filters or TTS engine issues.", segment.Id);
+        }
+
+        if ( processedMarkers.Count >= markers.Count )
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        {
+            var unprocessed = markers.Where(m => !processedMarkers.Contains(m.MarkerId)).Select(m => m.MarkerId);
+            _logger.LogWarning("The following emotion markers were found in ProcessAsync but not located in the final tokens for segment Id {SegmentId}: {UnprocessedMarkers}",
+                               segment.Id, string.Join(", ", unprocessed));
         }
 
         return ValueTask.CompletedTask;
-    }
-
-    /// <summary>
-    ///     Maps emotions to audio segments based on token timing
-    /// </summary>
-    private void MapEmotionsToSegment(AudioSegment segment, List<EmotionMarker> emotions)
-    {
-        if ( emotions.Count == 0 || segment?.Tokens == null || !segment.Tokens.Any() )
-        {
-            return;
-        }
-
-        var emotionTimings = new List<EmotionTiming>();
-
-        // Calculate character positions for each token
-        var charPosition = 0;
-        foreach ( var token in segment.Tokens )
-        {
-            // Skip tokens without timing information
-            if ( !token.StartTs.HasValue || !token.EndTs.HasValue )
-            {
-                charPosition += token.Text.Length + token.Whitespace.Length;
-
-                continue;
-            }
-
-            // Find emotions that fall within this token's text
-            var tokenEnd      = charPosition + token.Text.Length;
-            var tokenEmotions = emotions.Where(e => e.Position >= charPosition && e.Position < tokenEnd).ToList();
-
-            foreach ( var emotion in tokenEmotions )
-            {
-                // Calculate relative position within the token
-                var relativePos = token.Text.Length > 0
-                                      ? (emotion.Position - charPosition) / (float)token.Text.Length
-                                      : 0;
-
-                // Interpolate the timestamp
-                var timestamp = token.StartTs.Value + (token.EndTs.Value - token.StartTs.Value) * relativePos;
-
-                emotionTimings.Add(new EmotionTiming { Timestamp = timestamp, Emotion = emotion.Emotion });
-
-                _logger.LogDebug("Mapped emotion {Emoji} to timestamp {Timestamp:F2}s",
-                                 emotion.Emotion, timestamp);
-            }
-
-            // Update character position
-            charPosition = tokenEnd + token.Whitespace.Length;
-        }
-
-        // Register emotions with the service
-        if ( emotionTimings.Any() )
-        {
-            _emotionService.RegisterEmotions(segment.Id, emotionTimings);
-        }
     }
 }
