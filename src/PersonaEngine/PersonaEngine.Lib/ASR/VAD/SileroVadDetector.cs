@@ -8,25 +8,23 @@ namespace PersonaEngine.Lib.ASR.VAD;
 
 internal class SileroVadDetector : IVadDetector
 {
-    private const float threshHoldGap = 0.15f;
+    private readonly int _minSilenceSamples;
 
-    private readonly int minSilenceSamples;
+    private readonly int _minSpeechSamples;
 
-    private readonly int minSpeechSamples;
+    private readonly SileroVadOnnxModel _model;
 
-    private readonly SileroVadOnnxModel model;
+    private readonly float _negThreshold;
 
-    private readonly float negThreshold;
-
-    private readonly float threshold;
+    private readonly float _threshold;
 
     public SileroVadDetector(VadDetectorOptions vadDetectorOptions, SileroVadOptions sileroVadOptions)
     {
-        model             = new SileroVadOnnxModel(sileroVadOptions.ModelPath);
-        threshold         = sileroVadOptions?.Threshold ?? 0.5f;
-        negThreshold      = threshold - threshHoldGap;
-        minSpeechSamples  = (int)(SileroConstants.SampleRate / 1000 * vadDetectorOptions.MinSpeechDuration.TotalMilliseconds);
-        minSilenceSamples = (int)(SileroConstants.SampleRate / 1000 * vadDetectorOptions.MinSilenceDuration.TotalMilliseconds);
+        _model             = new SileroVadOnnxModel(sileroVadOptions.ModelPath);
+        _threshold         = sileroVadOptions.Threshold;
+        _negThreshold      = _threshold - sileroVadOptions.ThresholdGap;
+        _minSpeechSamples  = (int)(16d * vadDetectorOptions.MinSpeechDuration.TotalMilliseconds);
+        _minSilenceSamples = (int)(16d * vadDetectorOptions.MinSilenceDuration.TotalMilliseconds);
     }
 
     public async IAsyncEnumerable<VadSegment> DetectSegmentsAsync(IAudioSource source, [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -43,7 +41,7 @@ internal class SileroVadDetector : IVadDetector
 
     private IEnumerable<VadSegment> DetectSegments(Memory<float> samples)
     {
-        var  state                = model.CreateInferenceState();
+        var  state                = _model.CreateInferenceState();
         int? startingIndex        = null;
         int? startingSilenceIndex = null;
 
@@ -66,10 +64,10 @@ internal class SileroVadDetector : IVadDetector
                     slice = samples.Slice(i - SileroConstants.ContextSize, SileroConstants.BatchSize + SileroConstants.ContextSize);
                 }
 
-                var prob = model.Call(slice, state);
+                var prob = _model.Call(slice, state);
                 if ( !startingIndex.HasValue )
                 {
-                    if ( prob > threshold )
+                    if ( prob > _threshold )
                     {
                         startingIndex = i;
                     }
@@ -78,14 +76,14 @@ internal class SileroVadDetector : IVadDetector
                 }
 
                 // We are in speech
-                if ( prob > threshold )
+                if ( prob > _threshold )
                 {
                     startingSilenceIndex = null;
 
                     continue;
                 }
 
-                if ( prob > negThreshold )
+                if ( prob > _negThreshold )
                 {
                     // We are still in speech and the current batch is between the threshold and the negative threshold
                     // We continue to the next batch
@@ -101,11 +99,11 @@ internal class SileroVadDetector : IVadDetector
 
                 var silenceLength = i - startingSilenceIndex.Value;
 
-                if ( silenceLength > minSilenceSamples )
+                if ( silenceLength > _minSilenceSamples )
                 {
                     // We have silence after speech exceeding the minimum silence duration
                     var length = i - startingIndex.Value;
-                    if ( length >= minSpeechSamples )
+                    if ( length >= _minSpeechSamples )
                     {
                         yield return new VadSegment { StartTime = TimeSpan.FromMilliseconds(startingIndex.Value * 1000d / SileroConstants.SampleRate), Duration = TimeSpan.FromMilliseconds(length * 1000d / SileroConstants.SampleRate) };
                     }
@@ -127,7 +125,7 @@ internal class SileroVadDetector : IVadDetector
         if ( startingIndex.HasValue )
         {
             var length = samples.Length - startingIndex.Value;
-            if ( length >= minSpeechSamples )
+            if ( length >= _minSpeechSamples )
             {
                 yield return new VadSegment { StartTime = TimeSpan.FromMilliseconds(startingIndex.Value * 1000d / SileroConstants.SampleRate), Duration = TimeSpan.FromMilliseconds(length * 1000d / SileroConstants.SampleRate), IsIncomplete = true };
             }
