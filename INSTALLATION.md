@@ -477,8 +477,9 @@ Primary control panel JSON file in the main application folder (or `./publish` i
 
     // Conversation flow control settings
     "Conversation": {
-      "BargeInBehavior": 0        // Defines how user speech interrupts the AI's speech. Maps to: 0=Ignore (User cannot interrupt AI), 1=InterruptAndAppend (User can interrupt, their speech is added to the input queue).
-    },
+  "BargeInType": 3,         // Defines how and when user speech can interrupt the AI's speech. Maps to: 0=Ignore (User cannot interrupt AI), 1=Allow (User can always interrupt), 2=NoSpeaking (User can interrupt only when AI is not speaking), 3=MinWords (User can interrupt if their speech meets the minimum word count specified by BargeInMinWords), 4=MinWordsNoSpeaking (Combines NoSpeaking and MinWords criteria).
+  "BargeInMinWords" : 3    // Specifies the minimum number of words required in the user's speech to trigger a barge-in when BargeInType is set to 3 (MinWords) or 4 (MinWordsNoSpeaking).
+},
 
     // Context and personality settings for the LLM
     "ConversationContext": {
