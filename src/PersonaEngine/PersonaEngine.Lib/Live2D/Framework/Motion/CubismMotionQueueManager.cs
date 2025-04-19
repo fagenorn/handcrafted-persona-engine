@@ -208,8 +208,9 @@ public class CubismMotionQueueManager
 
         _remove.Clear();
 
-        foreach ( var item in Motions )
+        for ( var motionIndex = Motions.Count - 1; motionIndex >= 0; motionIndex-- )
         {
+            var item   = Motions[motionIndex];
             var motion = item.Motion;
 
             // ------ 値を反映する ------
