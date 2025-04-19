@@ -17,9 +17,4 @@ public interface ITtsEngine : IDisposable
         KokoroVoiceOptions?          options           = null,
         CancellationToken            cancellationToken = default
     );
-        
-    IAsyncEnumerable<AudioSegment> SynthesizeStreamingAsync(
-        IAsyncEnumerable<string> textStream,
-        KokoroVoiceOptions?      options           = null,
-        CancellationToken        cancellationToken = default);
 }

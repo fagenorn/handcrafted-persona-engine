@@ -6,6 +6,7 @@ using System.Globalization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.SemanticKernel;
@@ -27,6 +28,7 @@ using PersonaEngine.Lib.Live2D.Behaviour;
 using PersonaEngine.Lib.Live2D.Behaviour.Emotion;
 using PersonaEngine.Lib.Live2D.Behaviour.LipSync;
 using PersonaEngine.Lib.LLM;
+using PersonaEngine.Lib.Logging;
 using PersonaEngine.Lib.TTS.Audio;
 using PersonaEngine.Lib.TTS.Profanity;
 using PersonaEngine.Lib.TTS.RVC;
@@ -37,6 +39,10 @@ using PersonaEngine.Lib.UI.GUI;
 using PersonaEngine.Lib.UI.RouletteWheel;
 using PersonaEngine.Lib.UI.Text.Subtitles;
 using PersonaEngine.Lib.Vision;
+
+using Polly;
+using Polly.Retry;
+using Polly.Timeout;
 
 namespace PersonaEngine.Lib;
 
@@ -50,6 +56,7 @@ public static class ServiceCollectionExtensions
         services.AddUI(configuration);
         services.AddLive2D(configuration);
         services.AddSystemAudioPlayer();
+        services.AddPolly(configuration);
 
         services.AddSingleton<AvatarApp>();
 
@@ -146,7 +153,7 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<ConversationOptions>(configuration.GetSection("Config:Conversation"));
         services.Configure<ConversationContextOptions>(configuration.GetSection("Config:ConversationContext"));
-        
+
         services.AddSingleton<IChatEngine, SemanticKernelChatEngine>();
         services.AddSingleton<IVisualChatEngine, VisualQASemanticKernelChatEngine>();
         services.AddSingleton<IVisualQAService, VisualQAService>();
@@ -311,6 +318,37 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITextFilter, EmotionProcessor>();
         services.AddSingleton<IAudioFilter, EmotionAudioFilter>();
         services.AddSingleton<ILive2DAnimationService, EmotionAnimationService>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddPolly(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddResiliencePipeline("semantickernel-chat", pipelineBuilder =>
+                                                              {
+                                                                  pipelineBuilder
+                                                                      .AddTimeout(TimeSpan.FromSeconds(60))
+                                                                      .AddRetry(new RetryStrategyOptions {
+                                                                                                             Name = "ChatServiceRetry",
+                                                                                                             ShouldHandle = new PredicateBuilder().Handle<Exception>(ex => ex is HttpRequestException ||
+                                                                                                                                                                           ex is TimeoutRejectedException ||
+                                                                                                                                                                           (ex is KernelException ke && ke.Message.Contains("transient", StringComparison.OrdinalIgnoreCase))),
+                                                                                                             Delay            = TimeSpan.FromSeconds(2),
+                                                                                                             BackoffType      = DelayBackoffType.Exponential,
+                                                                                                             MaxDelay         = TimeSpan.FromSeconds(30),
+                                                                                                             MaxRetryAttempts = 3,
+                                                                                                             UseJitter        = true,
+                                                                                                             OnRetry = args =>
+                                                                                                                       {
+                                                                                                                           var sessionId = args.Context.Properties.TryGetValue(ResilienceKeys.SessionId, out var x) ? x : Guid.Empty;
+                                                                                                                           var logger    = args.Context.Properties.TryGetValue(ResilienceKeys.Logger, out var y) ? y : NullLogger.Instance;
+                                                                                                                           logger.LogWarning("Request failed/stopped for session {SessionId}. Retrying in {Timespan}. Attempt {RetryAttempt}...",
+                                                                                                                                             sessionId, args.Duration, args.AttemptNumber);
+
+                                                                                                                           return ValueTask.CompletedTask;
+                                                                                                                       }
+                                                                                                         });
+                                                              });
 
         return services;
     }
