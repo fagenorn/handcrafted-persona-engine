@@ -32,12 +32,17 @@
     <i>Let's bring your character to life like never before!</i> ✨
   </p>
 
-    <img src="assets/header.png" alt="Persona Engine" width="650">
+  <img src="assets/header.png" alt="Persona Engine" width="650">
 
-    <h2>💖 See it in Action! 💖</h2>
-    <p>Witness the Persona Engine creating digital magic:</p>
-    <a href="https://www.youtube.com/watch?v=4V2DgI7OtHE" target="_blank"> <img src="assets/demo_1.png" alt="Persona Engine Demo Video" width="600"></a>
-    <p><i>(Click the image above to watch the demo!)</i></p>
+  <h2>💖 See it in Action! 💖</h2>
+  <p>Witness the Persona Engine creating digital magic:</p>
+  <a href="https://www.youtube.com/watch?v=4V2DgI7OtHE" target="_blank"> <img src="assets/demo_1.png" alt="Persona Engine Demo Video" width="600"></a>
+  <p><i>(Click the image above to watch the demo!)</i></p>
+  <br>
+
+  <p>And here's another little glimpse into what the friendly engine can do:</p>
+  <video src="https://github.com/user-attachments/assets/8c486a9f-db2c-4486-8e20-0b1e336e476c"></video>
+  <br><br>
 </div>
 
 ## 📜 Table of Contents
@@ -66,6 +71,16 @@ It integrates seamlessly into streaming software like OBS Studio using Spout for
 > **Detailed instructions for configuring `personality.txt` for standard models are crucial and can be found in the [Installation Guide](./INSTALLATION.md#configure-personality-txt---important).**
 >
 > 👉 Want to try the fine-tuned model or see a live demo? Hop into our [Discord](#community)! 😊
+
+<div align="center">
+  <h3>Screenshots!</h3>
+  <img src="https://i.imgur.com/iQq2rxP.jpeg" alt="Persona Engine integrated with a Gmail interface concept" width="800">
+  <br><i>Look how helpful it is as a desktop friend! 😊</i>
+  <br><br>
+  <img src="https://i.imgur.com/WOLMe2T.jpeg" alt="Persona Engine acting as an AI Assistant" width="800">
+  <br><i>Peek inside the engine's cozy control room! ✨</i>
+  <br><br>
+</div>
 
 ## <a id="installation-guide"></a>🚀 Getting Started: Installation Guide
 
