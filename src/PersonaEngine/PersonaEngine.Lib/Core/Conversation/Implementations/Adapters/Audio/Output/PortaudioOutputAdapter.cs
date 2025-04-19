@@ -49,8 +49,6 @@ public class PortaudioOutputAdapter(ILogger<PortaudioOutputAdapter> logger, IAud
         try
         {
             _audioStream = null;
-
-            PortAudio.Terminate();
         }
         catch
         {
