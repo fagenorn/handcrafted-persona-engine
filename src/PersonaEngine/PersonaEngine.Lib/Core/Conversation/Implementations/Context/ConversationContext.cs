@@ -51,7 +51,6 @@ public class ConversationContext : IConversationContext
         _participants    = initialParticipants.ToDictionary(p => p.Id);
         _options         = optionsMonitor.CurrentValue;
         _cleanupStrategy = cleanupStrategy ?? new MaxTurnsCleanupStrategy(100);
-
         _optionsMonitorRegistration = optionsMonitor.OnChange(newOptions =>
                                                               {
                                                                   lock (_lock)
@@ -130,6 +129,9 @@ public class ConversationContext : IConversationContext
             var removed = _participants.Remove(participantId);
             if ( removed )
             {
+                // Optional: Decide if removing a participant should affect ongoing turns
+                // e.g., remove them from _currentTurnParticipantIds if turn is active?
+                // Current implementation doesn't automatically remove from active turn.
                 OnConversationUpdated();
             }
 
@@ -189,60 +191,6 @@ public class ConversationContext : IConversationContext
         handler?.Invoke(this, EventArgs.Empty);
     }
 
-    private void InternalCommitTurn(bool interrupted)
-    {
-        if ( _currentTurnId == Guid.Empty )
-        {
-            return;
-        }
-
-        var committedMessages = new List<ChatMessage>();
-        var endTime           = DateTimeOffset.UtcNow;
-
-        foreach ( var (participantId, buffer) in _currentMessageBuffers )
-        {
-            var text = buffer.ToString();
-
-            if ( string.IsNullOrWhiteSpace(text) || !_participants.TryGetValue(participantId, out var participantInfo) )
-            {
-                continue;
-            }
-
-            var role = participantInfo.Role;
-
-            var message = new ChatMessage(
-                                          Guid.NewGuid(),
-                                          participantId,
-                                          participantInfo.Name,
-                                          text,
-                                          _turnStartTime,
-                                          false,
-                                          role
-                                         );
-
-            committedMessages.Add(message);
-        }
-
-        if ( committedMessages.Count != 0 )
-        {
-            var turn = new InteractionTurn(
-                                           _currentTurnId,
-                                           _currentTurnParticipantIds,
-                                           _turnStartTime,
-                                           endTime,
-                                           committedMessages,
-                                           interrupted
-                                          );
-
-            _history.Add(turn);
-
-            ApplyCleanupStrategy();
-            OnConversationUpdated();
-        }
-
-        InternalAbortTurn(false);
-    }
-
     private void InternalAbortTurn(bool raiseEvent = true)
     {
         var wasActive = _currentTurnId != Guid.Empty;
@@ -257,6 +205,28 @@ public class ConversationContext : IConversationContext
         {
             OnConversationUpdated();
         }
+    }
+
+    private void FinalizeCurrentTurn()
+    {
+        if ( _currentTurnId == Guid.Empty )
+        {
+            return;
+        }
+
+        var turn = _history.FirstOrDefault(t => t.TurnId == _currentTurnId);
+
+        if ( turn != null )
+        {
+            turn.EndTime        = DateTimeOffset.UtcNow;
+            turn.WasInterrupted = _turnInterrupted;
+        }
+
+        _currentTurnId = Guid.Empty;
+        _currentMessageBuffers.Clear();
+        _participantsReadyToCommit.Clear();
+        _currentTurnParticipantIds.Clear();
+        _turnInterrupted = false;
     }
 
     private InteractionTurn? CreatePendingTurnSnapshot()
@@ -276,8 +246,6 @@ public class ConversationContext : IConversationContext
                 continue;
             }
 
-            var role = participantInfo.Role;
-
             var snapshotMessage = new ChatMessage(
                                                   Guid.NewGuid(),
                                                   participantId,
@@ -285,7 +253,7 @@ public class ConversationContext : IConversationContext
                                                   text,
                                                   _turnStartTime,
                                                   true,
-                                                  role
+                                                  participantInfo.Role
                                                  );
 
             pendingMessages.Add(snapshotMessage);
@@ -477,23 +445,76 @@ public class ConversationContext : IConversationContext
     {
         lock (_lock)
         {
-            if ( _currentTurnId == Guid.Empty || !_currentTurnParticipantIds.Contains(participantId) )
+            if ( _currentTurnId == Guid.Empty )
             {
-                Debug.WriteLine($"Warning: CompleteTurnPart called for participant {participantId} outside of an active turn or participation.");
+                return;
+            }
 
+            if ( !_currentTurnParticipantIds.Contains(participantId) )
+            {
+                return;
+            }
+
+            if ( _participantsReadyToCommit.Contains(participantId) )
+            {
+                return;
+            }
+
+            if ( !_currentMessageBuffers.TryGetValue(participantId, out var buffer) || buffer.Length == 0 )
+            {
+                Debug.WriteLine($"Debug: CompleteTurnPart called for participant {participantId} in turn {_currentTurnId} with no message content.");
+            }
+
+            if ( _participants.TryGetValue(participantId, out var participantInfo) )
+            {
+                var text = buffer!.ToString();
+                var message = new ChatMessage(
+                                              Guid.NewGuid(),
+                                              participantId,
+                                              participantInfo.Name,
+                                              text,
+                                              DateTimeOffset.UtcNow,
+                                              false,
+                                              participantInfo.Role
+                                             );
+
+                var turn = _history.FirstOrDefault(t => t.TurnId == _currentTurnId);
+                if ( turn == null )
+                {
+                    turn = new InteractionTurn(
+                                               _currentTurnId,
+                                               _currentTurnParticipantIds,
+                                               _turnStartTime,
+                                               null,
+                                               new List<ChatMessage> { message },
+                                               interrupted
+                                              );
+
+                    _history.Add(turn);
+                    ApplyCleanupStrategy();
+                }
+                else
+                {
+                    turn.Messages.Add(message);
+                    turn.WasInterrupted = turn.WasInterrupted || interrupted;
+                }
+
+                _currentMessageBuffers.Remove(participantId);
+            }
+            else
+            {
                 return;
             }
 
             _participantsReadyToCommit.Add(participantId);
-            if ( interrupted )
-            {
-                _turnInterrupted = true;
-            }
+            _turnInterrupted = _turnInterrupted || interrupted;
 
             if ( _participantsReadyToCommit.IsSupersetOf(_currentTurnParticipantIds) )
             {
-                InternalCommitTurn(_turnInterrupted);
+                FinalizeCurrentTurn();
             }
+
+            OnConversationUpdated();
         }
     }
 
@@ -519,14 +540,13 @@ public class ConversationContext : IConversationContext
             }
         }
     }
-    
+
     public IReadOnlyList<InteractionTurn> GetProjectedHistory()
     {
         lock (_lock)
         {
             var projectedHistory = new List<InteractionTurn>(_history);
-
-            var pendingTurn = CreatePendingTurnSnapshot();
+            var pendingTurn      = CreatePendingTurnSnapshot();
             if ( pendingTurn != null )
             {
                 projectedHistory.Add(pendingTurn);

@@ -10,6 +10,8 @@ public enum ConversationState
 
     Listening,
 
+    ActiveTurn,
+    
     ProcessingInput,
 
     WaitingForLlm,

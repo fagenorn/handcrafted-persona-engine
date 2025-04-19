@@ -2,7 +2,7 @@
 
 namespace PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
 
-public interface IConversationContext
+public interface IConversationContext : IDisposable
 {
     IReadOnlyDictionary<string, ParticipantInfo> Participants { get; }
 

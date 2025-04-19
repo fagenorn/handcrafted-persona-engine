@@ -340,7 +340,6 @@ public partial class ConversationSession : IConversationSession
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "{SessionId} | Output Loop: Error processing output event: {EventType}. Firing ErrorOccurred trigger.", SessionId, outputEvent.GetType().Name);
-                    // await FireErrorWithoutStoppingAsync(ex);
                     if ( _stateMachine.State is ConversationState.Error or ConversationState.Ended )
                     {
                         break;
@@ -520,6 +519,7 @@ public partial class ConversationSession : IConversationSession
 
         _logger.LogDebug("{SessionId} | Action: PrepareLlmRequestAsync for input: \"{InputText}\"", SessionId, finalizedEvent.FinalTranscript);
 
+        // In-case race condition (channel events not consumed fast enough)
         await CancelCurrentTurnProcessingAsync();
 
         _currentTurnCts = CancellationTokenSource.CreateLinkedTokenSource(_sessionCts.Token);
@@ -540,10 +540,11 @@ public partial class ConversationSession : IConversationSession
         {
             _context.StartTurn(_currentTurnId.Value, [finalizedEvent.ParticipantId, ASSISTANT_PARTICIPANT.Id]);
             _context.AppendToTurn(finalizedEvent.ParticipantId, finalizedEvent.FinalTranscript);
-            _context.CompleteTurnPart(finalizedEvent.ParticipantId);
 
             var userName = _context.Participants.TryGetValue(finalizedEvent.ParticipantId, out var pInfo) ? pInfo.Name : finalizedEvent.ParticipantId;
-            _logger.LogInformation("{SessionId} | {TurnId} | 📝 | [{Speaker}] {Text}", SessionId, _currentTurnId, userName, _context.GetPendingMessageText(finalizedEvent.ParticipantId));
+            _logger.LogInformation("{SessionId} | {TurnId} | 📝 | [{Speaker}]{Text}", SessionId, _currentTurnId, userName, _context.GetPendingMessageText(finalizedEvent.ParticipantId));
+            
+            _context.CompleteTurnPart(finalizedEvent.ParticipantId);
 
             await _stateMachine.FireAsync(ConversationTrigger.LlmRequestSent);
 
@@ -631,19 +632,22 @@ public partial class ConversationSession : IConversationSession
         _currentTtsChannel = null;
     }
 
-    private async Task WaitForTaskCancellationAsync(Task? task, string taskName, Guid turnIdBeingCancelled, int timeoutMilliseconds = 250)
+    private async Task WaitForTaskCancellationAsync(Task? task, string taskName, Guid turnIdBeingCancelled)
     {
         if ( task is { IsCompleted: false } )
         {
             _logger.LogTrace("{SessionId} | Waiting briefly for {TaskName} task cancellation acknowledgment (Turn {TurnId}).", SessionId, taskName, turnIdBeingCancelled);
             try
             {
-                await Task.WhenAny(task, Task.Delay(TimeSpan.FromMilliseconds(timeoutMilliseconds)));
-                _logger.LogTrace("{SessionId} | {TaskName} task wait completed or timed out (Turn {TurnId}).", SessionId, taskName, turnIdBeingCancelled);
+                await task;
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (OperationCanceledException)
             {
-                _logger.LogWarning(ex, "{SessionId} | Exception while waiting for {TaskName} task cancellation (Turn {TurnId}). Task Status: {Status}", SessionId, taskName, turnIdBeingCancelled, task.Status);
+                /* Ignored */
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "{SessionId} | Exception while waiting for {TaskName} task cancellation (Turn {TurnId}). Task Status: {Status}", SessionId, taskName, turnIdBeingCancelled, task.Status);
             }
         }
         else
@@ -652,7 +656,7 @@ public partial class ConversationSession : IConversationSession
         }
     }
 
-    private async Task HandleInterruptionAsync(IInputEvent inputEvent)
+    private void HandleInterruption()
     {
         var interruptedTurnId = _currentTurnId;
 
@@ -664,11 +668,32 @@ public partial class ConversationSession : IConversationSession
         }
 
         _metrics.IncrementTurnsInterrupted(SessionId, interruptedTurnId.Value);
-        _context.CompleteTurnPart(ASSISTANT_PARTICIPANT.Id, true);
 
-        CommitChanges(true);
+        CommitChanges(false);
+    }
 
-        await CancelCurrentTurnProcessingAsync();
+    private async Task HandleInterruptionCancelAndRefireAsync(IInputEvent inputEvent, StateMachine<ConversationState, ConversationTrigger>.Transition transition)
+    {
+        HandleInterruption();
+
+        if ( transition.Source is ConversationState.Speaking )
+        {
+            _context.CompleteTurnPart(ASSISTANT_PARTICIPANT.Id, true);
+        }
+
+        switch ( transition.Trigger )
+        {
+            case ConversationTrigger.InputDetected:
+                await _stateMachine.FireAsync(_inputDetectedTrigger, inputEvent);
+
+                return;
+            case ConversationTrigger.InputFinalized:
+                await _stateMachine.FireAsync(_inputFinalizedTrigger, inputEvent);
+
+                return;
+            default:
+                throw new ArgumentException($"{transition} failed. The state machine is in an invalid state.", nameof(transition));
+        }
     }
 
     private async Task PauseActivitiesAsync()
@@ -707,14 +732,11 @@ public partial class ConversationSession : IConversationSession
         }
     }
 
-    private Task HandleErrorAsync(Exception error)
+    private async Task HandleErrorAsync(Exception error)
     {
         _logger.LogError(error, "{SessionId} | Action: HandleErrorAsync - An error occurred in the state machine.", SessionId);
         _metrics.IncrementErrors(SessionId, _currentTurnId, error);
-        _ = Task.Run(async () => await CancelCurrentTurnProcessingAsync());
-        _ = _stateMachine.FireAsync(ConversationTrigger.StopRequested);
-
-        return Task.CompletedTask;
+        await _stateMachine.FireAsync(ConversationTrigger.StopRequested);
     }
 
     private async Task CleanupSessionAsync()
@@ -878,7 +900,10 @@ public partial class ConversationSession : IConversationSession
 
         outputWriter.TryComplete();
 
-        _context.CompleteTurnPart(ASSISTANT_PARTICIPANT.Id);
+        if ( _outputAdapter is not IAudioOutputAdapter )
+        {
+            _context.CompleteTurnPart(ASSISTANT_PARTICIPANT.Id);
+        }
     }
 
     private void HandleTtsStreamEnded()
@@ -939,6 +964,8 @@ public partial class ConversationSession : IConversationSession
             }
         }
     }
+
+    private void CommitSpokenText() { _context.CompleteTurnPart(ASSISTANT_PARTICIPANT.Id); }
 
     private void HandleIdle()
     {
