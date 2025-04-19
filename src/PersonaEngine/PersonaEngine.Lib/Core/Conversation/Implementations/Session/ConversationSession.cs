@@ -296,14 +296,16 @@ public partial class ConversationSession : IConversationSession
                         case AudioPlaybackEndedEvent ev:
                             if ( _audioPlaybackStopwatch != null )
                             {
-                                _audioPlaybackStopwatch.Stop();
+                                var apt = _audioPlaybackStopwatch;
+                                apt.Stop();
                                 _audioFinishReason = ev.FinishReason;
-                                _metrics.RecordAudioPlaybackDuration(_audioPlaybackStopwatch.Elapsed.TotalMilliseconds, SessionId, ev.TurnId ?? Guid.Empty, _audioFinishReason);
+                                _metrics.RecordAudioPlaybackDuration(apt.Elapsed.TotalMilliseconds, SessionId, ev.TurnId ?? Guid.Empty, _audioFinishReason);
                                 _audioPlaybackStopwatch = null;
 
                                 if ( _turnStopwatch != null && ev.TurnId.HasValue )
                                 {
-                                    _turnStopwatch.Stop();
+                                    apt = _turnStopwatch;
+                                    apt.Stop();
 
                                     var overallReason = _audioFinishReason;
                                     if ( _ttsFinishReason == CompletionReason.Error || _llmFinishReason == CompletionReason.Error )
@@ -315,7 +317,7 @@ public partial class ConversationSession : IConversationSession
                                         overallReason = CompletionReason.Cancelled;
                                     }
 
-                                    _metrics.RecordTurnDuration(_turnStopwatch.Elapsed.TotalMilliseconds, SessionId, ev.TurnId.Value, overallReason);
+                                    _metrics.RecordTurnDuration(apt.Elapsed.TotalMilliseconds, SessionId, ev.TurnId.Value, overallReason);
                                 }
                             }
 

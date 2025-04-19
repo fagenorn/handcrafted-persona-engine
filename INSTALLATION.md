@@ -366,7 +366,7 @@ Primary control panel JSON file in the main application folder (or `./publish` i
     // Automatic Speech Recognition (ASR) settings
     "Asr": {
       "TtsMode": 1,               // Controls the balance between performance and accuracy for ASR processing. Maps to: 0=Performant, 1=Balanced, 2=Precise.
-      "WhisperPrompt": "Aria, Joobel", // Optional prompt to guide the Whisper ASR model for better recognition of specific names or terms.
+      "TtsPrompt": "Aria, Joobel", // Optional prompt to guide the Whisper ASR model for better recognition of specific names or terms.
       "VadThreshold": 0.5,        // Voice Activity Detection (VAD) threshold. Higher values require a louder signal to be considered speech (0.0 to 1.0).
       "VadThresholdGap": 0.15,    // Determines the negative threshold (VadThreshold - VadThresholdGap). Speech detection continues if the probability is between the negative threshold and the main threshold, helping to avoid cutting off mid-sentence.
       "VadMinSpeechDuration": 250, // Minimum duration (in milliseconds) of audio required to be considered speech.
