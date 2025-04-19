@@ -1,0 +1,11 @@
+﻿using PersonaEngine.Lib.Core.Conversation.Abstractions.Strategies;
+
+namespace PersonaEngine.Lib.Core.Conversation.Implementations.Strategies;
+
+ public class AllowBargeInStrategy : IBargeInStrategy
+    {
+        public bool ShouldAllowBargeIn(BargeInContext context)
+        {
+            return true;
+        }
+    }

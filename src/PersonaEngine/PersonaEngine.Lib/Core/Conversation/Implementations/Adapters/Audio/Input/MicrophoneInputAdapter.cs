@@ -9,6 +9,7 @@ using PersonaEngine.Lib.Audio;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Adapters;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Input;
 
 using Polly;
 using Polly.Contrib.WaitAndRetry;

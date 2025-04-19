@@ -10,8 +10,10 @@ using PersonaEngine.Lib.Core.Conversation.Abstractions.Configuration;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
+using PersonaEngine.Lib.Core.Conversation.Abstractions.Strategies;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Context;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Common;
+using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Input;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Metrics;
 using PersonaEngine.Lib.LLM;
@@ -25,18 +27,19 @@ public partial class ConversationSession : IConversationSession
 {
     private static readonly ParticipantInfo ASSISTANT_PARTICIPANT = new("ARIA_ASSISTANT_BOT", "Aria", ChatMessageRole.Assistant);
 
-    public ConversationSession(ILogger logger, IChatEngine chatEngine, ITtsEngine ttsEngine, IEnumerable<IInputAdapter> inputAdapters, IOutputAdapter outputAdapter, ConversationMetrics metrics, Guid sessionId, ConversationOptions options, ConversationContext context)
+    public ConversationSession(ILogger logger, IChatEngine chatEngine, ITtsEngine ttsEngine, IEnumerable<IInputAdapter> inputAdapters, IOutputAdapter outputAdapter, ConversationMetrics metrics, Guid sessionId, ConversationOptions options, ConversationContext context, IBargeInStrategy bargeInStrategy)
     {
         _logger     = logger;
         _chatEngine = chatEngine;
         _ttsEngine  = ttsEngine;
 
         _inputAdapters.AddRange(inputAdapters);
-        _outputAdapter = outputAdapter;
-        _metrics       = metrics;
-        SessionId      = sessionId;
-        _options       = options;
-        _context       = context;
+        _outputAdapter   = outputAdapter;
+        _metrics         = metrics;
+        SessionId        = sessionId;
+        _options         = options;
+        _context         = context;
+        _bargeInStrategy = bargeInStrategy;
 
         _inputChannel       = Channel.CreateUnbounded<IInputEvent>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
         _inputChannelWriter = _inputChannel.Writer;
@@ -396,6 +399,8 @@ public partial class ConversationSession : IConversationSession
 
     #region Fields
 
+    private readonly IBargeInStrategy _bargeInStrategy;
+
     private Task? _llmTask;
 
     private Task? _ttsTask;
@@ -543,7 +548,7 @@ public partial class ConversationSession : IConversationSession
 
             var userName = _context.Participants.TryGetValue(finalizedEvent.ParticipantId, out var pInfo) ? pInfo.Name : finalizedEvent.ParticipantId;
             _logger.LogInformation("{SessionId} | {TurnId} | 📝 | [{Speaker}]{Text}", SessionId, _currentTurnId, userName, _context.GetPendingMessageText(finalizedEvent.ParticipantId));
-            
+
             _context.CompleteTurnPart(finalizedEvent.ParticipantId);
 
             await _stateMachine.FireAsync(ConversationTrigger.LlmRequestSent);

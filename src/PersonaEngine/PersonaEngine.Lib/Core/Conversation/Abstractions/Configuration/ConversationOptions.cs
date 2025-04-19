@@ -4,5 +4,7 @@ namespace PersonaEngine.Lib.Core.Conversation.Abstractions.Configuration;
 
 public record ConversationOptions
 {
-    public BargeInStrategy BargeInBehavior { get; set; } = BargeInStrategy.InterruptAndAppend;
+    public BargeInType BargeInType { get; set; } = BargeInType.MinWords;
+
+    public int BargeInMinWords { get; set; } = 2;
 }

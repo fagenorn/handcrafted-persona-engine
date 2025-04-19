@@ -1,4 +1,6 @@
-﻿namespace PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
+﻿using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
+
+namespace PersonaEngine.Lib.Core.Conversation.Implementations.Events.Input;
 
 public record SttSegmentRecognizing(
     Guid           SessionId,

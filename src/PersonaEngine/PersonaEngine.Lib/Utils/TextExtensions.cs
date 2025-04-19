@@ -129,4 +129,35 @@ public static class TextExtensions
 
         return -1;
     }
+
+    public static int GetWordCount(this string text)
+    {
+        if ( string.IsNullOrWhiteSpace(text) )
+        {
+            return 0;
+        }
+
+        var wordCount = 0;
+        var inWord    = false;
+
+        foreach ( var c in text )
+        {
+            if ( char.IsWhiteSpace(c) )
+            {
+                inWord = false;
+            }
+            else
+            {
+                if ( inWord )
+                {
+                    continue;
+                }
+
+                wordCount++;
+                inWord = true;
+            }
+        }
+
+        return wordCount;
+    }
 }

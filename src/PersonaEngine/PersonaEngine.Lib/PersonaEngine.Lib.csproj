@@ -45,7 +45,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <Folder Include="Core\Conversation\Implementations\Events\Input\" />
         <Folder Include="Resources\Live2D\Avatars\"/>
         <Folder Include="Resources\Live2D\runtime\"/>
         <Folder Include="Resources\Models\kokoro\"/>

@@ -55,10 +55,10 @@ public partial class ConversationSession
                      .Ignore(ConversationTrigger.InputDetected);
 
         _stateMachine.Configure(ConversationState.ActiveTurn)
-                     .PermitIf(_inputDetectedTrigger, ConversationState.Interrupted, _ => _options.BargeInBehavior != BargeInStrategy.Ignore, "Handle Barge-In during Active Turn")
-                     .PermitIf(_inputFinalizedTrigger, ConversationState.Interrupted, _ => _options.BargeInBehavior != BargeInStrategy.Ignore, "Handle Barge-In during Active Turn (Finalized)")
-                     .IgnoreIf(ConversationTrigger.InputDetected, () => _options.BargeInBehavior == BargeInStrategy.Ignore, "Ignore Barge-In during Active Turn")
-                     .IgnoreIf(ConversationTrigger.InputFinalized, () => _options.BargeInBehavior == BargeInStrategy.Ignore, "Ignore Barge-In during Active Turn");
+                     .PermitIf(_inputDetectedTrigger, ConversationState.Interrupted,
+                               ShouldAllowBargeIn, "Barge-In")
+                     .PermitIf(_inputFinalizedTrigger, ConversationState.Interrupted,
+                               ShouldAllowBargeIn, "Barge-In");
 
         _stateMachine.Configure(ConversationState.ProcessingInput)
                      .SubstateOf(ConversationState.ActiveTurn)
@@ -143,6 +143,11 @@ public partial class ConversationSession
                                                       return;
                                                   }
 
+                                                  if ( unmetGuards.Count != 0 && unmetGuards.First() == "Barge-In" )
+                                                  {
+                                                      return;
+                                                  }
+
                                                   _logger.LogWarning("{SessionId} | Unhandled trigger '{Trigger}' in state '{State}'. Unmet guards: [{UnmetGuards}]",
                                                                      SessionId, trigger, state, string.Join(", ", unmetGuards ?? Array.Empty<string>()));
 
@@ -184,5 +189,23 @@ public partial class ConversationSession
 
         _logger.LogInformation("{SessionId} | {TurnId} | {Emoji} | {DestinationState}",
                                SessionId, _currentTurnId ?? Guid.Empty, emoji, transition.Destination);
+    }
+
+    private bool ShouldAllowBargeIn(IInputEvent inputEvent)
+    {
+        var context = new BargeInContext(
+                                         _options,
+                                         _stateMachine.State,
+                                         inputEvent,
+                                         SessionId,
+                                         _currentTurnId
+                                        );
+
+        var allow = _bargeInStrategy.ShouldAllowBargeIn(context);
+
+        _logger.LogDebug("{SessionId} | Barge-in check for trigger {TriggerType} in state {State}. Strategy decided: {Allow}",
+                         SessionId, inputEvent.GetType().Name, context.CurrentState, allow);
+
+        return allow;
     }
 }
