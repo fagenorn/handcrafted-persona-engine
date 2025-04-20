@@ -53,7 +53,7 @@ internal class SileroVadDetector : IVadDetector
             {
                 if ( i == 0 )
                 {
-                    // the first batch will have the empty context (which we need to copy at the beggining of the slice)
+                    // the first batch will have the empty context (which we need to copy at the beginning of the slice)
                     rentedMemory = ArrayPool<float>.Shared.Rent(SileroConstants.ContextSize + SileroConstants.BatchSize);
                     Array.Clear(rentedMemory, 0, SileroConstants.ContextSize);
                     samples.Span.Slice(0, SileroConstants.BatchSize).CopyTo(rentedMemory.AsSpan(SileroConstants.ContextSize));
