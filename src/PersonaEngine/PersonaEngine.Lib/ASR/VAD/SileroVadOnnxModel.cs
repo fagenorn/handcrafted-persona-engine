@@ -18,14 +18,12 @@ internal class SileroVadOnnxModel : IDisposable
     {
         var sessionOptions = new SessionOptions {
                                                     EnableMemoryPattern    = true,
-                                                    ExecutionMode          = ExecutionMode.ORT_PARALLEL,
-                                                    InterOpNumThreads      = 1,
-                                                    IntraOpNumThreads      = 1,
+                                                    ExecutionMode          = ExecutionMode.ORT_SEQUENTIAL,
                                                     GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
                                                     LogSeverityLevel       = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR
                                                 };
         
-        sessionOptions.AppendExecutionProvider_CUDA();
+        sessionOptions.AppendExecutionProvider_CPU();
 
         session    = new InferenceSession(modelPath, sessionOptions);
         runOptions = new RunOptions();
