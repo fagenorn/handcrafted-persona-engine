@@ -7,6 +7,14 @@
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
+    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+      <PlatformTarget>x64</PlatformTarget>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+      <PlatformTarget>x64</PlatformTarget>
+    </PropertyGroup>
+
     <ItemGroup>
         <PackageReference Include="Aurio.LibSampleRate" Version="4.2.1"/>
         <PackageReference Include="FontStashSharp" Version="1.3.10"/>
@@ -20,8 +28,9 @@
         <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.2"/>
         <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions"
                           Version="9.0.2"/>
-        <PackageReference Include="Microsoft.ML.OnnxRuntime.Extensions" Version="0.14.0" />
-        <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.21.0" />
+        <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.21.0" />
+        <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Windows" Version="1.21.1" />
+<!--        <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.21.0" />-->
         <PackageReference Include="Microsoft.ML.Tokenizers" Version="1.0.2"/>
         <PackageReference Include="Microsoft.ML.Tokenizers.Data.Cl100kBase" Version="1.0.2"/>
         <PackageReference Include="Microsoft.SemanticKernel.Abstractions" Version="1.40.0"/>

@@ -85,10 +85,7 @@ public class FileModelProvider : IModelProvider
         await Task.CompletedTask;
     }
 
-    /// <summary>
-    ///     Maps model type to file path
-    /// </summary>
-    private string GetModelPath(ModelType modelType)
+    public string GetModelPath(ModelType modelType)
     {
         var fullPath = Path.Combine(_baseDirectory, modelType.GetDescription());
 
