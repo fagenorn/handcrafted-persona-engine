@@ -234,7 +234,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ILexicon, Lexicon>();
         services.AddSingleton<IFallbackPhonemizer, EspeakFallbackPhonemizer>();
 
-        services.AddSingleton<IAudioSynthesizer, OnnxAudioSynthesizer>();
+        services.AddSingleton<IAudioSynthesizer, KokoroAudioSynthesizer>();
+        
         services.AddSingleton<IModelProvider>(provider =>
                                               {
                                                   var config = provider.GetRequiredService<IOptions<TtsConfiguration>>().Value;

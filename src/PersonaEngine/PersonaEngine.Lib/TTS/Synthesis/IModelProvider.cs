@@ -5,12 +5,8 @@
 /// </summary>
 public interface IModelProvider : IAsyncDisposable
 {
-    /// <summary>
-    ///     Gets a model by type
-    /// </summary>
-    /// <param name="modelType">Type of model</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Model resource</returns>
+    string GetModelPath(ModelType modelType);
+    
     Task<ModelResource> GetModelAsync(
         ModelType         modelType,
         CancellationToken cancellationToken = default);
