@@ -74,10 +74,10 @@ It integrates seamlessly into streaming software like OBS Studio using Spout for
 
 <div align="center">
   <h3>Screenshots!</h3>
-  <img src="https://i.imgur.com/iQq2rxP.jpeg" alt="Persona Engine integrated with a Gmail interface concept" width="800">
+  <img src="./assets/screenshot_1.jpg" alt="Persona Engine integrated with a Gmail interface concept" width="800">
   <br><i>Look how helpful it is as a desktop friend! 😊</i>
   <br><br>
-  <img src="https://i.imgur.com/WOLMe2T.jpeg" alt="Persona Engine acting as an AI Assistant" width="800">
+  <img src="./assets/screenshot_2.jpg" alt="Persona Engine acting as an AI Assistant" width="800">
   <br><i>Peek inside the engine's cozy control room! ✨</i>
   <br><br>
 </div>
