@@ -258,13 +258,17 @@ public partial class ConversationSession : IConversationSession
 
                             break;
                         case LlmStreamEndEvent ev:
-                            if ( _llmStopwatch != null )
+                            if ( _llmStopwatch != null && _outputAdapter is not IAudioOutputAdapter )
                             {
                                 _llmStopwatch.Stop();
                                 _llmFinishReason = ev.FinishReason;
                                 _metrics.RecordLlmDuration(_llmStopwatch.Elapsed.TotalMilliseconds, SessionId, ev.TurnId ?? Guid.Empty, _llmFinishReason);
                                 _llmStopwatch = null;
                             }
+
+                            break;
+                        case TtsReadyToSynthesizeEvent ev:
+                            TrackLlmFirstTokenLatency(ev.TurnId.Value);
 
                             break;
                         case TtsStreamStartEvent:
@@ -849,17 +853,27 @@ public partial class ConversationSession : IConversationSession
             return;
         }
 
-        if ( _firstLlmTokenLatencyStopwatch != null )
+        if ( _outputAdapter is not IAudioOutputAdapter )
         {
-            _firstLlmTokenLatencyStopwatch.Stop();
-            _currentTurnFirstLlmTokenLatencyMs = _firstLlmTokenLatencyStopwatch.Elapsed.TotalMilliseconds;
-            _logger.LogDebug("{SessionId} | {TurnId} | ⏱️ | First LLM [{LatencyMs:N0} ms]", SessionId, turnId.Value, _currentTurnFirstLlmTokenLatencyMs.Value);
-            _firstLlmTokenLatencyStopwatch = null;
+            TrackLlmFirstTokenLatency(turnId.Value);
         }
 
         _context.AppendToTurn(ASSISTANT_PARTICIPANT.Id, chunkEvent.Chunk);
 
         await outputWriter.WriteAsync(chunkEvent, turnCts.Token);
+    }
+
+    private void TrackLlmFirstTokenLatency(Guid turnId)
+    {
+        if ( _firstLlmTokenLatencyStopwatch == null )
+        {
+            return;
+        }
+
+        _firstLlmTokenLatencyStopwatch.Stop();
+        _currentTurnFirstLlmTokenLatencyMs = _firstLlmTokenLatencyStopwatch.Elapsed.TotalMilliseconds;
+        _logger.LogDebug("{SessionId} | {TurnId} | ⏱️ | First LLM [{LatencyMs:N0} ms]", SessionId, turnId, _currentTurnFirstLlmTokenLatencyMs.Value);
+        _firstLlmTokenLatencyStopwatch = null;
     }
 
     private async Task HandleTtsStreamChunkReceived(IOutputEvent outputEvent, StateMachine<ConversationState, ConversationTrigger>.Transition _)

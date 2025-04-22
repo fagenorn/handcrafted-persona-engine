@@ -62,7 +62,7 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
     {
         if ( string.IsNullOrEmpty(phonemes) )
         {
-            _logger.LogWarning("SynthesizeAsync called with empty or null phonemes.");
+            _logger.LogInformation("SynthesizeAsync called with empty or null phonemes.");
 
             return new AudioData(Memory<float>.Empty, Memory<long>.Empty);
         }
@@ -205,7 +205,12 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
 
     private void InitializeSession()
     {
-        var sessionOptions = new SessionOptions { EnableMemoryPattern = true, ExecutionMode = ExecutionMode.ORT_SEQUENTIAL, GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL, LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_WARNING };
+        var sessionOptions = new SessionOptions {
+                                                    EnableMemoryPattern    = true, 
+                                                    ExecutionMode          = ExecutionMode.ORT_PARALLEL, 
+                                                    GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL, 
+                                                    LogSeverityLevel       = OrtLoggingLevel.ORT_LOGGING_LEVEL_WARNING
+                                                };
 
         sessionOptions.AppendExecutionProvider_CUDA();
 
