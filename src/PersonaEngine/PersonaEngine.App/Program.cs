@@ -1,11 +1,8 @@
 ﻿using System.Text;
-
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-
 using PersonaEngine.Lib;
 using PersonaEngine.Lib.Core;
-
 using Serilog;
 using Serilog.Events;
 
@@ -18,23 +15,23 @@ internal static class Program
         Console.OutputEncoding = Encoding.UTF8;
 
         var builder = new ConfigurationBuilder()
-                      .SetBasePath(Directory.GetCurrentDirectory())
-                      .AddJsonFile("appsettings.json", false, true);
+            .SetBasePath(Directory.GetCurrentDirectory())
+            .AddJsonFile("appsettings.json", false, true);
 
-        IConfiguration config   = builder.Build();
-        var            services = new ServiceCollection();
+        IConfiguration config = builder.Build();
+        var services = new ServiceCollection();
 
         services.AddLogging(loggingBuilder =>
-                            {
-                                CreateLogger();
-                                loggingBuilder.AddSerilog();
-                            });
+        {
+            CreateLogger();
+            loggingBuilder.AddSerilog();
+        });
 
         services.AddMetrics();
         services.AddApp(config);
 
         var serviceProvider = services.BuildServiceProvider();
-        
+
         var window = serviceProvider.GetRequiredService<AvatarApp>();
         window.Run();
 
@@ -44,13 +41,13 @@ internal static class Program
     private static void CreateLogger()
     {
         Log.Logger = new LoggerConfiguration()
-                     .MinimumLevel.Warning()
-                     .MinimumLevel.Override("PersonaEngine.Lib.Core.Conversation", LogEventLevel.Information)
-                     .Enrich.FromLogContext()
-                     .Enrich.With<GuidToEmojiEnricher>()
-                     .WriteTo.Console(
-                                      outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}"
-                                     )
-                     .CreateLogger();
+            .MinimumLevel.Warning()
+            .MinimumLevel.Override("PersonaEngine.Lib.Core.Conversation", LogEventLevel.Information)
+            .Enrich.FromLogContext()
+            .Enrich.With<GuidToEmojiEnricher>()
+            .WriteTo.Console(
+                outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}"
+            )
+            .CreateLogger();
     }
 }

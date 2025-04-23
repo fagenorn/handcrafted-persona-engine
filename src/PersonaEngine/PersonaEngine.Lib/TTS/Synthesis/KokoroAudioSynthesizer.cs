@@ -1,9 +1,7 @@
 ﻿using System.Buffers;
-
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.ML.OnnxRuntime;
-
 using PersonaEngine.Lib.Configuration;
 
 namespace PersonaEngine.Lib.TTS.Synthesis;
@@ -41,26 +39,28 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
     private OrtValue? _speedOrtValue;
 
     public KokoroAudioSynthesizer(
-        IModelProvider                      ittsModelProvider,
-        IKokoroVoiceProvider                voiceProvider,
+        IModelProvider ittsModelProvider,
+        IKokoroVoiceProvider voiceProvider,
         IOptionsMonitor<KokoroVoiceOptions> options,
-        ILogger<KokoroAudioSynthesizer>     logger)
+        ILogger<KokoroAudioSynthesizer> logger
+    )
     {
-        _modelProvider  = ittsModelProvider ?? throw new ArgumentNullException(nameof(ittsModelProvider));
-        _voiceProvider  = voiceProvider ?? throw new ArgumentNullException(nameof(voiceProvider));
-        _optionsMonitor = options ?? throw new ArgumentNullException(nameof(options));
-        _logger         = logger ?? throw new ArgumentNullException(nameof(logger));
+        _modelProvider = ittsModelProvider;
+        _voiceProvider = voiceProvider;
+        _optionsMonitor = options;
+        _logger = logger;
 
         LoadPhonemeMap();
         InitializeSession();
     }
 
     public async Task<AudioData> SynthesizeAsync(
-        string              phonemes,
-        KokoroVoiceOptions? options           = null,
-        CancellationToken   cancellationToken = default)
+        string phonemes,
+        KokoroVoiceOptions? options = null,
+        CancellationToken cancellationToken = default
+    )
     {
-        if ( string.IsNullOrEmpty(phonemes) )
+        if (string.IsNullOrEmpty(phonemes))
         {
             _logger.LogInformation("SynthesizeAsync called with empty or null phonemes.");
 
@@ -71,32 +71,42 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
 
         var currentOptions = options ?? _optionsMonitor.CurrentValue;
 
-        if ( phonemes.Length > currentOptions.MaxPhonemeLength )
+        if (phonemes.Length > currentOptions.MaxPhonemeLength)
         {
-            _logger.LogWarning("Input phonemes ({Length}) exceed max length ({MaxLength}). Truncating.",
-                               phonemes.Length, currentOptions.MaxPhonemeLength);
+            _logger.LogWarning(
+                "Input phonemes ({Length}) exceed max length ({MaxLength}). Truncating.",
+                phonemes.Length,
+                currentOptions.MaxPhonemeLength
+            );
 
             phonemes = phonemes[..currentOptions.MaxPhonemeLength];
         }
 
         try
         {
-            var voice = await _voiceProvider.GetVoiceAsync(currentOptions.DefaultVoice, cancellationToken);
+            var voice = await _voiceProvider.GetVoiceAsync(
+                currentOptions.DefaultVoice,
+                cancellationToken
+            );
 
             using var ioBinding = _session!.CreateIoBinding();
 
-            var       sequenceLength = phonemes.Length;
-            var       tokenBuffer    = ArrayPool<long>.Shared.Rent(sequenceLength + 2);
+            var sequenceLength = phonemes.Length;
+            var tokenBuffer = ArrayPool<long>.Shared.Rent(sequenceLength + 2);
             OrtValue? inputIdsOrtValue;
-            int       inputSize;
+            int inputSize;
             try
             {
                 inputSize = ConvertPhonemesToTokens(phonemes, tokenBuffer);
 
-                var tokenData  = tokenBuffer.AsMemory(0, inputSize);
+                var tokenData = tokenBuffer.AsMemory(0, inputSize);
                 var tokenShape = new long[] { 1, tokenData.Length };
 
-                inputIdsOrtValue = OrtValue.CreateTensorValueFromMemory(OrtMemoryInfo.DefaultInstance, tokenData, tokenShape);
+                inputIdsOrtValue = OrtValue.CreateTensorValueFromMemory(
+                    OrtMemoryInfo.DefaultInstance,
+                    tokenData,
+                    tokenShape
+                );
                 ioBinding.BindInput(InputIdsName, inputIdsOrtValue);
             }
             finally
@@ -104,10 +114,15 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
                 ArrayPool<long>.Shared.Return(tokenBuffer);
             }
 
-            var styleEmbeddingData  = voice.GetEmbedding([1, inputSize]);
+            var styleEmbeddingData = voice.GetEmbedding([1, inputSize]);
             var styleEmbeddingShape = new long[] { 1, styleEmbeddingData.Length };
 
-            var styleOrtValue = OrtValue.CreateTensorValueFromMemory(OrtMemoryInfo.DefaultInstance, styleEmbeddingData, styleEmbeddingShape);
+            var styleOrtValue = OrtValue.CreateTensorValueFromMemory(
+                OrtMemoryInfo.DefaultInstance,
+                styleEmbeddingData,
+                styleEmbeddingShape
+            );
+
             ioBinding.BindInput(StyleEmbeddingName, styleOrtValue);
 
             UpdateAndBindCachedInputs(ioBinding, currentOptions.DefaultSpeed);
@@ -115,16 +130,22 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
             ioBinding.BindOutputToDevice(WaveformOutputName, OrtMemoryInfo.DefaultInstance);
             ioBinding.BindOutputToDevice(DurationsOutputName, OrtMemoryInfo.DefaultInstance);
 
-            using var runOptions = new RunOptions();
-            using var results    = _session.RunWithBoundResults(runOptions, ioBinding);
+            Memory<float> waveform;
+            Memory<long> durations;
 
-            var waveformTensor = results[0].GetTensorDataAsSpan<float>();
-            var durationTensor = results[1].GetTensorDataAsSpan<long>();
+            lock (_session)
+            {
+                using var runOptions = new RunOptions();
+                using var results = _session.RunWithBoundResults(runOptions, ioBinding);
 
-            var waveform  = waveformTensor.ToArray().AsMemory();
-            var durations = durationTensor.ToArray().AsMemory();
+                var waveformTensor = results[0].GetTensorDataAsSpan<float>();
+                var durationTensor = results[1].GetTensorDataAsSpan<long>();
 
-            if ( currentOptions.TrimSilence )
+                waveform = waveformTensor.ToArray().AsMemory();
+                durations = durationTensor.ToArray().AsMemory();
+            }
+
+            if (currentOptions.TrimSilence)
             {
                 waveform = TrimSilence(waveform);
             }
@@ -135,7 +156,11 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during audio synthesis for phonemes: '{Phonemes}'", phonemes);
+            _logger.LogError(
+                ex,
+                "Error during audio synthesis for phonemes: '{Phonemes}'",
+                phonemes
+            );
 
             throw;
         }
@@ -146,7 +171,7 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
         _session?.Dispose();
         _speedOrtValue?.Dispose();
 
-        _session       = null;
+        _session = null;
         _speedOrtValue = null;
 
         return ValueTask.CompletedTask;
@@ -154,18 +179,26 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
 
     private void UpdateAndBindCachedInputs(OrtIoBinding ioBinding, float speed)
     {
-        if ( _currentSpeed == null || speed - _currentSpeed > 0.001f || speed - _currentSpeed < -0.001f )
+        if (
+            _currentSpeed == null
+            || speed - _currentSpeed > 0.001f
+            || speed - _currentSpeed < -0.001f
+        )
         {
             _speedOrtValue?.Dispose();
 
-            var speedData  = new[] { speed };
+            var speedData = new[] { speed };
             var speedShape = new long[] { 1 };
 
-            _speedOrtValue = OrtValue.CreateTensorValueFromMemory(OrtMemoryInfo.DefaultInstance, speedData.AsMemory(), speedShape);
-            _currentSpeed  = speed;
+            _speedOrtValue = OrtValue.CreateTensorValueFromMemory(
+                OrtMemoryInfo.DefaultInstance,
+                speedData.AsMemory(),
+                speedShape
+            );
+            _currentSpeed = speed;
         }
 
-        if ( _speedOrtValue != null )
+        if (_speedOrtValue != null)
         {
             ioBinding.BindInput(SpeedName, _speedOrtValue);
         }
@@ -177,12 +210,12 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
 
         try
         {
-            var lines   = File.ReadAllLines(mapPath);
+            var lines = File.ReadAllLines(mapPath);
             var mapping = new Dictionary<char, long>(lines.Length);
 
-            foreach ( var line in lines )
+            foreach (var line in lines)
             {
-                if ( string.IsNullOrWhiteSpace(line) || line.Length < 3 )
+                if (string.IsNullOrWhiteSpace(line) || line.Length < 3)
                 {
                     _logger.LogWarning("Skipping invalid line in phoneme map: '{Line}'", line);
 
@@ -192,8 +225,12 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
                 mapping[line[0]] = long.Parse(line[2..]);
             }
 
-            _phonemeMap = mapping; // Assign once loaded
-            _logger.LogInformation("Loaded {Count} phoneme mappings from {Path}.", mapping.Count, mapPath);
+            _phonemeMap = mapping;
+            _logger.LogInformation(
+                "Loaded {Count} phoneme mappings from {Path}.",
+                mapping.Count,
+                mapPath
+            );
         }
         catch (Exception ex)
         {
@@ -205,12 +242,13 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
 
     private void InitializeSession()
     {
-        var sessionOptions = new SessionOptions {
-                                                    EnableMemoryPattern    = true, 
-                                                    ExecutionMode          = ExecutionMode.ORT_PARALLEL, 
-                                                    GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL, 
-                                                    LogSeverityLevel       = OrtLoggingLevel.ORT_LOGGING_LEVEL_WARNING
-                                                };
+        var sessionOptions = new SessionOptions
+        {
+            EnableMemoryPattern = true,
+            ExecutionMode = ExecutionMode.ORT_PARALLEL,
+            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
+            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_WARNING,
+        };
 
         sessionOptions.AppendExecutionProvider_CUDA();
 
@@ -231,25 +269,30 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
 
     private int ConvertPhonemesToTokens(string phonemes, long[] buffer)
     {
-        if ( _phonemeMap == null )
+        if (_phonemeMap == null)
         {
             _logger.LogError("Phoneme map accessed before initialization.");
 
-            throw new InvalidOperationException("Phoneme map is not initialized. Ensure EnsureInitializedAsync() was called and completed successfully.");
+            throw new InvalidOperationException(
+                "Phoneme map is not initialized. Ensure EnsureInitializedAsync() was called and completed successfully."
+            );
         }
 
         buffer[0] = BosTokenId;
 
-        for ( var i = 0; i < phonemes.Length; i++ )
+        for (var i = 0; i < phonemes.Length; i++)
         {
             var phonemeChar = phonemes[i];
-            if ( _phonemeMap.TryGetValue(phonemeChar, out var id) )
+            if (_phonemeMap.TryGetValue(phonemeChar, out var id))
             {
                 buffer[i + 1] = id;
             }
             else
             {
-                _logger.LogWarning("Unrecognized phoneme character '{PhonemeChar}' encountered. Skipping.", phonemeChar);
+                _logger.LogWarning(
+                    "Unrecognized phoneme character '{PhonemeChar}' encountered. Skipping.",
+                    phonemeChar
+                );
             }
         }
 
@@ -258,20 +301,24 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
         return phonemes.Length + 1;
     }
 
-    private Memory<float> TrimSilence(Memory<float> audioData, float threshold = 0.01f, int minSamplesPadding = 512)
+    private Memory<float> TrimSilence(
+        Memory<float> audioData,
+        float threshold = 0.01f,
+        int minSamplesPadding = 512
+    )
     {
-        if ( audioData.IsEmpty || audioData.Length <= minSamplesPadding * 2 )
+        if (audioData.IsEmpty || audioData.Length <= minSamplesPadding * 2)
         {
             return audioData;
         }
 
-        var span       = audioData.Span;
+        var span = audioData.Span;
         var startIndex = -1;
-        var endIndex   = -1;
+        var endIndex = -1;
 
-        for ( var i = 0; i < span.Length; i++ )
+        for (var i = 0; i < span.Length; i++)
         {
-            if ( Math.Abs(span[i]) > threshold )
+            if (Math.Abs(span[i]) > threshold)
             {
                 startIndex = Math.Max(0, i - minSamplesPadding);
 
@@ -279,16 +326,18 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
             }
         }
 
-        if ( startIndex == -1 )
+        if (startIndex == -1)
         {
-            _logger.LogDebug("Audio appears entirely below silence threshold. Returning original or empty.");
+            _logger.LogDebug(
+                "Audio appears entirely below silence threshold. Returning original or empty."
+            );
 
             return audioData;
         }
 
-        for ( var i = span.Length - 1; i >= 0; i-- ) // Iterate down to 0
+        for (var i = span.Length - 1; i >= 0; i--) // Iterate down to 0
         {
-            if ( Math.Abs(span[i]) > threshold )
+            if (Math.Abs(span[i]) > threshold)
             {
                 endIndex = Math.Min(span.Length - 1, i + minSamplesPadding);
 
@@ -296,29 +345,43 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
             }
         }
 
-        if ( endIndex == -1 )
+        if (endIndex == -1)
         {
             endIndex = span.Length - 1;
-            _logger.LogWarning("Could not find end index for silence trimming after finding start index. Using full length from start.");
+            _logger.LogWarning(
+                "Could not find end index for silence trimming after finding start index. Using full length from start."
+            );
         }
 
-        if ( startIndex >= endIndex )
+        if (startIndex >= endIndex)
         {
-            _logger.LogDebug("Silence trimming resulted in invalid range (Start: {StartIndex}, End: {EndIndex}). Returning original audio.", startIndex, endIndex);
+            _logger.LogDebug(
+                "Silence trimming resulted in invalid range (Start: {StartIndex}, End: {EndIndex}). Returning original audio.",
+                startIndex,
+                endIndex
+            );
 
             return audioData;
         }
 
         var length = endIndex - startIndex + 1;
-        if ( length == audioData.Length )
+        if (length == audioData.Length)
         {
-            _logger.LogDebug("No silence trimmed. Original length: {OriginalLength}", audioData.Length);
+            _logger.LogDebug(
+                "No silence trimmed. Original length: {OriginalLength}",
+                audioData.Length
+            );
 
             return audioData;
         }
 
-        _logger.LogDebug("Trimming silence: Original length {OriginalLength}, New length {NewLength} (Start: {StartIndex}, End: {EndIndex})",
-                         audioData.Length, length, startIndex, endIndex);
+        _logger.LogDebug(
+            "Trimming silence: Original length {OriginalLength}, New length {NewLength} (Start: {StartIndex}, End: {EndIndex})",
+            audioData.Length,
+            length,
+            startIndex,
+            endIndex
+        );
 
         return audioData.Slice(startIndex, length);
     }

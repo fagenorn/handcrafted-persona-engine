@@ -3,23 +3,25 @@
 namespace PersonaEngine.Lib.Core.Conversation.Implementations.Events.Input;
 
 public record SttSegmentRecognizing(
-    Guid           SessionId,
+    Guid SessionId,
     DateTimeOffset Timestamp,
-    string         ParticipantId,
-    string         PartialTranscript,
-    TimeSpan       Duration
+    string ParticipantId,
+    string PartialTranscript,
+    TimeSpan Duration,
+    TimeSpan ProcessingDuration
 ) : IInputEvent
 {
     public Guid? TurnId { get; } = null;
 }
 
 public record SttSegmentRecognized(
-    Guid           SessionId,
+    Guid SessionId,
     DateTimeOffset Timestamp,
-    string         ParticipantId,
-    string         FinalTranscript,
-    TimeSpan       Duration,
-    float?         Confidence
+    string ParticipantId,
+    string FinalTranscript,
+    TimeSpan Duration,
+    TimeSpan ProcessingDuration,
+    float? Confidence
 ) : IInputEvent
 {
     public Guid? TurnId { get; } = null;

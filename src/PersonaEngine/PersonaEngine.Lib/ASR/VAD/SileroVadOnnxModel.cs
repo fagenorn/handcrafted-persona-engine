@@ -16,13 +16,13 @@ internal class SileroVadOnnxModel : IDisposable
 
     public SileroVadOnnxModel(string modelPath)
     {
-        var sessionOptions = new SessionOptions {
-                                                    EnableMemoryPattern    = true,
-                                                    ExecutionMode          = ExecutionMode.ORT_SEQUENTIAL,
-                                                    GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-                                                    LogSeverityLevel       = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR
-                                                };
-        
+        var sessionOptions = new SessionOptions
+        {
+            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR,
+            InterOpNumThreads = 1,
+            IntraOpNumThreads = 1,
+        };
+
         sessionOptions.AppendExecutionProvider_CPU();
 
         session    = new InferenceSession(modelPath, sessionOptions);
