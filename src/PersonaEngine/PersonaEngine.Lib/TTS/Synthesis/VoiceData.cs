@@ -1,8 +1,5 @@
 ﻿namespace PersonaEngine.Lib.TTS.Synthesis;
 
-/// <summary>
-///     Voice data for synthesis
-/// </summary>
 public class VoiceData
 {
     private const int StyleDim = 256;
@@ -11,7 +8,7 @@ public class VoiceData
 
     public VoiceData(string id, Memory<float> rawEmbedding)
     {
-        Id            = id;
+        Id = id;
         _rawEmbedding = rawEmbedding;
     }
 
@@ -20,11 +17,11 @@ public class VoiceData
     public Memory<float> GetEmbedding(ReadOnlySpan<int> inputDimensions)
     {
         var numTokens = GetNumTokens(inputDimensions);
-        var offset    = numTokens * StyleDim;
+        var offset = numTokens * StyleDim;
 
         return offset + StyleDim > _rawEmbedding.Length
-                   ? new float[StyleDim]
-                   : _rawEmbedding.Slice(offset, StyleDim);
+            ? new float[StyleDim]
+            : _rawEmbedding.Slice(offset, StyleDim);
     }
 
     private int GetNumTokens(ReadOnlySpan<int> inputDimensions)

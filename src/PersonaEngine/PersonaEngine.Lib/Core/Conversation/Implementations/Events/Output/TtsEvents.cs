@@ -4,9 +4,11 @@ using PersonaEngine.Lib.TTS.Synthesis;
 
 namespace PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
 
-public record TtsReadyToSynthesizeEvent(Guid SessionId, Guid? TurnId, DateTimeOffset Timestamp) : IOutputEvent { }
+public record TtsReadyToSynthesizeEvent(Guid SessionId, Guid? TurnId, DateTimeOffset Timestamp)
+    : IOutputEvent { }
 
-public record TtsStreamStartEvent(Guid SessionId, Guid? TurnId, DateTimeOffset Timestamp) : IOutputEvent { }
+public record TtsStreamStartEvent(Guid SessionId, Guid? TurnId, DateTimeOffset Timestamp)
+    : IOutputEvent { }
 
 public record TtsChunkEvent(Guid SessionId, Guid? TurnId, DateTimeOffset Timestamp, AudioSegment Chunk) : IOutputEvent { }
 

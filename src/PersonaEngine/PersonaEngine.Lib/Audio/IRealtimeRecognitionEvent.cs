@@ -24,17 +24,24 @@ public class RealtimeSessionCanceled(string sessionId) : IRealtimeRecognitionEve
     public object SessionId { get; } = sessionId;
 }
 
-
-public class RealtimeSegmentRecognizing(TranscriptSegment segment, string sessionId) : IRealtimeTranscriptionSegment
+public record RealtimeSegmentRecognizing(
+    TranscriptSegment Segment,
+    string SessionId,
+    TimeSpan ProcessingDuration
+) : IRealtimeTranscriptionSegment
 {
-    public TranscriptSegment Segment { get; } = segment;
+    public TranscriptSegment Segment { get; } = Segment;
 
-    public string SessionId { get; } = sessionId;
+    public string SessionId { get; } = SessionId;
 }
 
-public class RealtimeSegmentRecognized(TranscriptSegment segment, string sessionId) : IRealtimeTranscriptionSegment
+public record RealtimeSegmentRecognized(
+    TranscriptSegment Segment,
+    string SessionId,
+    TimeSpan ProcessingDuration
+) : IRealtimeTranscriptionSegment
 {
-    public TranscriptSegment Segment { get; } = segment;
+    public TranscriptSegment Segment { get; } = Segment;
 
-    public string SessionId { get; } = sessionId;
+    public string SessionId { get; } = SessionId;
 }

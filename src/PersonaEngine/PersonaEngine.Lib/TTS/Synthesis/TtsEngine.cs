@@ -78,8 +78,8 @@ public class TtsEngine : ITtsEngine
     {
         var textBuffer      = new StringBuilder(4096);
         var completedReason = CompletionReason.Completed;
-        var firstChunk      = true;
-        var primed          = true;
+        var firstChunk = true;
+        var primed = true;
 
         try
         {
@@ -106,19 +106,12 @@ public class TtsEngine : ITtsEngine
                     continue;
                 }
 
-                for ( var i = 0; i < sentences.Count - 1; i++ )
+                for (var i = 0; i < sentences.Count - 1; i++)
                 {
                     var sentence = sentences[i].Trim();
                     if ( string.IsNullOrWhiteSpace(sentence) )
                     {
                         continue;
-                    }
-                    
-                    if ( primed )
-                    {
-                        var primedEvent = new TtsReadyToSynthesizeEvent(sessionId, turnId, DateTimeOffset.UtcNow);
-                        await outputWriter.WriteAsync(primedEvent, cancellationToken).ConfigureAwait(false);
-                        primed = false;
                     }
 
                     await foreach ( var segment in ProcessSentenceAsync(sentence, options, cancellationToken) )
@@ -127,8 +120,14 @@ public class TtsEngine : ITtsEngine
 
                         if ( firstChunk )
                         {
-                            var firstChunkEvent = new TtsStreamStartEvent(sessionId, turnId, DateTimeOffset.UtcNow);
-                            await outputWriter.WriteAsync(firstChunkEvent, cancellationToken).ConfigureAwait(false);
+                            var firstChunkEvent = new TtsStreamStartEvent(
+                                sessionId,
+                                turnId,
+                                DateTimeOffset.UtcNow
+                            );
+                            await outputWriter
+                                .WriteAsync(firstChunkEvent, cancellationToken)
+                                .ConfigureAwait(false);
                             firstChunk = false;
                         }
 
@@ -144,25 +143,46 @@ public class TtsEngine : ITtsEngine
             var remainingText = textBuffer.ToString().Trim();
             if ( !string.IsNullOrEmpty(remainingText) )
             {
-                if ( primed )
+                if (primed)
                 {
-                    var primedEvent = new TtsReadyToSynthesizeEvent(sessionId, turnId, DateTimeOffset.UtcNow);
-                    await outputWriter.WriteAsync(primedEvent, cancellationToken).ConfigureAwait(false);
+                    var primedEvent = new TtsReadyToSynthesizeEvent(
+                        sessionId,
+                        turnId,
+                        DateTimeOffset.UtcNow
+                    );
+                    await outputWriter
+                        .WriteAsync(primedEvent, cancellationToken)
+                        .ConfigureAwait(false);
                 }
-                
-                await foreach ( var segment in ProcessSentenceAsync(remainingText, options, cancellationToken) )
+
+                await foreach (
+                    var segment in ProcessSentenceAsync(remainingText, options, cancellationToken)
+                )
                 {
                     ApplyAudioFilters(segment);
 
                     if ( firstChunk )
                     {
-                        var firstChunkEvent = new TtsStreamStartEvent(sessionId, turnId, DateTimeOffset.UtcNow);
-                        await outputWriter.WriteAsync(firstChunkEvent, cancellationToken).ConfigureAwait(false);
+                        var firstChunkEvent = new TtsStreamStartEvent(
+                            sessionId,
+                            turnId,
+                            DateTimeOffset.UtcNow
+                        );
+                        await outputWriter
+                            .WriteAsync(firstChunkEvent, cancellationToken)
+                            .ConfigureAwait(false);
                         firstChunk = false;
                     }
 
-                    var chunkEvent = new TtsChunkEvent(sessionId, turnId, DateTimeOffset.UtcNow, segment);
-                    await outputWriter.WriteAsync(chunkEvent, cancellationToken).ConfigureAwait(false);
+                    var chunkEvent = new TtsChunkEvent(
+                        sessionId,
+                        turnId,
+                        DateTimeOffset.UtcNow,
+                        segment
+                    );
+                    await outputWriter
+                        .WriteAsync(chunkEvent, cancellationToken)
+                        .ConfigureAwait(false);
                 }
             }
         }
