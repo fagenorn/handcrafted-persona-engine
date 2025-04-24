@@ -2,6 +2,8 @@
 
 public class Live2DOptions
 {
+    public bool Enabled { get; set; } = false;
+    
     public string ModelPath { get; set; } = "Resources/Live2D/Avatars";
 
     public string ModelName { get; set; } = "angel";

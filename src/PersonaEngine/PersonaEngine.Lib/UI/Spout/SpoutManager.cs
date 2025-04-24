@@ -11,7 +11,7 @@ namespace PersonaEngine.Lib.UI.Spout;
 /// </summary>
 public class SpoutManager : IDisposable
 {
-    private readonly SpoutConfiguration _config;
+    private readonly SpoutOutputConfigurations _config;
 
     private readonly GL _gl;
 
@@ -25,7 +25,7 @@ public class SpoutManager : IDisposable
 
     private uint _depthAttachment;
 
-    public SpoutManager(GL gl, SpoutConfiguration config)
+    public SpoutManager(GL gl, SpoutOutputConfigurations config)
     {
         _gl          = gl;
         _config      = config;
@@ -33,10 +33,10 @@ public class SpoutManager : IDisposable
 
         InitializeCustomFramebuffer();
 
-        if ( !_spoutSender.CreateSender(config.OutputName, (uint)_config.Width, (uint)_config.Height, 0) )
+        if ( !_spoutSender.CreateSender(config.Name, (uint)_config.Width, (uint)_config.Height, 0) )
         {
             _spoutSender.Dispose();
-            Console.WriteLine($"Failed to create Spout Sender '{config.OutputName}'.");
+            Console.WriteLine($"Failed to create Spout Sender '{config.Name}'.");
         }
     }
 

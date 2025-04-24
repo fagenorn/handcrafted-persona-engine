@@ -96,6 +96,8 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddASRSystem(this IServiceCollection services, IConfiguration configuration)
     {
+        MicrophoneConfiguration? microphoneOptions = configuration.GetSection("Config:Microphone").Get<MicrophoneConfiguration>();
+        
         services.Configure<AsrConfiguration>(configuration.GetSection("Config:Asr"));
         services.Configure<MicrophoneConfiguration>(configuration.GetSection("Config:Microphone"));
 
@@ -135,7 +137,26 @@ public static class ServiceCollectionExtensions
                                                                                                sp.GetRequiredService<ILogger<RealtimeTranscriptor>>());
                                                            });
 
-        services.AddSingleton<IMicrophone, MicrophoneInputNAudioSource>();
+        // If the configuration is missing, use the "default" engine: NAudio
+        if (microphoneOptions == null || microphoneOptions.InputEngine == null)
+        {
+            services.AddSingleton<IMicrophone, MicrophoneInputNAudioSource>();
+        }
+        else
+        {
+            switch (microphoneOptions.InputEngine.ToLower())
+            {
+                // better engine
+                case "naudio":
+                    services.AddSingleton<IMicrophone, MicrophoneInputNAudioSource>();
+                    break;
+                // engine with linux support
+                case "portaudio":
+                    services.AddSingleton<IMicrophone, MicrophoneInputPortAudioSource>();
+                    break;
+            }
+        }
+
         services.AddSingleton<IAwaitableAudioSource>(sp => sp.GetRequiredService<IMicrophone>());
 
         return services;
@@ -274,10 +295,21 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<Live2DOptions>(configuration.GetSection("Config:Live2D"));
 
-        services.AddSingleton<IRenderComponent, Live2DManager>();
-        services.AddSingleton<ILive2DAnimationService, VBridgerLipSyncService>();
-        services.AddSingleton<ILive2DAnimationService, IdleBlinkingAnimationService>();
-        services.AddEmotionProcessing(configuration);
+        // Get the config to check if Live2D is enabled
+        var live2dOptions = configuration.GetSection("Config:Live2D").Get<Live2DOptions>() ?? new Live2DOptions();
+        
+        if (live2dOptions.Enabled)
+        {
+            services.AddSingleton<IRenderComponent, Live2DManager>();
+            services.AddSingleton<ILive2DAnimationService, VBridgerLipSyncService>();
+            services.AddSingleton<ILive2DAnimationService, IdleBlinkingAnimationService>();
+            services.AddEmotionProcessing(configuration);
+        }
+        else
+        {
+            // Register dummy/no-op implementation when disabled
+            services.AddSingleton<IRenderComponent, NullLive2DComponent>();
+        }
 
         return services;
     }

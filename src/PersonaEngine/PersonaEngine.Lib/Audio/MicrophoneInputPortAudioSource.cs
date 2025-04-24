@@ -133,7 +133,8 @@ public sealed class MicrophoneInputPortAudioSource : AwaitableWaveFileSource, IM
 
     public IEnumerable<string> GetAvailableDevices()
     {
-        throw new NotImplementedException();
+        // throw new NotImplementedException();
+        return new List<string>();
     }
 
     private void InitializeAudioStream()

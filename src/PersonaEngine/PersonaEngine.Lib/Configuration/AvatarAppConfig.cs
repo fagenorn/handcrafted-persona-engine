@@ -18,7 +18,7 @@ public record AvatarAppConfig
 
     public Live2DOptions Live2D { get; set; } = new();
 
-    public SpoutConfiguration[] SpoutConfigs { get; set; } = [];
+    public SpoutConfiguration SpoutConfigs { get; set; } = new();
 
     public VisionConfig Vision { get; set; } = new();
 
