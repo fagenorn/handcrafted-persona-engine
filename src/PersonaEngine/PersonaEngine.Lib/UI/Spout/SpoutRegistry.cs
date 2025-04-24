@@ -6,24 +6,24 @@ namespace PersonaEngine.Lib.UI.Spout;
 
 public class SpoutRegistry : IDisposable
 {
-    private readonly SpoutConfiguration[] _configs;
+    private readonly SpoutConfiguration _configs;
 
     private readonly GL _gl;
 
     private readonly Dictionary<string, SpoutManager> _spoutManagers = new();
 
-    public SpoutRegistry(GL gl, SpoutConfiguration[] configs)
+    public SpoutRegistry(GL gl, SpoutConfiguration configs)
     {
         _gl      = gl;
         _configs = configs;
 
-        foreach ( var config in _configs )
+        foreach ( var config in _configs.Outputs )
         {
             GetOrCreateManager(config);
         }
     }
 
-    public void Dispose()
+    public virtual void Dispose()
     {
         foreach ( var manager in _spoutManagers.Values )
         {
@@ -33,18 +33,18 @@ public class SpoutRegistry : IDisposable
         _spoutManagers.Clear();
     }
 
-    public SpoutManager GetOrCreateManager(SpoutConfiguration config)
+    public virtual SpoutManager GetOrCreateManager(SpoutOutputConfigurations config)
     {
-        if ( !_spoutManagers.TryGetValue(config.OutputName, out var manager) )
+        if ( !_spoutManagers.TryGetValue(config.Name, out var manager) )
         {
             manager = new SpoutManager(_gl, config);
-            _spoutManagers.Add(config.OutputName, manager);
+            _spoutManagers.Add(config.Name, manager);
         }
 
         return manager;
     }
 
-    public void BeginFrame(string spoutName)
+    public virtual void BeginFrame(string spoutName)
     {
         if ( string.IsNullOrEmpty(spoutName) || !_spoutManagers.TryGetValue(spoutName, out var manager) )
         {
@@ -54,7 +54,7 @@ public class SpoutRegistry : IDisposable
         manager.BeginFrame();
     }
 
-    public void SendFrame(string spoutName)
+    public virtual void SendFrame(string spoutName)
     {
         if ( string.IsNullOrEmpty(spoutName) || !_spoutManagers.TryGetValue(spoutName, out var manager) )
         {
@@ -64,7 +64,7 @@ public class SpoutRegistry : IDisposable
         manager.SendFrame();
     }
 
-    public void ResizeAll(int width, int height)
+    public virtual void ResizeAll(int width, int height)
     {
         foreach ( var manager in _spoutManagers.Values )
         {

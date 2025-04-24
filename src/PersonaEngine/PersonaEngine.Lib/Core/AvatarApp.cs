@@ -101,9 +101,19 @@ public class AvatarApp : IDisposable
             task.Execute(_gl);
         }
 
-        _spoutRegistry = new SpoutRegistry(_gl, _config.Value.SpoutConfigs);
+        if (_config.Value.SpoutConfigs?.Enabled == true)
+        {
+            _spoutRegistry = new SpoutRegistry(_gl, _config.Value.SpoutConfigs);
+        }
+        else
+        {
+            // Use null object pattern
+            _spoutRegistry = new NullSpoutRegistry();
+        }
 
-        _imGui = new ImGuiController(_gl, _window, _inputContext, Path.Combine(@"Resources\Fonts", @"Montserrat-Medium.ttf"), Path.Combine(@"Resources\Fonts", @"seguiemj.ttf"));
+        _imGui = new ImGuiController(_gl, _window, _inputContext, 
+            Path.Combine("Resources", "Fonts", "Montserrat-Medium.ttf"), 
+            Path.Combine("Resources", "Fonts", "seguiemj.ttf"));
 
         InitializeComponents(_regularComponents);
 
@@ -156,22 +166,23 @@ public class AvatarApp : IDisposable
 
         _imGui.Render();
 
-        // Render components to their respective Spout outputs
-        foreach ( var spoutGroup in _spoutComponents )
+        // Render components to their respective Spout outputs (if spout is enabled)
+        if ( _config.Value.SpoutConfigs?.Enabled == true )
         {
-            var spoutTarget = spoutGroup.Key;
-            var components  = spoutGroup.Value;
-
-            // Begin frame for this spout target
-            _spoutRegistry.BeginFrame(spoutTarget);
-
-            // Render all components for this spout target
-            foreach ( var component in components )
+            foreach ( var spoutGroup in _spoutComponents )
             {
-                component.Render((float)deltaTime);
-            }
+                var spoutTarget = spoutGroup.Key;
+                var components = spoutGroup.Value;
 
-            _spoutRegistry.SendFrame(spoutTarget);
+                _spoutRegistry.BeginFrame(spoutTarget);
+            
+                foreach ( var component in components )
+                {
+                    component.Render((float)deltaTime);
+                }
+
+                _spoutRegistry.SendFrame(spoutTarget);
+            }
         }
     }
 

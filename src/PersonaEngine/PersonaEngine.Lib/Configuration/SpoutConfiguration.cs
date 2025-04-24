@@ -2,9 +2,7 @@
 
 public record SpoutConfiguration
 {
-    public required string OutputName { get; init; }
-
-    public required int Width { get; init; }
-
-    public required int Height { get; init; }
+    public bool Enabled { get; set; } = false;
+    
+    public SpoutOutputConfigurations[] Outputs { get; set; } = [];
 }

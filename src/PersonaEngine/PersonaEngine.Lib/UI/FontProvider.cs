@@ -20,9 +20,9 @@ namespace PersonaEngine.Lib.UI;
 /// </summary>
 public class FontProvider : IStartupTask
 {
-    private const string FONTS_DIR = @"Resources\Fonts";
+    private static readonly string _fontsPath = Path.Combine("Resources", "Fonts");
 
-    private const string IMAGES_PATH = @"Resources\Imgs";
+    private static readonly string _imagesPath = Path.Combine("Resources", "Imgs");
 
     private readonly Dictionary<string, FontSystem> _fontCache = new();
 
@@ -45,14 +45,14 @@ public class FontProvider : IStartupTask
     {
         try
         {
-            if ( !Directory.Exists(FONTS_DIR) )
+            if ( !Directory.Exists(_fontsPath) )
             {
-                _logger.LogWarning("Fonts directory not found: {Path}", FONTS_DIR);
+                _logger.LogWarning("Fonts directory not found: {Path}", _fontsPath);
 
                 return Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
             }
 
-            var fontFiles = Directory.GetFiles(FONTS_DIR, "*.ttf");
+            var fontFiles = Directory.GetFiles(_fontsPath, "*.ttf");
             var fontNames = new List<string>(fontFiles.Length);
             foreach ( var file in fontFiles )
             {
@@ -77,7 +77,7 @@ public class FontProvider : IStartupTask
         if ( !_fontCache.TryGetValue(fontName, out var fontSystem) )
         {
             fontSystem = new FontSystem();
-            var fontData = File.ReadAllBytes(Path.Combine(FONTS_DIR, fontName));
+            var fontData = File.ReadAllBytes(Path.Combine(_fontsPath, fontName));
             fontSystem.AddFont(fontData);
             _fontCache[fontName] = fontSystem;
         }
@@ -89,7 +89,7 @@ public class FontProvider : IStartupTask
     {
         if ( !_textureCache.TryGetValue(imageName, out var texture) )
         {
-            using var stream      = File.OpenRead(Path.Combine(IMAGES_PATH, imageName));
+            using var stream      = File.OpenRead(Path.Combine(_imagesPath, imageName));
             var       imageResult = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
 
             // Premultiply alpha
