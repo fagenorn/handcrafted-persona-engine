@@ -156,9 +156,7 @@ public static class ServiceCollectionExtensions
                     break;
             }
         }
-        
 
-        services.AddSingleton<IMicrophone, MicrophoneInputPortAudioSource>();
         services.AddSingleton<IAwaitableAudioSource>(sp => sp.GetRequiredService<IMicrophone>());
 
         return services;
