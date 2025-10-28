@@ -1,8 +1,9 @@
 ﻿using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
+using PersonaEngine.Lib.TTS.Synthesis;
 using PersonaEngine.Lib.Utils;
 
-namespace PersonaEngine.Lib.TTS.Synthesis;
+namespace PersonaEngine.Lib.IO;
 
 public class FileModelProvider : IModelProvider
 {

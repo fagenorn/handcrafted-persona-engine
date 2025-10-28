@@ -1,4 +1,6 @@
-﻿namespace PersonaEngine.Lib.TTS.Synthesis;
+﻿using PersonaEngine.Lib.TTS.Synthesis;
+
+namespace PersonaEngine.Lib.IO;
 
 public interface IModelProvider : IAsyncDisposable
 {
