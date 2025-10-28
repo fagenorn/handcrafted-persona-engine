@@ -1,7 +1,6 @@
 ﻿using System.Collections.Concurrent;
-
 using Microsoft.Extensions.Logging;
-
+using PersonaEngine.Lib.IO;
 using PersonaEngine.Lib.TTS.Synthesis;
 
 namespace PersonaEngine.Lib.TTS.RVC;
@@ -16,20 +15,20 @@ public class RVCVoiceProvider : IRVCVoiceProvider
 
     private bool _disposed;
 
-    public RVCVoiceProvider(
-        IModelProvider            ittsModelProvider,
-        ILogger<RVCVoiceProvider> logger)
+    public RVCVoiceProvider(IModelProvider ittsModelProvider, ILogger<RVCVoiceProvider> logger)
     {
-        _modelProvider = ittsModelProvider ?? throw new ArgumentNullException(nameof(ittsModelProvider));
-        _logger        = logger ?? throw new ArgumentNullException(nameof(logger));
+        _modelProvider =
+            ittsModelProvider ?? throw new ArgumentNullException(nameof(ittsModelProvider));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <inheritdoc />
     public async Task<string> GetVoiceAsync(
-        string            voiceId,
-        CancellationToken cancellationToken = default)
+        string voiceId,
+        CancellationToken cancellationToken = default
+    )
     {
-        if ( string.IsNullOrEmpty(voiceId) )
+        if (string.IsNullOrEmpty(voiceId))
         {
             throw new ArgumentException("Voice ID cannot be null or empty", nameof(voiceId));
         }
@@ -38,15 +37,20 @@ public class RVCVoiceProvider : IRVCVoiceProvider
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<string>> GetAvailableVoicesAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<string>> GetAvailableVoicesAsync(
+        CancellationToken cancellationToken = default
+    )
     {
         try
         {
             // Get voice directory
-            var model     = await _modelProvider.GetModelAsync(Synthesis.ModelType.RVCVoices, cancellationToken);
+            var model = await _modelProvider.GetModelAsync(
+                IO.ModelType.RVCVoices,
+                cancellationToken
+            );
             var voicesDir = model.Path;
 
-            if ( !Directory.Exists(voicesDir) )
+            if (!Directory.Exists(voicesDir))
             {
                 _logger.LogWarning("Voices directory not found: {Path}", voicesDir);
 
@@ -59,7 +63,7 @@ public class RVCVoiceProvider : IRVCVoiceProvider
             // Extract voice IDs from filenames
             var voiceIds = new List<string>(voiceFiles.Length);
 
-            foreach ( var file in voiceFiles )
+            foreach (var file in voiceFiles)
             {
                 var voiceId = Path.GetFileNameWithoutExtension(file);
                 voiceIds.Add(voiceId);
@@ -82,7 +86,7 @@ public class RVCVoiceProvider : IRVCVoiceProvider
 
     public async ValueTask DisposeAsync()
     {
-        if ( _disposed )
+        if (_disposed)
         {
             return;
         }
@@ -93,19 +97,22 @@ public class RVCVoiceProvider : IRVCVoiceProvider
         await Task.CompletedTask;
     }
 
-    private async Task<string> GetVoicePathAsync(string voiceId, CancellationToken cancellationToken)
+    private async Task<string> GetVoicePathAsync(
+        string voiceId,
+        CancellationToken cancellationToken
+    )
     {
-        if ( _voicePaths.TryGetValue(voiceId, out var cachedPath) )
+        if (_voicePaths.TryGetValue(voiceId, out var cachedPath))
         {
             return cachedPath;
         }
 
-        var model     = await _modelProvider.GetModelAsync(Synthesis.ModelType.RVCVoices, cancellationToken);
+        var model = await _modelProvider.GetModelAsync(IO.ModelType.RVCVoices, cancellationToken);
         var voicesDir = model.Path;
 
         var voicePath = Path.Combine(voicesDir, $"{voiceId}.onnx");
 
-        if ( !File.Exists(voicePath) )
+        if (!File.Exists(voicePath))
         {
             _logger.LogWarning("Voice file not found: {Path}", voicePath);
 

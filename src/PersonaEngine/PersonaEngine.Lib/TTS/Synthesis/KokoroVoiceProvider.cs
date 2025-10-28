@@ -1,6 +1,6 @@
 ﻿using System.Collections.Concurrent;
-
 using Microsoft.Extensions.Logging;
+using PersonaEngine.Lib.IO;
 
 namespace PersonaEngine.Lib.TTS.Synthesis;
 
@@ -20,20 +20,23 @@ public class KokoroVoiceProvider : IKokoroVoiceProvider
     private bool _disposed;
 
     public KokoroVoiceProvider(
-        IModelProvider               ittsModelProvider,
-        ITtsCache                    cache,
-        ILogger<KokoroVoiceProvider> logger)
+        IModelProvider ittsModelProvider,
+        ITtsCache cache,
+        ILogger<KokoroVoiceProvider> logger
+    )
     {
-        _modelProvider = ittsModelProvider ?? throw new ArgumentNullException(nameof(ittsModelProvider));
-        _cache         = cache ?? throw new ArgumentNullException(nameof(cache));
-        _logger        = logger ?? throw new ArgumentNullException(nameof(logger));
+        _modelProvider =
+            ittsModelProvider ?? throw new ArgumentNullException(nameof(ittsModelProvider));
+        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<VoiceData> GetVoiceAsync(
-        string            voiceId,
-        CancellationToken cancellationToken = default)
+        string voiceId,
+        CancellationToken cancellationToken = default
+    )
     {
-        if ( string.IsNullOrEmpty(voiceId) )
+        if (string.IsNullOrEmpty(voiceId))
         {
             throw new ArgumentException("Voice ID cannot be null or empty", nameof(voiceId));
         }
@@ -41,25 +44,32 @@ public class KokoroVoiceProvider : IKokoroVoiceProvider
         try
         {
             // Use cache to avoid repeated loading
-            return await _cache.GetOrAddAsync($"voice_{voiceId}", async ct =>
-                                                                  {
-                                                                      _logger.LogDebug("Loading voice data for {VoiceId}", voiceId);
+            return await _cache.GetOrAddAsync(
+                $"voice_{voiceId}",
+                async ct =>
+                {
+                    _logger.LogDebug("Loading voice data for {VoiceId}", voiceId);
 
-                                                                      // Get voice directory
-                                                                      var voiceDirPath = await GetVoicePathAsync(voiceId, ct);
+                    // Get voice directory
+                    var voiceDirPath = await GetVoicePathAsync(voiceId, ct);
 
-                                                                      // Load binary data
-                                                                      var bytes = await File.ReadAllBytesAsync(voiceDirPath, ct);
+                    // Load binary data
+                    var bytes = await File.ReadAllBytesAsync(voiceDirPath, ct);
 
-                                                                      // Convert to float array
-                                                                      var embedding = new float[bytes.Length / sizeof(float)];
-                                                                      Buffer.BlockCopy(bytes, 0, embedding, 0, bytes.Length);
+                    // Convert to float array
+                    var embedding = new float[bytes.Length / sizeof(float)];
+                    Buffer.BlockCopy(bytes, 0, embedding, 0, bytes.Length);
 
-                                                                      _logger.LogInformation("Loaded voice {VoiceId} with {EmbeddingSize} embedding dimensions",
-                                                                                             voiceId, embedding.Length);
+                    _logger.LogInformation(
+                        "Loaded voice {VoiceId} with {EmbeddingSize} embedding dimensions",
+                        voiceId,
+                        embedding.Length
+                    );
 
-                                                                      return new VoiceData(voiceId, embedding);
-                                                                  }, cancellationToken);
+                    return new VoiceData(voiceId, embedding);
+                },
+                cancellationToken
+            );
         }
         catch (Exception ex)
         {
@@ -70,15 +80,20 @@ public class KokoroVoiceProvider : IKokoroVoiceProvider
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<string>> GetAvailableVoicesAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<string>> GetAvailableVoicesAsync(
+        CancellationToken cancellationToken = default
+    )
     {
         try
         {
             // Get voice directory
-            var model     = await _modelProvider.GetModelAsync(ModelType.KokoroVoices, cancellationToken);
+            var model = await _modelProvider.GetModelAsync(
+                IO.ModelType.KokoroVoices,
+                cancellationToken
+            );
             var voicesDir = model.Path;
 
-            if ( !Directory.Exists(voicesDir) )
+            if (!Directory.Exists(voicesDir))
             {
                 _logger.LogWarning("Voices directory not found: {Path}", voicesDir);
 
@@ -91,7 +106,7 @@ public class KokoroVoiceProvider : IKokoroVoiceProvider
             // Extract voice IDs from filenames
             var voiceIds = new List<string>(voiceFiles.Length);
 
-            foreach ( var file in voiceFiles )
+            foreach (var file in voiceFiles)
             {
                 var voiceId = Path.GetFileNameWithoutExtension(file);
                 voiceIds.Add(voiceId);
@@ -114,7 +129,7 @@ public class KokoroVoiceProvider : IKokoroVoiceProvider
 
     public async ValueTask DisposeAsync()
     {
-        if ( _disposed )
+        if (_disposed)
         {
             return;
         }
@@ -128,23 +143,29 @@ public class KokoroVoiceProvider : IKokoroVoiceProvider
     /// <summary>
     ///     Gets the file path for a voice
     /// </summary>
-    private async Task<string> GetVoicePathAsync(string voiceId, CancellationToken cancellationToken)
+    private async Task<string> GetVoicePathAsync(
+        string voiceId,
+        CancellationToken cancellationToken
+    )
     {
         // Check if path is cached
-        if ( _voicePaths.TryGetValue(voiceId, out var cachedPath) )
+        if (_voicePaths.TryGetValue(voiceId, out var cachedPath))
         {
             return cachedPath;
         }
 
         // Get base directory
-        var model     = await _modelProvider.GetModelAsync(ModelType.KokoroVoices, cancellationToken);
+        var model = await _modelProvider.GetModelAsync(
+            IO.ModelType.KokoroVoices,
+            cancellationToken
+        );
         var voicesDir = model.Path;
 
         // Build path
         var voicePath = Path.Combine(voicesDir, $"{voiceId}.bin");
 
         // Check if file exists
-        if ( !File.Exists(voicePath) )
+        if (!File.Exists(voicePath))
         {
             _logger.LogWarning("Voice file not found: {Path}", voicePath);
 

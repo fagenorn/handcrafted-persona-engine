@@ -21,6 +21,7 @@ using PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Input;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Output;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Metrics;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Session;
+using PersonaEngine.Lib.IO;
 using PersonaEngine.Lib.Live2D;
 using PersonaEngine.Lib.Live2D.Behaviour;
 using PersonaEngine.Lib.Live2D.Behaviour.Emotion;
@@ -250,7 +251,7 @@ public static class ServiceCollectionExtensions
             var logger = provider.GetRequiredService<ILogger<OpenNlpSentenceDetector>>();
             var modelProvider = provider.GetRequiredService<IModelProvider>();
             var basePath = modelProvider
-                .GetModelAsync(TTS.Synthesis.ModelType.OpenNLPDir)
+                .GetModelAsync(IO.ModelType.OpenNLPDir)
                 .GetAwaiter()
                 .GetResult()
                 .Path;
@@ -275,7 +276,7 @@ public static class ServiceCollectionExtensions
             var modelProvider = provider.GetRequiredService<IModelProvider>();
 
             var basePath = modelProvider
-                .GetModelAsync(TTS.Synthesis.ModelType.OpenNLPDir)
+                .GetModelAsync(IO.ModelType.OpenNLPDir)
                 .GetAwaiter()
                 .GetResult()
                 .Path;

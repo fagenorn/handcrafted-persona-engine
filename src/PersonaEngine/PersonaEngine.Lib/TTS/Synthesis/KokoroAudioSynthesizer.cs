@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.ML.OnnxRuntime;
 using PersonaEngine.Lib.Configuration;
+using PersonaEngine.Lib.IO;
 
 namespace PersonaEngine.Lib.TTS.Synthesis;
 
@@ -206,7 +207,7 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
 
     private void LoadPhonemeMap()
     {
-        var mapPath = _modelProvider.GetModelPath(ModelType.KokoroPhonemeMappings);
+        var mapPath = _modelProvider.GetModelPath(IO.ModelType.KokoroPhonemeMappings);
 
         try
         {
@@ -254,7 +255,7 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
 
         try
         {
-            var modelPath = _modelProvider.GetModelPath(ModelType.KokoroSynthesis);
+            var modelPath = _modelProvider.GetModelPath(IO.ModelType.KokoroSynthesis);
 
             _session = new InferenceSession(modelPath, sessionOptions);
         }
