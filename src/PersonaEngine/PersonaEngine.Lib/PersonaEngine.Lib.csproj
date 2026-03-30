@@ -5,6 +5,9 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="PersonaEngine.Lib.Tests" />
+  </ItemGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
@@ -18,6 +21,7 @@
     <PackageReference Include="Hexa.NET.ImGui.Backends" Version="1.0.15" />
     <PackageReference Include="Hexa.NET.ImGui.Widgets" Version="1.2.13" />
     <PackageReference Include="Hexa.NET.ImNodes" Version="2.2.7" />
+    <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.2" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.2" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.2" />
