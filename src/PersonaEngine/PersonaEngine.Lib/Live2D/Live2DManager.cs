@@ -1,11 +1,9 @@
 ﻿using Microsoft.Extensions.Options;
-
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.Live2D.App;
 using PersonaEngine.Lib.Live2D.Behaviour;
 using PersonaEngine.Lib.Live2D.Framework.Rendering;
 using PersonaEngine.Lib.UI;
-
 using Silk.NET.Input;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
@@ -20,9 +18,12 @@ public class Live2DManager : IRenderComponent
 
     private LAppDelegate? _lapp;
 
-    public Live2DManager(IOptionsMonitor<Live2DOptions> options, IEnumerable<ILive2DAnimationService> live2DAnimationServices)
+    public Live2DManager(
+        IOptionsMonitor<Live2DOptions> options,
+        IEnumerable<ILive2DAnimationService> live2DAnimationServices
+    )
     {
-        _options                 = options;
+        _options = options;
         _live2DAnimationServices = live2DAnimationServices.ToList();
     }
 
@@ -36,7 +37,7 @@ public class Live2DManager : IRenderComponent
 
     public void Render(float deltaTime)
     {
-        if ( _lapp == null )
+        if (_lapp == null)
         {
             return;
         }
@@ -45,12 +46,18 @@ public class Live2DManager : IRenderComponent
         _lapp.Run();
     }
 
-    public void Resize() { _lapp?.Resize(); }
+    public void Resize()
+    {
+        _lapp?.Resize();
+    }
 
     public void Initialize(GL gl, IView view, IInputContext input)
     {
         var config = _options.CurrentValue;
-        _lapp = new LAppDelegate(new SilkNetApi(gl, config.Width, config.Height), _ => { }) { BGColor = new CubismTextureColor(0, 0, 0, 0) };
+        _lapp = new LAppDelegate(new SilkNetApi(gl, config.Width, config.Height), _ => { })
+        {
+            BGColor = new CubismTextureColor(0, 0, 0, 0),
+        };
 
         LoadModel(config.ModelPath, config.ModelName);
     }
@@ -65,13 +72,13 @@ public class Live2DManager : IRenderComponent
     /// </summary>
     public void LoadModel(string modelPath, string modelName)
     {
-        if ( _lapp == null )
+        if (_lapp == null)
         {
             throw new InvalidOperationException("Live2DManager is not initialized.");
         }
 
         var model = _lapp.Live2dManager.LoadModel(modelPath, modelName);
-        model.RandomMotion      = false;
+        model.RandomMotion = false;
         model.CustomValueUpdate = true;
 
         // model.ModelMatrix.Translate(0.0f, -1.8f);
@@ -79,7 +86,7 @@ public class Live2DManager : IRenderComponent
 
         Resize();
 
-        foreach ( var animationService in _live2DAnimationServices )
+        foreach (var animationService in _live2DAnimationServices)
         {
             model.ValueUpdate += _ => animationService.Update(LAppPal.DeltaTime);
             animationService.Start(model);

@@ -1,12 +1,8 @@
 ﻿using System.Drawing;
 using System.Runtime.InteropServices;
-
 using FontStashSharp.Interfaces;
-
 using PersonaEngine.Lib.UI.Common;
-
 using Silk.NET.OpenGL;
-
 using Texture = PersonaEngine.Lib.UI.Common.Texture;
 
 namespace PersonaEngine.Lib.UI.Text.Rendering;
@@ -29,7 +25,7 @@ internal class Texture2DManager(GL gl) : ITexture2DManager
             unsafe
             {
                 var ptr = (byte*)data.ToPointer();
-                for ( var i = 0; i < size; i++ )
+                for (var i = 0; i < size; i++)
                 {
                     ptr[i] = 0;
                 }
@@ -42,7 +38,7 @@ internal class Texture2DManager(GL gl) : ITexture2DManager
         finally
         {
             // Free the unmanaged memory after the texture is created
-            if ( data != IntPtr.Zero )
+            if (data != IntPtr.Zero)
             {
                 Marshal.FreeHGlobal(data);
             }
@@ -66,16 +62,16 @@ internal class Texture2DManager(GL gl) : ITexture2DManager
             fixed (byte* ptr = data)
             {
                 gl.TexSubImage2D(
-                                 GLEnum.Texture2D,
-                                 0,                      // mipmap level
-                                 bounds.Left,            // x offset
-                                 bounds.Top,             // y offset
-                                 (uint)bounds.Width,     // width
-                                 (uint)bounds.Height,    // height
-                                 PixelFormat.Bgra,       // format matching the Texture class
-                                 PixelType.UnsignedByte, // data type
-                                 ptr                     // data pointer
-                                );
+                    GLEnum.Texture2D,
+                    0, // mipmap level
+                    bounds.Left, // x offset
+                    bounds.Top, // y offset
+                    (uint)bounds.Width, // width
+                    (uint)bounds.Height, // height
+                    PixelFormat.Bgra, // format matching the Texture class
+                    PixelType.UnsignedByte, // data type
+                    ptr // data pointer
+                );
 
                 gl.CheckError();
             }

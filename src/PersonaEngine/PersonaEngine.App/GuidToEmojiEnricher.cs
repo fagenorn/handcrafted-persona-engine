@@ -1,5 +1,4 @@
 ﻿using System.Collections.Concurrent;
-
 using Serilog.Core;
 using Serilog.Events;
 
@@ -9,16 +8,23 @@ public class GuidToEmojiEnricher : ILogEventEnricher
 {
     private readonly GuidEmojiMapper _mapper;
 
-    public GuidToEmojiEnricher() { _mapper = new GuidEmojiMapper(); }
+    public GuidToEmojiEnricher()
+    {
+        _mapper = new GuidEmojiMapper();
+    }
 
     public void Enrich(LogEvent logEvent, ILogEventPropertyFactory propertyFactory)
     {
-        var guidProperties = logEvent.Properties
-                                     .Where(kvp => kvp.Value is ScalarValue { Value: Guid })
-                                     .Select(kvp => new { kvp.Key, Value = (Guid)(((ScalarValue)kvp.Value).Value ?? Guid.Empty) })
-                                     .ToList();
+        var guidProperties = logEvent
+            .Properties.Where(kvp => kvp.Value is ScalarValue { Value: Guid })
+            .Select(kvp => new
+            {
+                kvp.Key,
+                Value = (Guid)(((ScalarValue)kvp.Value).Value ?? Guid.Empty),
+            })
+            .ToList();
 
-        foreach ( var propInfo in guidProperties )
+        foreach (var propInfo in guidProperties)
         {
             var emoji = _mapper.GetEmojiForGuid(propInfo.Value);
 
@@ -32,38 +38,39 @@ public class GuidToEmojiEnricher : ILogEventEnricher
 
 public class GuidEmojiMapper
 {
-    private static readonly IReadOnlyList<string> Emojis = new List<string> {
-                                                                                "🚀",
-                                                                                "🌟",
-                                                                                "💡",
-                                                                                "🔧",
-                                                                                "🐞",
-                                                                                "🔗",
-                                                                                "💾",
-                                                                                "🔑",
-                                                                                "🎉",
-                                                                                "🎯",
-                                                                                "📁",
-                                                                                "📄",
-                                                                                "📦",
-                                                                                "🧭",
-                                                                                "📡",
-                                                                                "🧪",
-                                                                                "🧬",
-                                                                                "⚙️",
-                                                                                "💎",
-                                                                                "🧩",
-                                                                                "🐙",
-                                                                                "🦄",
-                                                                                "🐘",
-                                                                                "🦋",
-                                                                                "🐌",
-                                                                                "🐬",
-                                                                                "🐿️",
-                                                                                "🍄",
-                                                                                "🌵",
-                                                                                "🍀"
-                                                                            }.AsReadOnly();
+    private static readonly IReadOnlyList<string> Emojis = new List<string>
+    {
+        "🚀",
+        "🌟",
+        "💡",
+        "🔧",
+        "🐞",
+        "🔗",
+        "💾",
+        "🔑",
+        "🎉",
+        "🎯",
+        "📁",
+        "📄",
+        "📦",
+        "🧭",
+        "📡",
+        "🧪",
+        "🧬",
+        "⚙️",
+        "💎",
+        "🧩",
+        "🐙",
+        "🦄",
+        "🐘",
+        "🦋",
+        "🐌",
+        "🐬",
+        "🐿️",
+        "🍄",
+        "🌵",
+        "🍀",
+    }.AsReadOnly();
 
     private readonly ConcurrentDictionary<Guid, string> _guidEmojiMap = new();
 
@@ -71,17 +78,20 @@ public class GuidEmojiMapper
 
     public string GetEmojiForGuid(Guid guid)
     {
-        if ( guid == Guid.Empty )
+        if (guid == Guid.Empty)
         {
             return "\u2796";
         }
-        
-        return _guidEmojiMap.GetOrAdd(guid, _ =>
-                                            {
-                                                var nextIndex      = Interlocked.Increment(ref _emojiIndex);
-                                                var emojiListIndex = (nextIndex & int.MaxValue) % Emojis.Count;
 
-                                                return Emojis[emojiListIndex];
-                                            });
+        return _guidEmojiMap.GetOrAdd(
+            guid,
+            _ =>
+            {
+                var nextIndex = Interlocked.Increment(ref _emojiIndex);
+                var emojiListIndex = (nextIndex & int.MaxValue) % Emojis.Count;
+
+                return Emojis[emojiListIndex];
+            }
+        );
     }
 }

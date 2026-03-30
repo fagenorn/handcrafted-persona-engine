@@ -26,7 +26,7 @@ public class CubismMotionManager : CubismMotionQueueManager
     /// <returns>開始したモーションの識別番号を返す。個別のモーションが終了したか否かを判定するIsFinished()の引数で使用する。開始できない時は「-1」</returns>
     public CubismMotionQueueEntry StartMotionPriority(ACubismMotion motion, MotionPriority priority)
     {
-        if ( priority == ReservePriority )
+        if (priority == ReservePriority)
         {
             ReservePriority = 0; // 予約を解除
         }
@@ -51,7 +51,7 @@ public class CubismMotionManager : CubismMotionQueueManager
 
         var updated = DoUpdateMotion(model, UserTimeSeconds);
 
-        if ( IsFinished() )
+        if (IsFinished())
         {
             CurrentPriority = 0; // 再生中モーションの優先度を解除
         }
@@ -69,7 +69,7 @@ public class CubismMotionManager : CubismMotionQueueManager
     /// </returns>
     public bool ReserveMotion(MotionPriority priority)
     {
-        if ( priority <= ReservePriority || priority <= CurrentPriority )
+        if (priority <= ReservePriority || priority <= CurrentPriority)
         {
             return false;
         }

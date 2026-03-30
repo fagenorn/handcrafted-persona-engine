@@ -15,12 +15,21 @@ namespace PersonaEngine.Lib.Audio;
 /// </remarks>
 public class DiscardableMemoryAudioSource(
     IReadOnlyDictionary<string, string> metadata,
-    bool                                storeSamples        = true,
-    bool                                storeBytes          = false,
-    int                                 initialSizeFloats   = BufferedMemoryAudioSource.DefaultInitialSize,
-    int                                 initialSizeBytes    = BufferedMemoryAudioSource.DefaultInitialSize,
-    IChannelAggregationStrategy?        aggregationStrategy = null)
-    : BufferedMemoryAudioSource(metadata, storeSamples, storeBytes, initialSizeFloats, initialSizeBytes, aggregationStrategy), IDiscardableAudioSource
+    bool storeSamples = true,
+    bool storeBytes = false,
+    int initialSizeFloats = BufferedMemoryAudioSource.DefaultInitialSize,
+    int initialSizeBytes = BufferedMemoryAudioSource.DefaultInitialSize,
+    IChannelAggregationStrategy? aggregationStrategy = null
+)
+    : BufferedMemoryAudioSource(
+        metadata,
+        storeSamples,
+        storeBytes,
+        initialSizeFloats,
+        initialSizeBytes,
+        aggregationStrategy
+    ),
+        IDiscardableAudioSource
 {
     private long framesDiscarded;
 
@@ -28,35 +37,39 @@ public class DiscardableMemoryAudioSource(
 
     public override long FramesCount => base.FramesCount - framesDiscarded;
 
-    public override TimeSpan Duration => TimeSpan.FromMilliseconds(SampleVirtualCount * 1000d / SampleRate);
+    public override TimeSpan Duration =>
+        TimeSpan.FromMilliseconds(SampleVirtualCount * 1000d / SampleRate);
 
     /// <inheritdoc />
     public virtual void DiscardFrames(int count)
     {
         ThrowIfNotInitialized();
 
-        if ( count <= 0 )
+        if (count <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(count), "Count must be positive.");
         }
 
-        if ( count > FramesCount )
+        if (count > FramesCount)
         {
-            throw new ArgumentOutOfRangeException(nameof(count), "Cannot discard more samples than available.");
+            throw new ArgumentOutOfRangeException(
+                nameof(count),
+                "Cannot discard more samples than available."
+            );
         }
 
         var framesToKeep = FramesCount - count;
-        if ( FloatFrames != null )
+        if (FloatFrames != null)
         {
             var samplesToDiscard = count * ChannelCount;
-            var samplesToKeep    = framesToKeep * ChannelCount;
+            var samplesToKeep = framesToKeep * ChannelCount;
             Array.Copy(FloatFrames, samplesToDiscard, FloatFrames, 0, samplesToKeep);
         }
 
-        if ( ByteFrames != null )
+        if (ByteFrames != null)
         {
             var bytesToDiscard = count * FrameSize;
-            var bytesToKeep    = framesToKeep * FrameSize;
+            var bytesToKeep = framesToKeep * FrameSize;
             Array.Copy(ByteFrames, bytesToDiscard, ByteFrames, 0, bytesToKeep);
         }
 
@@ -64,25 +77,55 @@ public class DiscardableMemoryAudioSource(
     }
 
     /// <inheritdoc />
-    public override Task<Memory<float>> GetSamplesAsync(long startFrame, int maxFrames = int.MaxValue, CancellationToken cancellationToken = default)
+    public override Task<Memory<float>> GetSamplesAsync(
+        long startFrame,
+        int maxFrames = int.MaxValue,
+        CancellationToken cancellationToken = default
+    )
     {
-        ArgumentOutOfRangeException.ThrowIfLessThan(startFrame, framesDiscarded, nameof(startFrame));
+        ArgumentOutOfRangeException.ThrowIfLessThan(
+            startFrame,
+            framesDiscarded,
+            nameof(startFrame)
+        );
 
         return base.GetSamplesAsync(startFrame - framesDiscarded, maxFrames, cancellationToken);
     }
 
     /// <inheritdoc />
-    public override Task<Memory<byte>> GetFramesAsync(long startFrame, int maxFrames = int.MaxValue, CancellationToken cancellationToken = default)
+    public override Task<Memory<byte>> GetFramesAsync(
+        long startFrame,
+        int maxFrames = int.MaxValue,
+        CancellationToken cancellationToken = default
+    )
     {
-        ArgumentOutOfRangeException.ThrowIfLessThan(startFrame, framesDiscarded, nameof(startFrame));
+        ArgumentOutOfRangeException.ThrowIfLessThan(
+            startFrame,
+            framesDiscarded,
+            nameof(startFrame)
+        );
 
         return base.GetFramesAsync(startFrame - framesDiscarded, maxFrames, cancellationToken);
     }
 
-    public override Task<int> CopyFramesAsync(Memory<byte> destination, long startFrame, int maxFrames = int.MaxValue, CancellationToken cancellationToken = default)
+    public override Task<int> CopyFramesAsync(
+        Memory<byte> destination,
+        long startFrame,
+        int maxFrames = int.MaxValue,
+        CancellationToken cancellationToken = default
+    )
     {
-        ArgumentOutOfRangeException.ThrowIfLessThan(startFrame, framesDiscarded, nameof(startFrame));
+        ArgumentOutOfRangeException.ThrowIfLessThan(
+            startFrame,
+            framesDiscarded,
+            nameof(startFrame)
+        );
 
-        return base.CopyFramesAsync(destination, startFrame - framesDiscarded, maxFrames, cancellationToken);
+        return base.CopyFramesAsync(
+            destination,
+            startFrame - framesDiscarded,
+            maxFrames,
+            cancellationToken
+        );
     }
 }

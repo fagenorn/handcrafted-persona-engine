@@ -11,13 +11,13 @@ public class ConfigurationChangedEventArgs : EventArgs
 
         Reloaded,
 
-        Saved
+        Saved,
     }
 
     public ConfigurationChangedEventArgs(string sectionKey, ChangeType type)
     {
         SectionKey = sectionKey;
-        Type       = type;
+        Type = type;
     }
 
     public string SectionKey { get; }

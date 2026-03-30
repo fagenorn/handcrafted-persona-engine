@@ -28,10 +28,13 @@ public class CubismBreath
 
         var t = _currentTime * 2.0f * 3.14159f;
 
-        foreach ( var item in Parameters )
+        foreach (var item in Parameters)
         {
-            model.AddParameterValue(item.ParameterId, item.Offset +
-                                                      item.Peak * MathF.Sin(t / item.Cycle), item.Weight);
+            model.AddParameterValue(
+                item.ParameterId,
+                item.Offset + item.Peak * MathF.Sin(t / item.Cycle),
+                item.Weight
+            );
         }
     }
 }

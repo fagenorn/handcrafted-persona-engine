@@ -25,9 +25,9 @@ public readonly struct AudioFormat
     /// </summary>
     public AudioFormat(ushort channels, ushort bitsPerSample, uint sampleRate)
     {
-        Channels      = channels;
+        Channels = channels;
         BitsPerSample = bitsPerSample;
-        SampleRate    = sampleRate;
+        SampleRate = sampleRate;
     }
 
     /// <summary>
@@ -43,10 +43,16 @@ public readonly struct AudioFormat
     /// <summary>
     ///     Creates a mono format with the specified bits per sample and sample rate.
     /// </summary>
-    public static AudioFormat CreateMono(ushort bitsPerSample, uint sampleRate) { return new AudioFormat(1, bitsPerSample, sampleRate); }
+    public static AudioFormat CreateMono(ushort bitsPerSample, uint sampleRate)
+    {
+        return new AudioFormat(1, bitsPerSample, sampleRate);
+    }
 
     /// <summary>
     ///     Creates a stereo format with the specified bits per sample and sample rate.
     /// </summary>
-    public static AudioFormat CreateStereo(ushort bitsPerSample, uint sampleRate) { return new AudioFormat(2, bitsPerSample, sampleRate); }
+    public static AudioFormat CreateStereo(ushort bitsPerSample, uint sampleRate)
+    {
+        return new AudioFormat(2, bitsPerSample, sampleRate);
+    }
 }

@@ -1,10 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
-
 using Microsoft.Extensions.Logging;
-
 using PortAudioSharp;
-
 using Stream = PortAudioSharp.Stream;
 
 namespace PersonaEngine.Lib.Audio;
@@ -36,50 +33,71 @@ public sealed class MicrophoneInputPortAudioSource : AwaitableWaveFileSource, IM
 
     public MicrophoneInputPortAudioSource(
         ILogger<MicrophoneInputPortAudioSource> logger,
-        int                                     deviceNumber        = -1,
-        int                                     sampleRate          = 16000,
-        int                                     bitsPerSample       = 16,
-        int                                     channels            = 1,
-        uint                                    framesPerBuffer     = 0,
-        bool                                    storeSamples        = true,
-        bool                                    storeBytes          = false,
-        int                                     initialSizeFloats   = DefaultInitialSize,
-        int                                     initialSizeBytes    = DefaultInitialSize,
-        IChannelAggregationStrategy?            aggregationStrategy = null)
-        : this(new Dictionary<string, string>(), logger, deviceNumber, sampleRate, bitsPerSample,
-               channels, framesPerBuffer, storeSamples, storeBytes, initialSizeFloats, initialSizeBytes, aggregationStrategy) { }
+        int deviceNumber = -1,
+        int sampleRate = 16000,
+        int bitsPerSample = 16,
+        int channels = 1,
+        uint framesPerBuffer = 0,
+        bool storeSamples = true,
+        bool storeBytes = false,
+        int initialSizeFloats = DefaultInitialSize,
+        int initialSizeBytes = DefaultInitialSize,
+        IChannelAggregationStrategy? aggregationStrategy = null
+    )
+        : this(
+            new Dictionary<string, string>(),
+            logger,
+            deviceNumber,
+            sampleRate,
+            bitsPerSample,
+            channels,
+            framesPerBuffer,
+            storeSamples,
+            storeBytes,
+            initialSizeFloats,
+            initialSizeBytes,
+            aggregationStrategy
+        ) { }
 
     private MicrophoneInputPortAudioSource(
-        Dictionary<string, string>              metadata,
+        Dictionary<string, string> metadata,
         ILogger<MicrophoneInputPortAudioSource> logger,
-        int                                     deviceNumber        = -1,
-        int                                     sampleRate          = 16000,
-        int                                     bitsPerSample       = 16,
-        int                                     channels            = 1,
-        uint                                    framesPerBuffer     = 0,
-        bool                                    storeSamples        = true,
-        bool                                    storeBytes          = false,
-        int                                     initialSizeFloats   = DefaultInitialSize,
-        int                                     initialSizeBytes    = DefaultInitialSize,
-        IChannelAggregationStrategy?            aggregationStrategy = null)
-        : base(metadata, storeSamples, storeBytes, initialSizeFloats, initialSizeBytes, aggregationStrategy)
+        int deviceNumber = -1,
+        int sampleRate = 16000,
+        int bitsPerSample = 16,
+        int channels = 1,
+        uint framesPerBuffer = 0,
+        bool storeSamples = true,
+        bool storeBytes = false,
+        int initialSizeFloats = DefaultInitialSize,
+        int initialSizeBytes = DefaultInitialSize,
+        IChannelAggregationStrategy? aggregationStrategy = null
+    )
+        : base(
+            metadata,
+            storeSamples,
+            storeBytes,
+            initialSizeFloats,
+            initialSizeBytes,
+            aggregationStrategy
+        )
     {
         PortAudio.Initialize();
 
-        _logger          = logger;
-        _deviceNumber    = deviceNumber == -1 ? PortAudio.DefaultInputDevice : deviceNumber;
-        _sampleRate      = sampleRate;
-        _bitsPerSample   = bitsPerSample;
-        _channels        = channels;
+        _logger = logger;
+        _deviceNumber = deviceNumber == -1 ? PortAudio.DefaultInputDevice : deviceNumber;
+        _sampleRate = sampleRate;
+        _bitsPerSample = bitsPerSample;
+        _channels = channels;
         _framesPerBuffer = framesPerBuffer;
-        _cts             = new CancellationTokenSource();
-        _metadata        = metadata;
+        _cts = new CancellationTokenSource();
+        _metadata = metadata;
 
-        if ( _deviceNumber == PortAudio.NoDevice )
+        if (_deviceNumber == PortAudio.NoDevice)
         {
             var sb = new StringBuilder();
 
-            for ( var i = 0; i != PortAudio.DeviceCount; ++i )
+            for (var i = 0; i != PortAudio.DeviceCount; ++i)
             {
                 var deviceInfo = PortAudio.GetDeviceInfo(i);
 
@@ -94,7 +112,14 @@ public sealed class MicrophoneInputPortAudioSource : AwaitableWaveFileSource, IM
             throw new InvalidOperationException("No default input device available");
         }
 
-        Initialize(new AudioSourceHeader { BitsPerSample = (ushort)bitsPerSample, Channels = (ushort)channels, SampleRate = (uint)sampleRate });
+        Initialize(
+            new AudioSourceHeader
+            {
+                BitsPerSample = (ushort)bitsPerSample,
+                Channels = (ushort)channels,
+                SampleRate = (uint)sampleRate,
+            }
+        );
 
         try
         {
@@ -110,7 +135,7 @@ public sealed class MicrophoneInputPortAudioSource : AwaitableWaveFileSource, IM
 
     public void StartRecording()
     {
-        if ( _isRecording )
+        if (_isRecording)
         {
             return;
         }
@@ -121,7 +146,7 @@ public sealed class MicrophoneInputPortAudioSource : AwaitableWaveFileSource, IM
 
     public void StopRecording()
     {
-        if ( !_isRecording )
+        if (!_isRecording)
         {
             return;
         }
@@ -141,33 +166,36 @@ public sealed class MicrophoneInputPortAudioSource : AwaitableWaveFileSource, IM
         var deviceInfo = PortAudio.GetDeviceInfo(_deviceNumber);
         _logger.LogInformation("Using input device: {DeviceName}", deviceInfo.name);
 
-        var inputParams = new StreamParameters {
-                                                   device                    = _deviceNumber,
-                                                   channelCount              = _channels,
-                                                   sampleFormat              = SampleFormat.Float32,
-                                                   suggestedLatency          = deviceInfo.defaultLowInputLatency,
-                                                   hostApiSpecificStreamInfo = IntPtr.Zero
-                                               };
+        var inputParams = new StreamParameters
+        {
+            device = _deviceNumber,
+            channelCount = _channels,
+            sampleFormat = SampleFormat.Float32,
+            suggestedLatency = deviceInfo.defaultLowInputLatency,
+            hostApiSpecificStreamInfo = IntPtr.Zero,
+        };
 
         _audioStream = new Stream(
-                                  inputParams,
-                                  null,
-                                  _sampleRate,
-                                  _framesPerBuffer,
-                                  StreamFlags.ClipOff,
-                                  ProcessAudioCallback,
-                                  IntPtr.Zero);
+            inputParams,
+            null,
+            _sampleRate,
+            _framesPerBuffer,
+            StreamFlags.ClipOff,
+            ProcessAudioCallback,
+            IntPtr.Zero
+        );
     }
 
     private StreamCallbackResult ProcessAudioCallback(
-        IntPtr                     input,
-        IntPtr                     output,
-        uint                       frameCount,
+        IntPtr input,
+        IntPtr output,
+        uint frameCount,
         ref StreamCallbackTimeInfo timeInfo,
-        StreamCallbackFlags        statusFlags,
-        IntPtr                     userData)
+        StreamCallbackFlags statusFlags,
+        IntPtr userData
+    )
     {
-        if ( _cts.Token.IsCancellationRequested )
+        if (_cts.Token.IsCancellationRequested)
         {
             return StreamCallbackResult.Complete;
         }
@@ -191,7 +219,7 @@ public sealed class MicrophoneInputPortAudioSource : AwaitableWaveFileSource, IM
 
     protected override void Dispose(bool disposing)
     {
-        if ( disposing )
+        if (disposing)
         {
             _cts.Cancel();
             StopRecording();

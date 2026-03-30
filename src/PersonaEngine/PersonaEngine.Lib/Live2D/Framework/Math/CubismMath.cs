@@ -20,11 +20,11 @@ public static class CubismMath
     /// <returns>最小値と最大値の範囲に収めた値</returns>
     public static float RangeF(float value, float min, float max)
     {
-        if ( value < min )
+        if (value < min)
         {
             value = min;
         }
-        else if ( value > max )
+        else if (value > max)
         {
             value = max;
         }
@@ -40,12 +40,12 @@ public static class CubismMath
     /// <returns>イージング処理されたサイン値</returns>
     public static float GetEasingSine(float value)
     {
-        if ( value < 0.0f )
+        if (value < 0.0f)
         {
             return 0.0f;
         }
 
-        if ( value > 1.0f )
+        if (value > 1.0f)
         {
             return 1.0f;
         }
@@ -59,7 +59,10 @@ public static class CubismMath
     /// <param name="l">左辺の値</param>
     /// <param name="r">右辺の値</param>
     /// <returns>大きい方の値</returns>
-    public static float Max(float l, float r) { return l > r ? l : r; }
+    public static float Max(float l, float r)
+    {
+        return l > r ? l : r;
+    }
 
     /// <summary>
     ///     小さい方の値を返す。
@@ -67,21 +70,30 @@ public static class CubismMath
     /// <param name="l">左辺の値</param>
     /// <param name="r">右辺の値</param>
     /// <returns>小さい方の値</returns>
-    public static float Min(float l, float r) { return l > r ? r : l; }
+    public static float Min(float l, float r)
+    {
+        return l > r ? r : l;
+    }
 
     /// <summary>
     ///     角度値をラジアン値に変換します。
     /// </summary>
     /// <param name="degrees">角度値</param>
     /// <returns>角度値から変換したラジアン値</returns>
-    public static float DegreesToRadian(float degrees) { return degrees / 180.0f * Pi; }
+    public static float DegreesToRadian(float degrees)
+    {
+        return degrees / 180.0f * Pi;
+    }
 
     /// <summary>
     ///     ラジアン値を角度値に変換します。
     /// </summary>
     /// <param name="radian">ラジアン値</param>
     /// <returns>ラジアン値から変換した角度値</returns>
-    public static float RadianToDegrees(float radian) { return radian * 180.0f / Pi; }
+    public static float RadianToDegrees(float radian)
+    {
+        return radian * 180.0f / Pi;
+    }
 
     /// <summary>
     ///     2つのベクトルからラジアン値を求めます。
@@ -100,12 +112,12 @@ public static class CubismMath
 
         ret = q1 - q2;
 
-        while ( ret < -Pi )
+        while (ret < -Pi)
         {
             ret += Pi * 2.0f;
         }
 
-        while ( ret > Pi )
+        while (ret > Pi)
         {
             ret -= Pi * 2.0f;
         }
@@ -127,7 +139,7 @@ public static class CubismMath
         radian = DirectionToRadian(from, to);
         degree = RadianToDegrees(radian);
 
-        if ( to.X - from.X > 0.0f )
+        if (to.X - from.X > 0.0f)
         {
             degree = -degree;
         }
@@ -140,7 +152,10 @@ public static class CubismMath
     /// </summary>
     /// <param name="totalAngle">ラジアン値</param>
     /// <returns>ラジアン値から変換した方向ベクトル</returns>
-    public static Vector2 RadianToDirection(float totalAngle) { return new Vector2(MathF.Sin(totalAngle), MathF.Cos(totalAngle)); }
+    public static Vector2 RadianToDirection(float totalAngle)
+    {
+        return new Vector2(MathF.Sin(totalAngle), MathF.Cos(totalAngle));
+    }
 
     /// <summary>
     ///     三次方程式の三次項の係数が0になったときに補欠的に二次方程式の解をもとめる。
@@ -152,9 +167,9 @@ public static class CubismMath
     /// <returns>二次方程式の解</returns>
     public static float QuadraticEquation(float a, float b, float c)
     {
-        if ( MathF.Abs(a) < Epsilon )
+        if (MathF.Abs(a) < Epsilon)
         {
-            if ( MathF.Abs(b) < Epsilon )
+            if (MathF.Abs(b) < Epsilon)
             {
                 return -c;
             }
@@ -177,7 +192,7 @@ public static class CubismMath
     /// <returns>0.0～1.0の間にある解</returns>
     public static float CardanoAlgorithmForBezier(float a, float b, float c, float d)
     {
-        if ( MathF.Abs(a) < Epsilon )
+        if (MathF.Abs(a) < Epsilon)
         {
             return RangeF(QuadraticEquation(b, c, d), 0.0f, 1.0f);
         }
@@ -186,37 +201,37 @@ public static class CubismMath
         var ca = c / a;
         var da = d / a;
 
-        var p            = (3.0f * ca - ba * ba) / 3.0f;
-        var p3           = p / 3.0f;
-        var q            = (2.0f * ba * ba * ba - 9.0f * ba * ca + 27.0f * da) / 27.0f;
-        var q2           = q / 2.0f;
+        var p = (3.0f * ca - ba * ba) / 3.0f;
+        var p3 = p / 3.0f;
+        var q = (2.0f * ba * ba * ba - 9.0f * ba * ca + 27.0f * da) / 27.0f;
+        var q2 = q / 2.0f;
         var discriminant = q2 * q2 + p3 * p3 * p3;
 
-        var center    = 0.5f;
+        var center = 0.5f;
         var threshold = center + 0.01f;
 
         float root1;
         float u1;
 
-        if ( discriminant < 0.0f )
+        if (discriminant < 0.0f)
         {
-            var mp3    = -p / 3.0f;
-            var mp33   = mp3 * mp3 * mp3;
-            var r      = MathF.Sqrt(mp33);
-            var t      = -q / (2.0f * r);
+            var mp3 = -p / 3.0f;
+            var mp33 = mp3 * mp3 * mp3;
+            var r = MathF.Sqrt(mp33);
+            var t = -q / (2.0f * r);
             var cosphi = RangeF(t, -1.0f, 1.0f);
-            var phi    = MathF.Acos(cosphi);
-            var crtr   = MathF.Cbrt(r);
-            var t1     = 2.0f * crtr;
+            var phi = MathF.Acos(cosphi);
+            var crtr = MathF.Cbrt(r);
+            var t1 = 2.0f * crtr;
 
             root1 = t1 * MathF.Cos(phi / 3.0f) - ba / 3.0f;
-            if ( MathF.Abs(root1 - center) < threshold )
+            if (MathF.Abs(root1 - center) < threshold)
             {
                 return RangeF(root1, 0.0f, 1.0f);
             }
 
             var root2 = t1 * MathF.Cos((phi + 2.0f * Pi) / 3.0f) - ba / 3.0f;
-            if ( MathF.Abs(root2 - center) < threshold )
+            if (MathF.Abs(root2 - center) < threshold)
             {
                 return RangeF(root2, 0.0f, 1.0f);
             }
@@ -226,9 +241,9 @@ public static class CubismMath
             return RangeF(root3, 0.0f, 1.0f);
         }
 
-        if ( discriminant == 0.0f )
+        if (discriminant == 0.0f)
         {
-            if ( q2 < 0.0f )
+            if (q2 < 0.0f)
             {
                 u1 = MathF.Cbrt(-q2);
             }
@@ -238,7 +253,7 @@ public static class CubismMath
             }
 
             root1 = 2.0f * u1 - ba / 3.0f;
-            if ( MathF.Abs(root1 - center) < threshold )
+            if (MathF.Abs(root1 - center) < threshold)
             {
                 return RangeF(root1, 0.0f, 1.0f);
             }
@@ -265,12 +280,12 @@ public static class CubismMath
     /// <returns>範囲内に収まった値</returns>
     public static int Clamp(int val, int min, int max)
     {
-        if ( val < min )
+        if (val < min)
         {
             return min;
         }
 
-        if ( max < val )
+        if (max < val)
         {
             return max;
         }
@@ -287,12 +302,12 @@ public static class CubismMath
     /// <returns>範囲内に収まった値</returns>
     public static float ClampF(float val, float min, float max)
     {
-        if ( val < min )
+        if (val < min)
         {
             return min;
         }
 
-        if ( max < val )
+        if (max < val)
         {
             return max;
         }
@@ -308,7 +323,12 @@ public static class CubismMath
     /// <returns>余り</returns>
     public static float ModF(float dividend, float divisor)
     {
-        if ( !float.IsFinite(dividend) || divisor == 0 || float.IsNaN(dividend) || float.IsNaN(divisor) )
+        if (
+            !float.IsFinite(dividend)
+            || divisor == 0
+            || float.IsNaN(dividend)
+            || float.IsNaN(divisor)
+        )
         {
             CubismLog.Warning("dividend: %f, divisor: %f ModF() returns 'NaN'.", dividend, divisor);
 
@@ -317,7 +337,7 @@ public static class CubismMath
 
         // 絶対値に変換する。
         var absDividend = MathF.Abs(dividend);
-        var absDivisor  = MathF.Abs(divisor);
+        var absDivisor = MathF.Abs(divisor);
 
         // 絶対値で割り算する。
         var result = absDividend - MathF.Floor(absDividend / absDivisor) * absDivisor;

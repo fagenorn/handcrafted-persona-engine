@@ -1,7 +1,5 @@
 using System.Threading.Channels;
-
 using Microsoft.Extensions.Logging;
-
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Adapters;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
@@ -164,9 +162,7 @@ internal sealed class TurnPipelineCoordinator : IAsyncDisposable
 
         if (!turnId.HasValue || turnCts is null || _llmChannel is null)
         {
-            _logger.LogWarning(
-                "StartTtsStage called without a valid TurnId or LLM channel."
-            );
+            _logger.LogWarning("StartTtsStage called without a valid TurnId or LLM channel.");
 
             return;
         }
@@ -194,7 +190,10 @@ internal sealed class TurnPipelineCoordinator : IAsyncDisposable
         }
     }
 
-    public async ValueTask WriteLlmChunkAsync(LlmChunkEvent chunk, CancellationToken cancellationToken)
+    public async ValueTask WriteLlmChunkAsync(
+        LlmChunkEvent chunk,
+        CancellationToken cancellationToken
+    )
     {
         var writer = _llmChannel?.Writer;
 
@@ -208,7 +207,10 @@ internal sealed class TurnPipelineCoordinator : IAsyncDisposable
         await writer.WriteAsync(chunk, cancellationToken);
     }
 
-    public async ValueTask WriteTtsChunkAsync(TtsChunkEvent chunk, CancellationToken cancellationToken)
+    public async ValueTask WriteTtsChunkAsync(
+        TtsChunkEvent chunk,
+        CancellationToken cancellationToken
+    )
     {
         var writer = _ttsChannel?.Writer;
 

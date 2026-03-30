@@ -12,17 +12,17 @@ public class WindowManager
     public WindowManager(Vector2D<int> size, string title)
     {
         var options = WindowOptions.Default;
-        options.Size             =  size;
-        options.Title            =  title;
-        options.UpdatesPerSecond =  60;
-        options.FramesPerSecond  =  30;
-        options.WindowBorder     =  WindowBorder.Fixed;
-        MainWindow               =  Window.Create(options);
-        MainWindow.Load          += OnLoad;
-        MainWindow.Update        += OnUpdate;
-        MainWindow.Render        += OnRender;
-        MainWindow.Resize        += OnResize;
-        MainWindow.Closing       += OnClose;
+        options.Size = size;
+        options.Title = title;
+        options.UpdatesPerSecond = 60;
+        options.FramesPerSecond = 30;
+        options.WindowBorder = WindowBorder.Fixed;
+        MainWindow = Window.Create(options);
+        MainWindow.Load += OnLoad;
+        MainWindow.Update += OnUpdate;
+        MainWindow.Render += OnRender;
+        MainWindow.Resize += OnResize;
+        MainWindow.Closing += OnClose;
     }
 
     public IWindow MainWindow { get; }
@@ -45,13 +45,28 @@ public class WindowManager
         Load?.Invoke();
     }
 
-    private void OnUpdate(double delta) { Update?.Invoke(delta); }
+    private void OnUpdate(double delta)
+    {
+        Update?.Invoke(delta);
+    }
 
-    private void OnRender(double delta) { RenderFrame?.Invoke(delta); }
+    private void OnRender(double delta)
+    {
+        RenderFrame?.Invoke(delta);
+    }
 
-    private void OnResize(Vector2D<int> size) { Resize?.Invoke(size); }
+    private void OnResize(Vector2D<int> size)
+    {
+        Resize?.Invoke(size);
+    }
 
-    private void OnClose() { Close?.Invoke(); }
+    private void OnClose()
+    {
+        Close?.Invoke();
+    }
 
-    public void Run() { MainWindow.Run(); }
+    public void Run()
+    {
+        MainWindow.Run();
+    }
 }

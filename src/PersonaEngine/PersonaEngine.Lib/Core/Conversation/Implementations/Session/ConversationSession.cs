@@ -1,8 +1,6 @@
 using System.Threading.Channels;
-
 using Microsoft.Extensions.Logging;
 using OpenAI.Chat;
-
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Adapters;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Configuration;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
@@ -13,7 +11,6 @@ using PersonaEngine.Lib.Core.Conversation.Implementations.Context;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Metrics;
 using PersonaEngine.Lib.LLM;
 using PersonaEngine.Lib.TTS.Synthesis;
-
 using Stateless;
 
 namespace PersonaEngine.Lib.Core.Conversation.Implementations.Session;

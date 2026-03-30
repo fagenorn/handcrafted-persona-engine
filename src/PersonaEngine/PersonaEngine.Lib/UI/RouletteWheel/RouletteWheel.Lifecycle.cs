@@ -20,7 +20,7 @@ public partial class RouletteWheel
         /// <summary>
         ///     Wheel is animating to a disabled state.
         /// </summary>
-        AnimatingOut
+        AnimatingOut,
     }
 
     private float _animationCurrentScale = 1.0f;
@@ -53,25 +53,25 @@ public partial class RouletteWheel
     /// </summary>
     public void Enable()
     {
-        if ( IsEnabled && CurrentAnimationState == AnimationState.Idle )
+        if (IsEnabled && CurrentAnimationState == AnimationState.Idle)
         {
             return;
         }
 
         IsEnabled = true;
 
-        if ( !_config.CurrentValue.AnimateToggle )
+        if (!_config.CurrentValue.AnimateToggle)
         {
-            CurrentAnimationState  = AnimationState.Idle;
+            CurrentAnimationState = AnimationState.Idle;
             _animationCurrentScale = 1.0f;
 
             return;
         }
 
         CurrentAnimationState = AnimationState.AnimatingIn;
-        _animationStartTime   = _time;
-        _animationDuration    = _config.CurrentValue.AnimationDuration;
-        _animationStartScale  = _animationCurrentScale;
+        _animationStartTime = _time;
+        _animationDuration = _config.CurrentValue.AnimationDuration;
+        _animationStartScale = _animationCurrentScale;
         _animationTargetScale = 1.0f;
     }
 
@@ -80,25 +80,25 @@ public partial class RouletteWheel
     /// </summary>
     public void Disable()
     {
-        if ( !IsEnabled && CurrentAnimationState == AnimationState.Idle )
+        if (!IsEnabled && CurrentAnimationState == AnimationState.Idle)
         {
             return;
         }
 
         IsEnabled = false;
 
-        if ( !_config.CurrentValue.AnimateToggle )
+        if (!_config.CurrentValue.AnimateToggle)
         {
-            CurrentAnimationState  = AnimationState.Idle;
+            CurrentAnimationState = AnimationState.Idle;
             _animationCurrentScale = 0.0f;
 
             return;
         }
 
         CurrentAnimationState = AnimationState.AnimatingOut;
-        _animationStartTime   = _time;
-        _animationDuration    = _config.CurrentValue.AnimationDuration;
-        _animationStartScale  = _animationCurrentScale;
+        _animationStartTime = _time;
+        _animationDuration = _config.CurrentValue.AnimationDuration;
+        _animationStartScale = _animationCurrentScale;
         _animationTargetScale = 0.0f;
     }
 
@@ -109,7 +109,7 @@ public partial class RouletteWheel
     /// <param name="duration">Duration of the animation in seconds.</param>
     public void Toggle()
     {
-        if ( IsEnabled )
+        if (IsEnabled)
         {
             Disable();
         }
@@ -121,24 +121,25 @@ public partial class RouletteWheel
 
     private void UpdateVisibilityAnimation()
     {
-        if ( CurrentAnimationState == AnimationState.Idle )
+        if (CurrentAnimationState == AnimationState.Idle)
         {
             return;
         }
 
-        var elapsed  = _time - _animationStartTime;
+        var elapsed = _time - _animationStartTime;
         var progress = Math.Min(elapsed / _animationDuration, 1.0f);
 
         // Apply easing function to the progress
         var easedProgress = EaseOutBack(progress);
 
         // Calculate current scale based on progress
-        _animationCurrentScale = _animationStartScale + (_animationTargetScale - _animationStartScale) * easedProgress;
+        _animationCurrentScale =
+            _animationStartScale + (_animationTargetScale - _animationStartScale) * easedProgress;
 
         // Check if animation is complete
-        if ( progress >= 1.0f )
+        if (progress >= 1.0f)
         {
-            CurrentAnimationState  = AnimationState.Idle;
+            CurrentAnimationState = AnimationState.Idle;
             _animationCurrentScale = _animationTargetScale;
         }
     }

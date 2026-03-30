@@ -8,7 +8,7 @@ public class ProcessedText
     public ProcessedText(string normalizedText, IReadOnlyList<string> sentences)
     {
         NormalizedText = normalizedText;
-        Sentences      = sentences;
+        Sentences = sentences;
     }
 
     /// <summary>

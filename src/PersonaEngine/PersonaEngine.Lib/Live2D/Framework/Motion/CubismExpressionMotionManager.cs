@@ -55,7 +55,7 @@ public class CubismExpressionMotionManager : CubismMotionQueueManager
     /// <returns>開始したモーションの識別番号を返す。個別のモーションが終了したか否かを判定するIsFinished()の引数で使用する。開始できない時は「-1」</returns>
     public CubismMotionQueueEntry StartMotionPriority(ACubismMotion motion, MotionPriority priority)
     {
-        if ( priority == ReservePriority )
+        if (priority == ReservePriority)
         {
             ReservePriority = 0; // 予約を解除
         }
@@ -83,13 +83,13 @@ public class CubismExpressionMotionManager : CubismMotionQueueManager
         var motions = Motions;
 
         var expressionWeight = 0.0f;
-        var expressionIndex  = 0;
+        var expressionIndex = 0;
 
         // If there is already a motion, set the end flag
         var list = new List<CubismMotionQueueEntry>();
-        foreach ( var item in motions )
+        foreach (var item in motions)
         {
-            if ( item.Motion is not CubismExpressionMotion expressionMotion )
+            if (item.Motion is not CubismExpressionMotion expressionMotion)
             {
                 list.Add(item);
 
@@ -97,21 +97,24 @@ public class CubismExpressionMotionManager : CubismMotionQueueManager
             }
 
             var expressionParameters = expressionMotion.Parameters;
-            if ( item.Available )
+            if (item.Available)
             {
                 // 再生中のExpressionが参照しているパラメータをすべてリストアップ
-                for ( var i = 0; i < expressionParameters.Count; ++i )
+                for (var i = 0; i < expressionParameters.Count; ++i)
                 {
-                    if ( expressionParameters[i].ParameterId == null )
+                    if (expressionParameters[i].ParameterId == null)
                     {
                         continue;
                     }
 
                     var index = -1;
                     // リストにパラメータIDが存在するか検索
-                    for ( var j = 0; j < _expressionParameterValues.Count; ++j )
+                    for (var j = 0; j < _expressionParameterValues.Count; ++j)
                     {
-                        if ( _expressionParameterValues[j].ParameterId != expressionParameters[i].ParameterId )
+                        if (
+                            _expressionParameterValues[j].ParameterId
+                            != expressionParameters[i].ParameterId
+                        )
                         {
                             continue;
                         }
@@ -121,31 +124,48 @@ public class CubismExpressionMotionManager : CubismMotionQueueManager
                         break;
                     }
 
-                    if ( index >= 0 )
+                    if (index >= 0)
                     {
                         continue;
                     }
 
                     // If the parameter does not exist in the list, add it.
-                    ExpressionParameterValue item1 = new() { ParameterId = expressionParameters[i].ParameterId, AdditiveValue = CubismExpressionMotion.DefaultAdditiveValue, MultiplyValue = CubismExpressionMotion.DefaultMultiplyValue };
+                    ExpressionParameterValue item1 = new()
+                    {
+                        ParameterId = expressionParameters[i].ParameterId,
+                        AdditiveValue = CubismExpressionMotion.DefaultAdditiveValue,
+                        MultiplyValue = CubismExpressionMotion.DefaultMultiplyValue,
+                    };
                     item1.OverwriteValue = model.GetParameterValue(item1.ParameterId);
                     _expressionParameterValues.Add(item1);
                 }
             }
-            
+
             // ------ 値を計算する ------
             expressionMotion.SetupMotionQueueEntry(item, UserTimeSeconds);
-            _fadeWeights[expressionIndex] = expressionMotion.UpdateFadeWeight(item, UserTimeSeconds);
-            expressionMotion.CalculateExpressionParameters(model, UserTimeSeconds,
-                                                           item, _expressionParameterValues, expressionIndex, _fadeWeights[expressionIndex]);
+            _fadeWeights[expressionIndex] = expressionMotion.UpdateFadeWeight(
+                item,
+                UserTimeSeconds
+            );
+            expressionMotion.CalculateExpressionParameters(
+                model,
+                UserTimeSeconds,
+                item,
+                _expressionParameterValues,
+                expressionIndex,
+                _fadeWeights[expressionIndex]
+            );
 
-            expressionWeight += expressionMotion.FadeInSeconds == 0.0f
-                                    ? 1.0f
-                                    : CubismMath.GetEasingSine((UserTimeSeconds - item.FadeInStartTime) / expressionMotion.FadeInSeconds);
+            expressionWeight +=
+                expressionMotion.FadeInSeconds == 0.0f
+                    ? 1.0f
+                    : CubismMath.GetEasingSine(
+                        (UserTimeSeconds - item.FadeInStartTime) / expressionMotion.FadeInSeconds
+                    );
 
             updated = true;
 
-            if ( item.IsTriggeredFadeOut )
+            if (item.IsTriggeredFadeOut)
             {
                 // フェードアウト開始
                 item.StartFadeout(item.FadeOutSeconds, UserTimeSeconds);
@@ -155,13 +175,13 @@ public class CubismExpressionMotionManager : CubismMotionQueueManager
         }
 
         // ----- 最新のExpressionのフェードが完了していればそれ以前を削除する ------
-        if ( motions.Count > 1 )
+        if (motions.Count > 1)
         {
             var latestFadeWeight = _fadeWeights[_fadeWeights.Count - 1];
-            if ( latestFadeWeight >= 1.0f )
+            if (latestFadeWeight >= 1.0f)
             {
                 // 配列の最後の要素は削除しない
-                for ( var i = motions.Count - 2; i >= 0; i-- )
+                for (var i = motions.Count - 2; i >= 0; i--)
                 {
                     motions.RemoveAt(i);
                     _fadeWeights.RemoveAt(i);
@@ -169,20 +189,27 @@ public class CubismExpressionMotionManager : CubismMotionQueueManager
             }
         }
 
-        if ( expressionWeight > 1.0f )
+        if (expressionWeight > 1.0f)
         {
             expressionWeight = 1.0f;
         }
 
         // モデルに各値を適用
-        for ( var i = 0; i < _expressionParameterValues.Count; ++i )
+        for (var i = 0; i < _expressionParameterValues.Count; ++i)
         {
-            model.SetParameterValue(_expressionParameterValues[i].ParameterId,
-                                    (_expressionParameterValues[i].OverwriteValue + _expressionParameterValues[i].AdditiveValue) * _expressionParameterValues[i].MultiplyValue,
-                                    expressionWeight);
+            model.SetParameterValue(
+                _expressionParameterValues[i].ParameterId,
+                (
+                    _expressionParameterValues[i].OverwriteValue
+                    + _expressionParameterValues[i].AdditiveValue
+                ) * _expressionParameterValues[i].MultiplyValue,
+                expressionWeight
+            );
 
-            _expressionParameterValues[i].AdditiveValue = CubismExpressionMotion.DefaultAdditiveValue;
-            _expressionParameterValues[i].MultiplyValue = CubismExpressionMotion.DefaultMultiplyValue;
+            _expressionParameterValues[i].AdditiveValue =
+                CubismExpressionMotion.DefaultAdditiveValue;
+            _expressionParameterValues[i].MultiplyValue =
+                CubismExpressionMotion.DefaultMultiplyValue;
         }
 
         return updated;
@@ -193,5 +220,8 @@ public class CubismExpressionMotionManager : CubismMotionQueueManager
     /// </summary>
     /// <param name="index">取得する表情モーションのインデックス</param>
     /// <returns>表情のフェードのウェイト値</returns>
-    public float GetFadeWeight(int index) { return _fadeWeights[index]; }
+    public float GetFadeWeight(int index)
+    {
+        return _fadeWeights[index];
+    }
 }

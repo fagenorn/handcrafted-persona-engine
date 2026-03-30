@@ -23,7 +23,7 @@ public record BenchmarkResult
 
     public override string ToString()
     {
-        return $"Total: {Total}, TP: {TruePositives}, FP: {FalsePositives}, TN: {TrueNegatives}, FN: {FalseNegatives}, " +
-               $"Accuracy: {Accuracy:P2}, Precision: {Precision:P2}, Recall: {Recall:P2}";
+        return $"Total: {Total}, TP: {TruePositives}, FP: {FalsePositives}, TN: {TrueNegatives}, FN: {FalseNegatives}, "
+            + $"Accuracy: {Accuracy:P2}, Precision: {Precision:P2}, Recall: {Recall:P2}";
     }
 }

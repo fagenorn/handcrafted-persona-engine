@@ -13,10 +13,11 @@ public abstract class ConfigSectionEditorBase : IConfigSectionEditor, IDisposabl
 
     protected ConfigSectionEditorBase(
         IUiConfigurationManager configManager,
-        IEditorStateManager     stateManager)
+        IEditorStateManager stateManager
+    )
     {
         ConfigManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
-        StateManager  = stateManager ?? throw new ArgumentNullException(nameof(stateManager));
+        StateManager = stateManager ?? throw new ArgumentNullException(nameof(stateManager));
     }
 
     public abstract string SectionKey { get; }
@@ -35,7 +36,11 @@ public abstract class ConfigSectionEditorBase : IConfigSectionEditor, IDisposabl
 
     public virtual void OnConfigurationChanged(ConfigurationChangedEventArgs args)
     {
-        if ( args.Type is ConfigurationChangedEventArgs.ChangeType.Saved or ConfigurationChangedEventArgs.ChangeType.Reloaded )
+        if (
+            args.Type
+            is ConfigurationChangedEventArgs.ChangeType.Saved
+                or ConfigurationChangedEventArgs.ChangeType.Reloaded
+        )
         {
             _hasUnsavedChanges = false;
         }
@@ -49,7 +54,7 @@ public abstract class ConfigSectionEditorBase : IConfigSectionEditor, IDisposabl
 
     protected void MarkAsChanged()
     {
-        if ( !_hasUnsavedChanges )
+        if (!_hasUnsavedChanges)
         {
             _hasUnsavedChanges = true;
             StateManager.MarkAsChanged(SectionKey);

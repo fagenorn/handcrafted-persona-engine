@@ -1,17 +1,26 @@
 ﻿using System.Diagnostics;
 using System.Drawing;
 using System.Numerics;
-
 using Hexa.NET.ImGui;
 using Hexa.NET.ImGui.Widgets;
-
 using PersonaEngine.Lib.Configuration;
 
 namespace PersonaEngine.Lib.UI.GUI;
 
 public class RouletteWheelEditor : ConfigSectionEditorBase
 {
-    private readonly string[] _anchorOptions = { "TopLeft", "TopCenter", "TopRight", "MiddleLeft", "MiddleCenter", "MiddleRight", "BottomLeft", "BottomCenter", "BottomRight" };
+    private readonly string[] _anchorOptions =
+    {
+        "TopLeft",
+        "TopCenter",
+        "TopRight",
+        "MiddleLeft",
+        "MiddleCenter",
+        "MiddleRight",
+        "BottomLeft",
+        "BottomCenter",
+        "BottomRight",
+    };
 
     private readonly FontProvider _fontProvider;
 
@@ -74,14 +83,15 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
     private float _yPosition = 0.5f;
 
     public RouletteWheelEditor(
-        IUiConfigurationManager     configManager,
-        IEditorStateManager         stateManager,
-        IUiThemeManager             themeManager,
+        IUiConfigurationManager configManager,
+        IEditorStateManager stateManager,
+        IUiThemeManager themeManager,
         RouletteWheel.RouletteWheel wheel,
-        FontProvider                fontProvider)
+        FontProvider fontProvider
+    )
         : base(configManager, stateManager)
     {
-        _wheel        = wheel;
+        _wheel = wheel;
         _themeManager = themeManager;
         _fontProvider = fontProvider;
 
@@ -93,11 +103,14 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
 
     public override string DisplayName => "Roulette Configuration";
 
-    public override void Initialize() { LoadAvailableFontsAsync(); }
+    public override void Initialize()
+    {
+        LoadAvailableFontsAsync();
+    }
 
     private async void Spin(int? targetSection = null)
     {
-        if ( _wheel.IsSpinning )
+        if (_wheel.IsSpinning)
         {
             return;
         }
@@ -116,7 +129,7 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
         {
             Debug.WriteLine($"Error during spinning: {ex.Message}");
 
-            if ( _spinningOperation != null )
+            if (_spinningOperation != null)
             {
                 StateManager.ClearActiveOperation(_spinningOperation.Id);
                 _spinningOperation = null;
@@ -152,30 +165,30 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
 
     private void LoadConfiguration(RouletteWheelOptions config)
     {
-        _width                 = config.Width;
-        _height                = config.Height;
-        _fontName              = config.Font;
-        _fontSize              = config.FontSize;
-        _textScale             = config.TextScale;
-        _textColor             = config.TextColor;
-        _strokeWidth           = config.TextStroke;
-        _useAdaptiveSize       = config.AdaptiveText;
+        _width = config.Width;
+        _height = config.Height;
+        _fontName = config.Font;
+        _fontSize = config.FontSize;
+        _textScale = config.TextScale;
+        _textColor = config.TextColor;
+        _strokeWidth = config.TextStroke;
+        _useAdaptiveSize = config.AdaptiveText;
         _radialTextOrientation = config.RadialTextOrientation;
-        _sectionLabels         = config.SectionLabels;
-        _spinDuration          = config.SpinDuration;
-        _minRotations          = config.MinRotations;
-        _animateToggle         = config.AnimateToggle;
-        _animationDuration     = config.AnimationDuration;
-        _defaultEnabled        = config.Enabled;
+        _sectionLabels = config.SectionLabels;
+        _spinDuration = config.SpinDuration;
+        _minRotations = config.MinRotations;
+        _animateToggle = config.AnimateToggle;
+        _animationDuration = config.AnimationDuration;
+        _defaultEnabled = config.Enabled;
     }
 
     public override void Render()
     {
         var availWidth = ImGui.GetContentRegionAvail().X;
 
-        if ( ImGui.BeginTabBar("RouletteConfigTabs") )
+        if (ImGui.BeginTabBar("RouletteConfigTabs"))
         {
-            if ( ImGui.BeginTabItem("Basic Settings") )
+            if (ImGui.BeginTabItem("Basic Settings"))
             {
                 RenderTestingSection();
                 RenderBasicSettingsTab();
@@ -196,25 +209,25 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
         ImGui.Spacing();
 
         ImGui.SetCursorPosX(availWidth * .5f * .5f);
-        if ( ImGui.Button("Reset", new Vector2(150, 0)) )
+        if (ImGui.Button("Reset", new Vector2(150, 0)))
         {
             ResetToDefaults();
         }
 
         ImGui.SameLine(0, 10);
 
-        if ( ImGui.IsItemHovered() )
+        if (ImGui.IsItemHovered())
         {
             ImGui.SetTooltip("Reset all Wheel settings to default values");
         }
 
-        if ( !StateManager.HasUnsavedChanges )
+        if (!StateManager.HasUnsavedChanges)
         {
             ImGui.BeginDisabled();
             ImGui.Button("Save", new Vector2(150, 0));
             ImGui.EndDisabled();
         }
-        else if ( ImGui.Button("Save", new Vector2(150, 0)) )
+        else if (ImGui.Button("Save", new Vector2(150, 0)))
         {
             SaveConfiguration();
         }
@@ -224,7 +237,7 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
     {
         var availWidth = ImGui.GetContentRegionAvail().X;
         bool widthChanged,
-             heightChanged;
+            heightChanged;
 
         ImGui.Spacing();
         ImGui.SeparatorText("Wheel Dimensions");
@@ -232,7 +245,7 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
 
         ImGui.SetNextItemWidth(125);
         widthChanged = ImGui.InputInt("Width##WheelWidth", ref _width, 10);
-        if ( widthChanged )
+        if (widthChanged)
         {
             _width = Math.Max(50, _width); // Minimum width
         }
@@ -240,23 +253,23 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
         ImGui.SameLine();
 
         ImGui.SetCursorPosX(availWidth - 175);
-        if ( ImGui.Button("Equal Dimensions", new Vector2(175, 0)) )
+        if (ImGui.Button("Equal Dimensions", new Vector2(175, 0)))
         {
-            var size         = Math.Max(_width, _height);
+            var size = Math.Max(_width, _height);
             _width = _height = size;
             _wheel.SetDiameter(size);
-            widthChanged  = true;
+            widthChanged = true;
             heightChanged = true;
         }
 
         ImGui.SetNextItemWidth(125);
         heightChanged = ImGui.InputInt("Height##WheelHeight", ref _height, 10);
-        if ( heightChanged )
+        if (heightChanged)
         {
             _height = Math.Max(50, _height); // Minimum height
         }
 
-        if ( widthChanged || heightChanged )
+        if (widthChanged || heightChanged)
         {
             UpdateConfiguration();
         }
@@ -264,37 +277,37 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
 
     private void RenderSectionsTab()
     {
-        var availWidth      = ImGui.GetContentRegionAvail().X;
+        var availWidth = ImGui.GetContentRegionAvail().X;
         var sectionsChanged = false;
 
         ImGui.Spacing();
         ImGui.SeparatorText("Wheel Sections");
         ImGui.Spacing();
 
-        if ( _sectionLabels.Length > 0 )
+        if (_sectionLabels.Length > 0)
         {
             ImGui.BeginChild("SectionsList", new Vector2(0, 0), ImGuiChildFlags.AutoResizeY);
 
-            for ( var i = 0; i < _sectionLabels.Length; i++ )
+            for (var i = 0; i < _sectionLabels.Length; i++)
             {
                 ImGui.PushID(i);
 
                 var tempLabel = _sectionLabels[i];
                 ImGui.SetNextItemWidth(availWidth - 10 - 30);
-                if ( ImGui.InputText("##SectionLabel", ref tempLabel, 128) )
+                if (ImGui.InputText("##SectionLabel", ref tempLabel, 128))
                 {
                     _sectionLabels[i] = tempLabel;
-                    sectionsChanged   = true;
+                    sectionsChanged = true;
                 }
 
                 ImGui.SameLine(0, 10);
 
-                if ( ImGui.Button("X##RemoveSection" + i, new Vector2(30, 0)) )
+                if (ImGui.Button("X##RemoveSection" + i, new Vector2(30, 0)))
                 {
                     var newLabels = new string[_sectionLabels.Length - 1];
                     Array.Copy(_sectionLabels, 0, newLabels, 0, i);
                     Array.Copy(_sectionLabels, i + 1, newLabels, i, _sectionLabels.Length - i - 1);
-                    _sectionLabels  = newLabels;
+                    _sectionLabels = newLabels;
                     sectionsChanged = true;
                 }
 
@@ -318,22 +331,22 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
 
         ImGui.SameLine(0, 10);
 
-        if ( ImGui.Button("Add", new Vector2(80, 0)) && !string.IsNullOrWhiteSpace(_newSectionLabel) )
+        if (ImGui.Button("Add", new Vector2(80, 0)) && !string.IsNullOrWhiteSpace(_newSectionLabel))
         {
             // Add the new section
             var newLabels = new string[(_sectionLabels?.Length ?? 0) + 1];
-            if ( _sectionLabels is { Length: > 0 } )
+            if (_sectionLabels is { Length: > 0 })
             {
                 Array.Copy(_sectionLabels, newLabels, _sectionLabels.Length);
             }
 
-            newLabels[^1]    = _newSectionLabel;
-            _sectionLabels   = newLabels;
+            newLabels[^1] = _newSectionLabel;
+            _sectionLabels = newLabels;
             _newSectionLabel = string.Empty;
-            sectionsChanged  = true;
+            sectionsChanged = true;
         }
 
-        if ( sectionsChanged )
+        if (sectionsChanged)
         {
             UpdateConfiguration();
         }
@@ -341,7 +354,7 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
 
     private void RenderStyleTab()
     {
-        var availWidth    = ImGui.GetContentRegionAvail().X;
+        var availWidth = ImGui.GetContentRegionAvail().X;
         var configChanged = false;
 
         ImGui.Spacing();
@@ -352,7 +365,7 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
         {
             ImGui.SetNextItemWidth(availWidth - 120);
 
-            if ( _loadingFonts )
+            if (_loadingFonts)
             {
                 ImGui.BeginDisabled();
                 var loadingText = "Loading fonts...";
@@ -362,24 +375,32 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
             else
             {
                 var fontChanged = false;
-                if ( ImGui.BeginCombo("##Font", string.IsNullOrEmpty(_fontName) ? "<Select font>" : _fontName) )
+                if (
+                    ImGui.BeginCombo(
+                        "##Font",
+                        string.IsNullOrEmpty(_fontName) ? "<Select font>" : _fontName
+                    )
+                )
                 {
-                    if ( _availableFonts.Count == 0 )
+                    if (_availableFonts.Count == 0)
                     {
-                        ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "No fonts available");
+                        ImGui.TextColored(
+                            new Vector4(0.7f, 0.7f, 0.7f, 1.0f),
+                            "No fonts available"
+                        );
                     }
                     else
                     {
-                        foreach ( var font in _availableFonts )
+                        foreach (var font in _availableFonts)
                         {
                             var isSelected = font == _fontName;
-                            if ( ImGui.Selectable(font, isSelected) )
+                            if (ImGui.Selectable(font, isSelected))
                             {
-                                _fontName   = font;
+                                _fontName = font;
                                 fontChanged = true;
                             }
 
-                            if ( isSelected )
+                            if (isSelected)
                             {
                                 ImGui.SetItemDefaultFocus();
                             }
@@ -394,12 +415,12 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
 
             ImGui.SameLine(0, 10);
 
-            if ( ImGui.Button("Refresh", new Vector2(-1, 0)) )
+            if (ImGui.Button("Refresh", new Vector2(-1, 0)))
             {
                 LoadAvailableFontsAsync();
             }
 
-            if ( ImGui.IsItemHovered() )
+            if (ImGui.IsItemHovered())
             {
                 ImGui.SetTooltip("Refresh available fonts list");
             }
@@ -409,7 +430,7 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
 
         // ImGui.SetCursorPosX((availWidth - 110f - 200f - 110f - 200f) * .5f);
         // Create a 2-column table for consistent alignment
-        if ( ImGui.BeginTable("StyleProperties", 4, ImGuiTableFlags.SizingFixedFit) )
+        if (ImGui.BeginTable("StyleProperties", 4, ImGuiTableFlags.SizingFixedFit))
         {
             ImGui.TableSetupColumn("1", 110f);
             ImGui.TableSetupColumn("2", 200f);
@@ -423,9 +444,9 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
             ImGui.Text("Font Size");
             ImGui.TableNextColumn();
             var fontSizeChanged = ImGui.InputInt("##FontSize", ref _fontSize, 1);
-            if ( fontSizeChanged )
+            if (fontSizeChanged)
             {
-                _fontSize     = Math.Clamp(_fontSize, 1, 72);
+                _fontSize = Math.Clamp(_fontSize, 1, 72);
                 configChanged = true;
             }
 
@@ -443,12 +464,22 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
             ImGui.AlignTextToFramePadding();
             ImGui.Text("Color");
             ImGui.TableNextColumn();
-            var color        = ColorTranslator.FromHtml(_textColor);
-            var colorVec     = new Vector4(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
-            var colorChanged = ImGui.ColorEdit4("##Color", ref colorVec, ImGuiColorEditFlags.DisplayHex);
-            if ( colorChanged )
+            var color = ColorTranslator.FromHtml(_textColor);
+            var colorVec = new Vector4(
+                color.R / 255f,
+                color.G / 255f,
+                color.B / 255f,
+                color.A / 255f
+            );
+            var colorChanged = ImGui.ColorEdit4(
+                "##Color",
+                ref colorVec,
+                ImGuiColorEditFlags.DisplayHex
+            );
+            if (colorChanged)
             {
-                _textColor    = $"#{(int)(colorVec.W * 255):X2}{(int)(colorVec.X * 255):X2}{(int)(colorVec.Y * 255):X2}{(int)(colorVec.Z * 255):X2}";
+                _textColor =
+                    $"#{(int)(colorVec.W * 255):X2}{(int)(colorVec.X * 255):X2}{(int)(colorVec.Y * 255):X2}{(int)(colorVec.Z * 255):X2}";
                 configChanged = true;
             }
 
@@ -458,9 +489,9 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
             ImGui.Text("Stroke Width");
             ImGui.TableNextColumn();
             var strokeChanged = ImGui.InputInt("##StrokeWidth", ref _strokeWidth, 1);
-            if ( strokeChanged )
+            if (strokeChanged)
             {
-                _strokeWidth  = Math.Clamp(_strokeWidth, 0, 5);
+                _strokeWidth = Math.Clamp(_strokeWidth, 0, 5);
                 configChanged = true;
             }
 
@@ -470,7 +501,7 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
         ImGui.Spacing();
 
         // Checkbox options in two columns
-        var checkboxWidth    = availWidth / 2 - 10;
+        var checkboxWidth = availWidth / 2 - 10;
         var adaptSizeChanged = ImGui.Checkbox("Adaptive Size", ref _useAdaptiveSize);
         ImGui.SameLine(checkboxWidth + 43);
         var radialOrienChanged = ImGui.Checkbox("Radial Orientation", ref _radialTextOrientation);
@@ -478,7 +509,7 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
         configChanged |= adaptSizeChanged | radialOrienChanged;
 
         // Apply configuration changes if needed
-        if ( configChanged )
+        if (configChanged)
         {
             UpdateConfiguration();
         }
@@ -486,21 +517,26 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
 
     private void RenderPositioningTab()
     {
-        if ( ImGui.BeginTabItem("Position & Rotation") )
+        if (ImGui.BeginTabItem("Position & Rotation"))
         {
             ImGui.Text("Wheel Position");
             ImGui.Separator();
 
             // Position method selector
-            ImGui.Combo("Position Method", ref _selectedPositionOption, _positionOptions, _positionOptions.Length);
+            ImGui.Combo(
+                "Position Method",
+                ref _selectedPositionOption,
+                _positionOptions,
+                _positionOptions.Length
+            );
 
             ImGui.Spacing();
 
             // Different UI based on position method
-            switch ( _selectedPositionOption )
+            switch (_selectedPositionOption)
             {
                 case 0: // Center
-                    if ( ImGui.Button("Center in Viewport", new Vector2(200, 0)) )
+                    if (ImGui.Button("Center in Viewport", new Vector2(200, 0)))
                     {
                         _wheel.CenterInViewport();
                     }
@@ -514,7 +550,7 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X * 0.4f);
                     ImGui.SliderFloat("Y Position %", ref _yPosition, 0.0f, 1.0f, "%.2f");
 
-                    if ( ImGui.Button("Apply Position", new Vector2(200, 0)) )
+                    if (ImGui.Button("Apply Position", new Vector2(200, 0)))
                     {
                         _wheel.PositionByPercentage(_xPosition, _yPosition);
                     }
@@ -522,16 +558,21 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
                     break;
 
                 case 2: // Anchor Position
-                    ImGui.Combo("Anchor Point", ref _selectedAnchor, _anchorOptions, _anchorOptions.Length);
+                    ImGui.Combo(
+                        "Anchor Point",
+                        ref _selectedAnchor,
+                        _anchorOptions,
+                        _anchorOptions.Length
+                    );
 
-                    if ( ImGui.Button("Apply Anchor", new Vector2(200, 0)) )
+                    if (ImGui.Button("Apply Anchor", new Vector2(200, 0)))
                     {
                         // This would need a conversion from index to the actual ViewportAnchor enum
                         // For now, just showing the concept
                         // _wheel.PositionAt((ViewportAnchor)_selectedAnchor, new Vector2(0, 0));
 
                         // Simple implementation for demo purposes:
-                        switch ( _selectedAnchor )
+                        switch (_selectedAnchor)
                         {
                             case 0:
                                 _wheel.PositionByPercentage(0.0f, 0.0f);
@@ -584,13 +625,15 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
 
             // Rotation slider
             ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X * 0.7f);
-            if ( ImGui.SliderFloat("Rotation (degrees)", ref _rotationDegrees, 0.0f, 360.0f, "%.1f°") )
+            if (
+                ImGui.SliderFloat("Rotation (degrees)", ref _rotationDegrees, 0.0f, 360.0f, "%.1f°")
+            )
             {
                 _wheel.RotateByDegrees(_rotationDegrees - _wheel.RotationDegrees);
             }
 
             // Quick rotation buttons
-            if ( ImGui.Button("+45°", new Vector2(60, 0)) )
+            if (ImGui.Button("+45°", new Vector2(60, 0)))
             {
                 _wheel.RotateByDegrees(45);
                 _rotationDegrees = _wheel.RotationDegrees;
@@ -598,7 +641,7 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
 
             ImGui.SameLine();
 
-            if ( ImGui.Button("+90°", new Vector2(60, 0)) )
+            if (ImGui.Button("+90°", new Vector2(60, 0)))
             {
                 _wheel.RotateByDegrees(90);
                 _rotationDegrees = _wheel.RotationDegrees;
@@ -606,7 +649,7 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
 
             ImGui.SameLine();
 
-            if ( ImGui.Button("-45°", new Vector2(60, 0)) )
+            if (ImGui.Button("-45°", new Vector2(60, 0)))
             {
                 _wheel.RotateByDegrees(-45);
                 _rotationDegrees = _wheel.RotationDegrees;
@@ -614,7 +657,7 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
 
             ImGui.SameLine();
 
-            if ( ImGui.Button("-90°", new Vector2(60, 0)) )
+            if (ImGui.Button("-90°", new Vector2(60, 0)))
             {
                 _wheel.RotateByDegrees(-90);
                 _rotationDegrees = _wheel.RotationDegrees;
@@ -634,18 +677,36 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
 
         // Spin duration
         ImGui.SetNextItemWidth(125);
-        var spinDurationChanged = ImGui.SliderFloat("Spin Duration (sec)", ref _spinDuration, 1.0f, 10.0f, "%.1f");
+        var spinDurationChanged = ImGui.SliderFloat(
+            "Spin Duration (sec)",
+            ref _spinDuration,
+            1.0f,
+            10.0f,
+            "%.1f"
+        );
 
         // Min rotations
         ImGui.SetNextItemWidth(125);
-        var minRotChanged = ImGui.SliderFloat("Min Rotations", ref _minRotations, 1.0f, 10.0f, "%.0f");
+        var minRotChanged = ImGui.SliderFloat(
+            "Min Rotations",
+            ref _minRotations,
+            1.0f,
+            10.0f,
+            "%.0f"
+        );
 
         ImGui.Spacing();
         ImGui.SeparatorText("Animation Settings");
         ImGui.Spacing();
 
         ImGui.SetNextItemWidth(125);
-        var aniDurChanged = ImGui.SliderFloat("Animation Duration (sec)", ref _animationDuration, 0.1f, 2.0f, "%.1f");
+        var aniDurChanged = ImGui.SliderFloat(
+            "Animation Duration (sec)",
+            ref _animationDuration,
+            0.1f,
+            2.0f,
+            "%.1f"
+        );
 
         ImGui.SameLine();
         ImGui.SetCursorPosX(availWidth - 200);
@@ -659,7 +720,13 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
         ImGui.SetNextItemWidth(200);
         var defaultEnabledChanged = ImGui.Checkbox("Default Enabled", ref _defaultEnabled);
 
-        if ( spinDurationChanged || minRotChanged || aniDurChanged || aniShowHideChanged || defaultEnabledChanged )
+        if (
+            spinDurationChanged
+            || minRotChanged
+            || aniDurChanged
+            || aniShowHideChanged
+            || defaultEnabledChanged
+        )
         {
             UpdateConfiguration();
         }
@@ -673,20 +740,25 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
         ImGui.SeparatorText("Playground");
         ImGui.Spacing();
 
-        if ( _sectionLabels.Length > 0 )
+        if (_sectionLabels.Length > 0)
         {
             ImGui.SetNextItemWidth(availWidth - 155);
-            ImGui.Combo("##TargetSection", ref _selectedSection, _sectionLabels, _sectionLabels.Length);
+            ImGui.Combo(
+                "##TargetSection",
+                ref _selectedSection,
+                _sectionLabels,
+                _sectionLabels.Length
+            );
 
             ImGui.SameLine(0, 5);
 
-            if ( _wheel.IsSpinning )
+            if (_wheel.IsSpinning)
             {
                 ImGui.BeginDisabled();
                 ImGui.Button("Spin to Selected", new Vector2(150, 0));
                 ImGui.EndDisabled();
             }
-            else if ( ImGui.Button("Spin to Selected", new Vector2(150, 0)) )
+            else if (ImGui.Button("Spin to Selected", new Vector2(150, 0)))
             {
                 Spin(_selectedSection);
             }
@@ -694,39 +766,43 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
             ImGui.Spacing();
             ImGui.SetCursorPosX(availWidth - 150);
 
-            if ( _wheel.IsSpinning )
+            if (_wheel.IsSpinning)
             {
                 ImGui.BeginDisabled();
                 ImGui.Button("Spin Random", new Vector2(150, 0));
                 ImGui.EndDisabled();
             }
-            else if ( ImGui.Button("Spin Random", new Vector2(150, 0)) )
+            else if (ImGui.Button("Spin Random", new Vector2(150, 0)))
             {
                 Spin();
             }
 
             ImGui.SameLine(-1, 0);
 
-            if ( _wheel.IsEnabled )
+            if (_wheel.IsEnabled)
             {
-                if ( ImGui.Button("Hide Wheel", new Vector2(155, 0)) )
+                if (ImGui.Button("Hide Wheel", new Vector2(155, 0)))
                 {
                     _wheel.Disable();
                 }
             }
             else
             {
-                if ( ImGui.Button("Show Wheel", new Vector2(155, 0)) )
+                if (ImGui.Button("Show Wheel", new Vector2(155, 0)))
                 {
                     _wheel.Enable();
                 }
             }
 
-            if ( _wheel.IsSpinning )
+            if (_wheel.IsSpinning)
             {
                 ImGui.SameLine(0, 10);
                 ImGui.SetNextItemWidth(availWidth - 155 - 150 - 10 - 5);
-                ImGui.ProgressBar(_spinningOperation?.Progress ?? 0, new Vector2(0, 0), "Spinning...");
+                ImGui.ProgressBar(
+                    _spinningOperation?.Progress ?? 0,
+                    new Vector2(0, 0),
+                    "Spinning..."
+                );
             }
         }
         else
@@ -739,24 +815,25 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
 
     private void UpdateConfiguration()
     {
-        var updatedConfig = _currentConfig with {
-                                                    Font = _fontName,
-                                                    FontSize = _fontSize,
-                                                    TextColor = _textColor,
-                                                    TextScale = _textScale,
-                                                    TextStroke = _strokeWidth,
-                                                    AdaptiveText = _useAdaptiveSize,
-                                                    RadialTextOrientation = _radialTextOrientation,
-                                                    SectionLabels = _sectionLabels,
-                                                    SpinDuration = _spinDuration,
-                                                    MinRotations = _minRotations,
-                                                    Enabled = _defaultEnabled,
-                                                    Width = _width,
-                                                    Height = _height,
-                                                    RotationDegrees = _rotationDegrees,
-                                                    AnimateToggle = _animateToggle,
-                                                    AnimationDuration = _animationDuration
-                                                };
+        var updatedConfig = _currentConfig with
+        {
+            Font = _fontName,
+            FontSize = _fontSize,
+            TextColor = _textColor,
+            TextScale = _textScale,
+            TextStroke = _strokeWidth,
+            AdaptiveText = _useAdaptiveSize,
+            RadialTextOrientation = _radialTextOrientation,
+            SectionLabels = _sectionLabels,
+            SpinDuration = _spinDuration,
+            MinRotations = _minRotations,
+            Enabled = _defaultEnabled,
+            Width = _width,
+            Height = _height,
+            RotationDegrees = _rotationDegrees,
+            AnimateToggle = _animateToggle,
+            AnimationDuration = _animationDuration,
+        };
 
         _currentConfig = updatedConfig;
         ConfigManager.UpdateConfiguration(updatedConfig, SectionKey);
@@ -766,7 +843,7 @@ public class RouletteWheelEditor : ConfigSectionEditorBase
 
     public override void Update(float deltaTime)
     {
-        if ( _spinningOperation != null && _wheel.IsSpinning )
+        if (_spinningOperation != null && _wheel.IsSpinning)
         {
             _spinningOperation.Progress = _wheel.Progress;
         }

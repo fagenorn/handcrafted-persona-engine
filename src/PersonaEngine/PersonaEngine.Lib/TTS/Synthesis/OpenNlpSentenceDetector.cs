@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Logging;
-
 using OpenNLP.Tools.SentenceDetect;
 
 namespace PersonaEngine.Lib.TTS.Synthesis;
@@ -17,7 +16,7 @@ public class OpenNlpSentenceDetector : IMlSentenceDetector
 
     public OpenNlpSentenceDetector(string modelPath, ILogger<OpenNlpSentenceDetector> logger)
     {
-        if ( string.IsNullOrEmpty(modelPath) )
+        if (string.IsNullOrEmpty(modelPath))
         {
             throw new ArgumentException("Model path cannot be null or empty", nameof(modelPath));
         }
@@ -27,7 +26,10 @@ public class OpenNlpSentenceDetector : IMlSentenceDetector
         try
         {
             _detector = new EnglishMaximumEntropySentenceDetector(modelPath);
-            _logger.LogInformation("Initialized OpenNLP sentence detector from {ModelPath}", modelPath);
+            _logger.LogInformation(
+                "Initialized OpenNLP sentence detector from {ModelPath}",
+                modelPath
+            );
         }
         catch (Exception ex)
         {
@@ -42,7 +44,7 @@ public class OpenNlpSentenceDetector : IMlSentenceDetector
     /// </summary>
     public IReadOnlyList<string> Detect(string text)
     {
-        if ( string.IsNullOrEmpty(text) )
+        if (string.IsNullOrEmpty(text))
         {
             return Array.Empty<string>();
         }
@@ -63,7 +65,7 @@ public class OpenNlpSentenceDetector : IMlSentenceDetector
 
     public void Dispose()
     {
-        if ( _disposed )
+        if (_disposed)
         {
             return;
         }

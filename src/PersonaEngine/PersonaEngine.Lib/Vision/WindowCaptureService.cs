@@ -1,21 +1,21 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-
 using PersonaEngine.Lib.Configuration;
-
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
-
 using uniffi.rust_lib;
 
 namespace PersonaEngine.Lib.Vision;
 
 public class CaptureFrameEventArgs : EventArgs
 {
-    public CaptureFrameEventArgs(ReadOnlyMemory<byte> frameData) { FrameData = frameData; }
+    public CaptureFrameEventArgs(ReadOnlyMemory<byte> frameData)
+    {
+        FrameData = frameData;
+    }
 
     public ReadOnlyMemory<byte> FrameData { get; }
 }
@@ -32,8 +32,10 @@ public class WindowCaptureService : IDisposable
 
     private Task? _captureTask;
 
-    public WindowCaptureService(IOptions<AvatarAppConfig> config, ILogger<WindowCaptureService>? logger = null)
-
+    public WindowCaptureService(
+        IOptions<AvatarAppConfig> config,
+        ILogger<WindowCaptureService>? logger = null
+    )
     {
         _config = config.Value.Vision ?? throw new ArgumentNullException(nameof(config));
         _logger = logger ?? NullLogger<WindowCaptureService>.Instance;
@@ -64,7 +66,7 @@ public class WindowCaptureService : IDisposable
     {
         lock (_lock)
         {
-            if ( _captureTask != null )
+            if (_captureTask != null)
             {
                 return Task.CompletedTask;
             }
@@ -79,7 +81,7 @@ public class WindowCaptureService : IDisposable
     {
         lock (_lock)
         {
-            if ( _captureTask == null )
+            if (_captureTask == null)
             {
                 return;
             }
@@ -106,17 +108,17 @@ public class WindowCaptureService : IDisposable
 
     private async Task CaptureLoop(CancellationToken token)
     {
-        while ( !token.IsCancellationRequested )
+        while (!token.IsCancellationRequested)
         {
             try
             {
-                if ( OnCaptureFrame == null )
+                if (OnCaptureFrame == null)
                 {
                     return;
                 }
 
                 var result = RustLibMethods.CaptureWindowByTitle(_config.WindowTitle);
-                if ( result.image != null )
+                if (result.image != null)
                 {
                     var imageData = await ProcessImage(result, token);
                     HandleCaptureFrame(imageData);
@@ -142,19 +144,22 @@ public class WindowCaptureService : IDisposable
         }
     }
 
-    private async Task<ReadOnlyMemory<byte>> ProcessImage(ImageData imageData, CancellationToken token)
+    private async Task<ReadOnlyMemory<byte>> ProcessImage(
+        ImageData imageData,
+        CancellationToken token
+    )
     {
         var minPixels = _config.CaptureMinPixels;
         var maxPixels = _config.CaptureMaxPixels;
 
-        var       width         = (int)imageData.width;
-        var       height        = (int)imageData.height;
-        using var image         = Image.LoadPixelData<Rgba32>(imageData.image, width, height);
-        var       currentPixels = width * height;
-        if ( currentPixels < minPixels || currentPixels > maxPixels )
+        var width = (int)imageData.width;
+        var height = (int)imageData.height;
+        using var image = Image.LoadPixelData<Rgba32>(imageData.image, width, height);
+        var currentPixels = width * height;
+        if (currentPixels < minPixels || currentPixels > maxPixels)
         {
             double scaleFactor;
-            if ( currentPixels < minPixels )
+            if (currentPixels < minPixels)
             {
                 scaleFactor = Math.Sqrt((double)minPixels / currentPixels);
             }
@@ -163,7 +168,7 @@ public class WindowCaptureService : IDisposable
                 scaleFactor = Math.Sqrt((double)maxPixels / currentPixels);
             }
 
-            var newWidth  = (int)(width * scaleFactor);
+            var newWidth = (int)(width * scaleFactor);
             var newHeight = (int)(height * scaleFactor);
 
             image.Mutate(x => x.Resize(newWidth, newHeight));

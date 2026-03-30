@@ -1,7 +1,5 @@
 ﻿using System.Text.RegularExpressions;
-
 using Microsoft.Extensions.Logging;
-
 using OpenNLP.Tools.PosTagger;
 using OpenNLP.Tools.Tokenize;
 
@@ -24,7 +22,7 @@ public partial class OpenNlpPosTagger : IPosTagger
 
     public OpenNlpPosTagger(string modelPath, ILogger<OpenNlpPosTagger> logger)
     {
-        if ( string.IsNullOrEmpty(modelPath) )
+        if (string.IsNullOrEmpty(modelPath))
         {
             throw new ArgumentException("Model path cannot be null or empty", nameof(modelPath));
         }
@@ -48,9 +46,12 @@ public partial class OpenNlpPosTagger : IPosTagger
     /// <summary>
     ///     Tags parts of speech in text using OpenNLP with spaCy-like currency handling
     /// </summary>
-    public Task<IReadOnlyList<PosToken>> TagAsync(string text, CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<PosToken>> TagAsync(
+        string text,
+        CancellationToken cancellationToken = default
+    )
     {
-        if ( string.IsNullOrEmpty(text) )
+        if (string.IsNullOrEmpty(text))
         {
             return Task.FromResult<IReadOnlyList<PosToken>>(Array.Empty<PosToken>());
         }
@@ -71,47 +72,64 @@ public partial class OpenNlpPosTagger : IPosTagger
             var tags = _posTagger.Tag(tokens);
 
             // Post-process to assign "$" tag to currency symbols
-            for ( var i = 0; i < tokens.Length; i++ )
+            for (var i = 0; i < tokens.Length; i++)
             {
-                if ( _currencySymbolRegex.IsMatch(tokens[i]) )
+                if (_currencySymbolRegex.IsMatch(tokens[i]))
                 {
                     tags[i] = "$"; // Assign "$" tag to currency symbols (spaCy-like behavior)
                 }
             }
 
             // Build result tokens with whitespace
-            var result          = new List<PosToken>();
+            var result = new List<PosToken>();
             var currentPosition = 0;
 
-            for ( var i = 0; i < tokens.Length; i++ )
+            for (var i = 0; i < tokens.Length; i++)
             {
                 var token = tokens[i];
-                var tag   = tags[i];
+                var tag = tags[i];
 
                 // Find token position in processed text
-                var tokenPosition = processedText.IndexOf(token, currentPosition, StringComparison.Ordinal);
+                var tokenPosition = processedText.IndexOf(
+                    token,
+                    currentPosition,
+                    StringComparison.Ordinal
+                );
 
                 // Extract whitespace between tokens
                 var whitespace = "";
-                if ( i < tokens.Length - 1 )
+                if (i < tokens.Length - 1)
                 {
-                    var nextTokenStart = processedText.IndexOf(tokens[i + 1], tokenPosition + token.Length, StringComparison.Ordinal);
-                    if ( nextTokenStart >= 0 )
+                    var nextTokenStart = processedText.IndexOf(
+                        tokens[i + 1],
+                        tokenPosition + token.Length,
+                        StringComparison.Ordinal
+                    );
+                    if (nextTokenStart >= 0)
                     {
                         whitespace = processedText.Substring(
-                                                             tokenPosition + token.Length,
-                                                             nextTokenStart - (tokenPosition + token.Length));
+                            tokenPosition + token.Length,
+                            nextTokenStart - (tokenPosition + token.Length)
+                        );
                     }
                 }
                 else
                 {
                     // Last token - get any remaining whitespace
-                    whitespace = tokenPosition + token.Length < processedText.Length
-                                     ? processedText[(tokenPosition + token.Length)..]
-                                     : "";
+                    whitespace =
+                        tokenPosition + token.Length < processedText.Length
+                            ? processedText[(tokenPosition + token.Length)..]
+                            : "";
                 }
 
-                result.Add(new PosToken { Text = token, PartOfSpeech = tag, IsWhitespace = whitespace.Contains(" ") });
+                result.Add(
+                    new PosToken
+                    {
+                        Text = token,
+                        PartOfSpeech = tag,
+                        IsWhitespace = whitespace.Contains(" "),
+                    }
+                );
 
                 currentPosition = tokenPosition + token.Length;
             }
@@ -134,7 +152,7 @@ public partial class OpenNlpPosTagger : IPosTagger
 
     public void Dispose()
     {
-        if ( _disposed )
+        if (_disposed)
         {
             return;
         }
@@ -145,5 +163,6 @@ public partial class OpenNlpPosTagger : IPosTagger
     [GeneratedRegex(@"([\$\€\£\¥\₹])(\d)")]
     private static partial Regex CurrencyWithNumRegex();
 
-    [GeneratedRegex(@"^[\$\€\£\¥\₹]$")] private static partial Regex CurrencyRegex();
+    [GeneratedRegex(@"^[\$\€\£\¥\₹]$")]
+    private static partial Regex CurrencyRegex();
 }

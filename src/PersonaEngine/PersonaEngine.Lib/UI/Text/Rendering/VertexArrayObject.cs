@@ -1,5 +1,4 @@
 ﻿using PersonaEngine.Lib.UI.Common;
-
 using Silk.NET.OpenGL;
 
 namespace PersonaEngine.Lib.UI.Text.Rendering;
@@ -16,7 +15,7 @@ public class VertexArrayObject : IDisposable
     {
         _gl = glApi;
 
-        if ( stride <= 0 )
+        if (stride <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(stride));
         }
@@ -39,10 +38,23 @@ public class VertexArrayObject : IDisposable
         _gl.CheckError();
     }
 
-    public unsafe void VertexAttribPointer(int location, int size, VertexAttribPointerType type, bool normalized, int offset)
+    public unsafe void VertexAttribPointer(
+        int location,
+        int size,
+        VertexAttribPointerType type,
+        bool normalized,
+        int offset
+    )
     {
         _gl.EnableVertexAttribArray((uint)location);
-        _gl.VertexAttribPointer((uint)location, size, type, normalized, (uint)_stride, (void*)offset);
+        _gl.VertexAttribPointer(
+            (uint)location,
+            size,
+            type,
+            normalized,
+            (uint)_stride,
+            (void*)offset
+        );
         _gl.CheckError();
     }
 }

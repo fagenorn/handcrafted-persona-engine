@@ -7,7 +7,7 @@ public class SubtitleLine
 {
     public SubtitleLine(int segmentIndex, int lineIndexInSegment)
     {
-        SegmentIndex       = segmentIndex;
+        SegmentIndex = segmentIndex;
         LineIndexInSegment = lineIndexInSegment;
     }
 
@@ -31,6 +31,6 @@ public class SubtitleLine
     {
         Words.Clear();
         TotalWidth = 0;
-        BaselineY  = 0;
+        BaselineY = 0;
     }
 }

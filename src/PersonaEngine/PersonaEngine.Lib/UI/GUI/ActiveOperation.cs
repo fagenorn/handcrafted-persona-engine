@@ -7,9 +7,9 @@ public class ActiveOperation
 {
     public ActiveOperation(string id, string name)
     {
-        Id                 = id;
-        Name               = name;
-        Progress           = 0f;
+        Id = id;
+        Name = name;
+        Progress = 0f;
         CancellationSource = new CancellationTokenSource();
     }
 

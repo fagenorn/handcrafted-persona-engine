@@ -10,15 +10,19 @@ public class TokenContext
     {
         var vowel = ctx.FutureVowel;
 
-        if ( !string.IsNullOrEmpty(phonemes) )
+        if (!string.IsNullOrEmpty(phonemes))
         {
-            foreach ( var c in phonemes )
+            foreach (var c in phonemes)
             {
-                if ( PhonemizerConstants.Vowels.Contains(c) ||
-                     PhonemizerConstants.Consonants.Contains(c) ||
-                     PhonemizerConstants.NonQuotePuncts.Contains(c) )
+                if (
+                    PhonemizerConstants.Vowels.Contains(c)
+                    || PhonemizerConstants.Consonants.Contains(c)
+                    || PhonemizerConstants.NonQuotePuncts.Contains(c)
+                )
                 {
-                    vowel = PhonemizerConstants.NonQuotePuncts.Contains(c) ? null : PhonemizerConstants.Vowels.Contains(c);
+                    vowel = PhonemizerConstants.NonQuotePuncts.Contains(c)
+                        ? null
+                        : PhonemizerConstants.Vowels.Contains(c);
 
                     break;
                 }

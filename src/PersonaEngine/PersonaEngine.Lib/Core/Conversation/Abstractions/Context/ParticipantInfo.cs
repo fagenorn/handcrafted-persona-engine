@@ -2,8 +2,4 @@
 
 namespace PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
 
-public record ParticipantInfo(
-    string          Id,
-    string          Name,
-    ChatMessageRole Role
-);
+public record ParticipantInfo(string Id, string Name, ChatMessageRole Role);

@@ -2,10 +2,8 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
-
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-
 using PersonaEngine.Lib.Configuration;
 
 namespace PersonaEngine.Lib.TTS.Synthesis;
@@ -16,30 +14,33 @@ namespace PersonaEngine.Lib.TTS.Synthesis;
 public class EspeakFallbackPhonemizer : IFallbackPhonemizer
 {
     // Dictionary of espeak to model phoneme mappings, sorted by key length descending (matching Python E2M)
-    private static readonly IReadOnlyDictionary<string, string> E2M = new Dictionary<string, string> {
-                                                                                                         { "ʔˌn\u0329", "tn" },
-                                                                                                         { "ʔn\u0329", "tn" },
-                                                                                                         { "ʔn", "tn" },
-                                                                                                         { "ʔ", "t" },
-                                                                                                         { "a^ɪ", "I" },
-                                                                                                         { "a^ʊ", "W" },
-                                                                                                         { "d^ʒ", "ʤ" },
-                                                                                                         { "e^ɪ", "A" },
-                                                                                                         { "e", "A" },
-                                                                                                         { "t^ʃ", "ʧ" },
-                                                                                                         { "ɔ^ɪ", "Y" },
-                                                                                                         { "ə^l", "ᵊl" },
-                                                                                                         { "ʲo", "jo" },
-                                                                                                         { "ʲə", "jə" },
-                                                                                                         { "ʲ", "" },
-                                                                                                         { "ɚ", "əɹ" },
-                                                                                                         { "r", "ɹ" },
-                                                                                                         { "x", "k" },
-                                                                                                         { "ç", "k" },
-                                                                                                         { "ɐ", "ə" },
-                                                                                                         { "ɬ", "l" },
-                                                                                                         { "\u0303", "" }
-                                                                                                     }.OrderByDescending(kv => kv.Key.Length).ToDictionary(kv => kv.Key, kv => kv.Value);
+    private static readonly IReadOnlyDictionary<string, string> E2M = new Dictionary<string, string>
+    {
+        { "ʔˌn\u0329", "tn" },
+        { "ʔn\u0329", "tn" },
+        { "ʔn", "tn" },
+        { "ʔ", "t" },
+        { "a^ɪ", "I" },
+        { "a^ʊ", "W" },
+        { "d^ʒ", "ʤ" },
+        { "e^ɪ", "A" },
+        { "e", "A" },
+        { "t^ʃ", "ʧ" },
+        { "ɔ^ɪ", "Y" },
+        { "ə^l", "ᵊl" },
+        { "ʲo", "jo" },
+        { "ʲə", "jə" },
+        { "ʲ", "" },
+        { "ɚ", "əɹ" },
+        { "r", "ɹ" },
+        { "x", "k" },
+        { "ç", "k" },
+        { "ɐ", "ə" },
+        { "ɬ", "l" },
+        { "\u0303", "" },
+    }
+        .OrderByDescending(kv => kv.Key.Length)
+        .ToDictionary(kv => kv.Key, kv => kv.Value);
 
     // Add a cache to avoid repeated processing
     private readonly ConcurrentDictionary<string, (string? Phonemes, int? Rating)> _cache = new();
@@ -72,57 +73,64 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
     private volatile bool _useBritishEnglish;
 
     public EspeakFallbackPhonemizer(
-        IOptionsMonitor<TtsConfiguration>   ttsConfig,
+        IOptionsMonitor<TtsConfiguration> ttsConfig,
         IOptionsMonitor<KokoroVoiceOptions> voiceOptions,
-        ILogger<EspeakFallbackPhonemizer>   logger)
+        ILogger<EspeakFallbackPhonemizer> logger
+    )
     {
-        _ttsConfig    = ttsConfig ?? throw new ArgumentNullException(nameof(ttsConfig));
+        _ttsConfig = ttsConfig ?? throw new ArgumentNullException(nameof(ttsConfig));
         _voiceOptions = voiceOptions ?? throw new ArgumentNullException(nameof(voiceOptions));
-        _logger       = logger ?? throw new ArgumentNullException(nameof(logger));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        _espeakPath        = _ttsConfig.CurrentValue.EspeakPath ?? throw new ArgumentNullException(nameof(ttsConfig.CurrentValue.EspeakPath));
+        _espeakPath =
+            _ttsConfig.CurrentValue.EspeakPath
+            ?? throw new ArgumentNullException(nameof(ttsConfig.CurrentValue.EspeakPath));
         _useBritishEnglish = _voiceOptions.CurrentValue.UseBritishEnglish;
 
         _voiceOptionsChangeToken = _voiceOptions.OnChange(options =>
-                                                          {
-                                                              _useBritishEnglish = options.UseBritishEnglish;
-                                                              _logger.LogDebug("Voice options updated: UseBritishEnglish={UseBritishEnglish}", _useBritishEnglish);
-                                                              _needProcessReset = true;
+        {
+            _useBritishEnglish = options.UseBritishEnglish;
+            _logger.LogDebug(
+                "Voice options updated: UseBritishEnglish={UseBritishEnglish}",
+                _useBritishEnglish
+            );
+            _needProcessReset = true;
 
-                                                              // Clear cache when voice options change
-                                                              _cache.Clear();
-                                                          });
+            // Clear cache when voice options change
+            _cache.Clear();
+        });
 
         _ttsConfigChangeToken = _ttsConfig.OnChange(config =>
-                                                    {
-                                                        if ( string.IsNullOrEmpty(config.EspeakPath) || _espeakPath == config.EspeakPath )
-                                                        {
-                                                            return;
-                                                        }
+        {
+            if (string.IsNullOrEmpty(config.EspeakPath) || _espeakPath == config.EspeakPath)
+            {
+                return;
+            }
 
-                                                        _espeakPath = config.EspeakPath;
-                                                        _logger.LogDebug("TTS configuration updated: EspeakPath={EspeakPath}", _espeakPath);
-                                                        _needProcessReset = true;
+            _espeakPath = config.EspeakPath;
+            _logger.LogDebug("TTS configuration updated: EspeakPath={EspeakPath}", _espeakPath);
+            _needProcessReset = true;
 
-                                                        // Clear cache when espeak path changes
-                                                        _cache.Clear();
-                                                    });
+            // Clear cache when espeak path changes
+            _cache.Clear();
+        });
     }
 
     /// <summary>
     ///     Gets phonemes for a word using espeak-ng command-line tool
     /// </summary>
     public async Task<(string? Phonemes, int? Rating)> GetPhonemesAsync(
-        string            word,
-        CancellationToken cancellationToken = default)
+        string word,
+        CancellationToken cancellationToken = default
+    )
     {
-        if ( string.IsNullOrEmpty(word) )
+        if (string.IsNullOrEmpty(word))
         {
             return (null, null);
         }
 
         // Check cache first
-        if ( _cache.TryGetValue(word, out var cachedResult) )
+        if (_cache.TryGetValue(word, out var cachedResult))
         {
             return cachedResult;
         }
@@ -134,7 +142,7 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
             await _processLock.WaitAsync(cancellationToken);
 
             // Check cache again in case another thread added the result while we were waiting
-            if ( _cache.TryGetValue(word, out cachedResult) )
+            if (_cache.TryGetValue(word, out cachedResult))
             {
                 return cachedResult;
             }
@@ -151,7 +159,10 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
             // Read the output with a timeout
             var readTask = process.StandardOutput.ReadLineAsync();
 
-            if ( await Task.WhenAny(readTask, Task.Delay(_processReadTimeoutMs, cancellationToken)) != readTask )
+            if (
+                await Task.WhenAny(readTask, Task.Delay(_processReadTimeoutMs, cancellationToken))
+                != readTask
+            )
             {
                 _logger.LogWarning("Timeout reading output from espeak-ng for word {Word}", word);
                 _needProcessReset = true;
@@ -161,7 +172,7 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
 
             var output = await readTask;
 
-            if ( string.IsNullOrEmpty(output) )
+            if (string.IsNullOrEmpty(output))
             {
                 _logger.LogDebug("Empty output from espeak-ng for word {Word}", word);
                 _needProcessReset = true;
@@ -193,7 +204,7 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
         }
         finally
         {
-            if ( !cancelled )
+            if (!cancelled)
             {
                 _processLock.Release();
             }
@@ -202,7 +213,7 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
 
     public async ValueTask DisposeAsync()
     {
-        if ( _disposed )
+        if (_disposed)
         {
             return;
         }
@@ -210,11 +221,11 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
         _voiceOptionsChangeToken?.Dispose();
         _ttsConfigChangeToken?.Dispose();
 
-        if ( _espeakProcess != null )
+        if (_espeakProcess != null)
         {
             try
             {
-                if ( !_espeakProcess.HasExited )
+                if (!_espeakProcess.HasExited)
                 {
                     _espeakProcess.Kill();
                 }
@@ -239,14 +250,14 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
     private async Task<Process> EnsureProcessIsInitializedAsync(CancellationToken cancellationToken)
     {
         // If process needs to be reset or doesn't exist or has exited, create a new one
-        if ( _needProcessReset || _espeakProcess == null || _espeakProcess.HasExited )
+        if (_needProcessReset || _espeakProcess == null || _espeakProcess.HasExited)
         {
             // Dispose of the old process if it exists
-            if ( _espeakProcess != null )
+            if (_espeakProcess != null)
             {
                 try
                 {
-                    if ( !_espeakProcess.HasExited )
+                    if (!_espeakProcess.HasExited)
                     {
                         _espeakProcess.Kill();
                     }
@@ -263,32 +274,36 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
 
             // Create a new process
             var language = _useBritishEnglish ? "en-gb" : "en-us";
-            var startInfo = new ProcessStartInfo {
-                                                     FileName               = _espeakPath,
-                                                     Arguments              = $"--ipa=1 -v {language} -q --tie=^",
-                                                     RedirectStandardOutput = true,
-                                                     RedirectStandardInput  = true,
-                                                     StandardOutputEncoding = Encoding.UTF8,
-                                                     StandardInputEncoding  = Encoding.UTF8,
-                                                     UseShellExecute        = false,
-                                                     CreateNoWindow         = true
-                                                 };
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = _espeakPath,
+                Arguments = $"--ipa=1 -v {language} -q --tie=^",
+                RedirectStandardOutput = true,
+                RedirectStandardInput = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardInputEncoding = Encoding.UTF8,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
 
             var process = new Process { StartInfo = startInfo };
 
             // Start the process with a timeout
             var startTask = Task.Run(() =>
-                                     {
-                                         process.Start();
+            {
+                process.Start();
 
-                                         return true;
-                                     });
+                return true;
+            });
 
-            if ( await Task.WhenAny(startTask, Task.Delay(_processStartTimeoutMs, cancellationToken)) != startTask )
+            if (
+                await Task.WhenAny(startTask, Task.Delay(_processStartTimeoutMs, cancellationToken))
+                != startTask
+            )
             {
                 try
                 {
-                    if ( !process.HasExited )
+                    if (!process.HasExited)
                     {
                         process.Kill();
                     }
@@ -303,12 +318,12 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
                 throw new TimeoutException("Timeout starting espeak-ng process");
             }
 
-            if ( !startTask.Result )
+            if (!startTask.Result)
             {
                 throw new InvalidOperationException("Failed to start espeak-ng process");
             }
 
-            _espeakProcess    = process;
+            _espeakProcess = process;
             _needProcessReset = false;
             _logger.LogDebug("Started new espeak-ng process");
         }
@@ -322,14 +337,15 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
     private string SanitizeInput(string input)
     {
         // Remove characters that could cause command line issues
-        return input.Replace("\"", "")
-                    .Replace("\\", "")
-                    .Replace(";", "")
-                    .Replace("&", "")
-                    .Replace("|", "")
-                    .Replace(">", "")
-                    .Replace("<", "")
-                    .Replace("`", "");
+        return input
+            .Replace("\"", "")
+            .Replace("\\", "")
+            .Replace(";", "")
+            .Replace("&", "")
+            .Replace("|", "")
+            .Replace(">", "")
+            .Replace("<", "")
+            .Replace("`", "");
     }
 
     /// <summary>
@@ -341,7 +357,7 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
         var result = output;
 
         // Apply all the E2M replacements in order of key length (longest first)
-        foreach ( var kvp in E2M )
+        foreach (var kvp in E2M)
         {
             result = result.Replace(kvp.Key, kvp.Value);
         }
@@ -352,7 +368,7 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
         result = result.Replace("\u0329", "");
 
         // Apply language-specific replacements as in the Python implementation
-        if ( useBritishEnglish )
+        if (useBritishEnglish)
         {
             result = result.Replace("e^ə", "ɛː");
             result = result.Replace("iə", "ɪə");

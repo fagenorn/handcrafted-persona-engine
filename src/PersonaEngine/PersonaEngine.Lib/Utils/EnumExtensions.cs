@@ -7,7 +7,10 @@ namespace PersonaEngine.Lib.Utils;
 public static class EnumExtensions
 {
     // Thread-safe cache for storing descriptions
-    private static readonly ConcurrentDictionary<(Type Type, string Name), string> DescriptionCache = new();
+    private static readonly ConcurrentDictionary<
+        (Type Type, string Name),
+        string
+    > DescriptionCache = new();
 
     /// <summary>
     ///     Gets the description of an enum value.
@@ -21,25 +24,28 @@ public static class EnumExtensions
         var type = value.GetType();
         var name = Enum.GetName(type, value);
 
-        if ( name == null )
+        if (name == null)
         {
             return value.ToString();
         }
 
         var cacheKey = (type, name);
 
-        return DescriptionCache.GetOrAdd(cacheKey, key =>
-                                                   {
-                                                       var field = key.Type.GetField(key.Name);
+        return DescriptionCache.GetOrAdd(
+            cacheKey,
+            key =>
+            {
+                var field = key.Type.GetField(key.Name);
 
-                                                       if ( field == null )
-                                                       {
-                                                           return key.Name;
-                                                       }
+                if (field == null)
+                {
+                    return key.Name;
+                }
 
-                                                       var attribute = field.GetCustomAttribute<DescriptionAttribute>(false);
+                var attribute = field.GetCustomAttribute<DescriptionAttribute>(false);
 
-                                                       return attribute?.Description ?? key.Name;
-                                                   });
+                return attribute?.Description ?? key.Name;
+            }
+        );
     }
 }

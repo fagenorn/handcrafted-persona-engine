@@ -1,9 +1,7 @@
 ﻿using System.Text;
-
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel.Connectors.OpenAI;
-
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.LLM;
 
@@ -27,15 +25,16 @@ public class VisualQAService : IVisualQAService
 
     public VisualQAService(
         IOptions<AvatarAppConfig> config,
-        WindowCaptureService      captureService,
-        IVisualChatEngine         chatEngine,
-        ILogger<VisualQAService>  logger)
+        WindowCaptureService captureService,
+        IVisualChatEngine chatEngine,
+        ILogger<VisualQAService> logger
+    )
     {
         _config = config.Value.Vision;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         _captureService = captureService;
-        _chatEngine     = chatEngine;
+        _chatEngine = chatEngine;
 
         _captureService.OnCaptureFrame += OnCaptureFrame;
     }
@@ -44,7 +43,7 @@ public class VisualQAService : IVisualQAService
 
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
-        if ( !_config.Enabled )
+        if (!_config.Enabled)
         {
             return Task.CompletedTask;
         }
@@ -78,7 +77,7 @@ public class VisualQAService : IVisualQAService
         try
         {
             var currentTimestamp = DateTimeOffset.Now;
-            if ( (currentTimestamp - _lastProcessedTimestamp).TotalMilliseconds < 100 )
+            if ((currentTimestamp - _lastProcessedTimestamp).TotalMilliseconds < 100)
             {
                 return;
             }
@@ -98,11 +97,24 @@ public class VisualQAService : IVisualQAService
     {
         try
         {
-            var question    = "Describe the main content of this screenshot objectivly in great detail.";
+            var question =
+                "Describe the main content of this screenshot objectivly in great detail.";
             var chatMessage = new VisualChatMessage(question, imageData);
-            var caption     = new StringBuilder();
-            var settings    = new OpenAIPromptExecutionSettings { FrequencyPenalty = 1.1, Temperature = 0.1, PresencePenalty = 1.1, MaxTokens = 256 };
-            await foreach ( var response in _chatEngine.GetStreamingChatResponseAsync(chatMessage, settings, _internalCts.Token) )
+            var caption = new StringBuilder();
+            var settings = new OpenAIPromptExecutionSettings
+            {
+                FrequencyPenalty = 1.1,
+                Temperature = 0.1,
+                PresencePenalty = 1.1,
+                MaxTokens = 256,
+            };
+            await foreach (
+                var response in _chatEngine.GetStreamingChatResponseAsync(
+                    chatMessage,
+                    settings,
+                    _internalCts.Token
+                )
+            )
             {
                 caption.Append(response);
             }

@@ -104,16 +104,32 @@ internal class CubismRendererProfile_OpenGLES2(OpenGLApi gl)
         gl.ActiveTexture(gl.GL_TEXTURE0); //テクスチャユニット0をアクティブに（以後の設定対象とする）
         gl.GetIntegerv(gl.GL_TEXTURE_BINDING_2D, out LastTexture0Binding2D);
 
-        gl.GetVertexAttribiv(0, gl.GL_VERTEX_ATTRIB_ARRAY_ENABLED, out LastVertexAttribArrayEnabled[0]);
-        gl.GetVertexAttribiv(1, gl.GL_VERTEX_ATTRIB_ARRAY_ENABLED, out LastVertexAttribArrayEnabled[1]);
-        gl.GetVertexAttribiv(2, gl.GL_VERTEX_ATTRIB_ARRAY_ENABLED, out LastVertexAttribArrayEnabled[2]);
-        gl.GetVertexAttribiv(3, gl.GL_VERTEX_ATTRIB_ARRAY_ENABLED, out LastVertexAttribArrayEnabled[3]);
+        gl.GetVertexAttribiv(
+            0,
+            gl.GL_VERTEX_ATTRIB_ARRAY_ENABLED,
+            out LastVertexAttribArrayEnabled[0]
+        );
+        gl.GetVertexAttribiv(
+            1,
+            gl.GL_VERTEX_ATTRIB_ARRAY_ENABLED,
+            out LastVertexAttribArrayEnabled[1]
+        );
+        gl.GetVertexAttribiv(
+            2,
+            gl.GL_VERTEX_ATTRIB_ARRAY_ENABLED,
+            out LastVertexAttribArrayEnabled[2]
+        );
+        gl.GetVertexAttribiv(
+            3,
+            gl.GL_VERTEX_ATTRIB_ARRAY_ENABLED,
+            out LastVertexAttribArrayEnabled[3]
+        );
 
         LastScissorTest = gl.IsEnabled(gl.GL_SCISSOR_TEST);
         LastStencilTest = gl.IsEnabled(gl.GL_STENCIL_TEST);
-        LastDepthTest   = gl.IsEnabled(gl.GL_DEPTH_TEST);
-        LastCullFace    = gl.IsEnabled(gl.GL_CULL_FACE);
-        LastBlend       = gl.IsEnabled(gl.GL_BLEND);
+        LastDepthTest = gl.IsEnabled(gl.GL_DEPTH_TEST);
+        LastCullFace = gl.IsEnabled(gl.GL_CULL_FACE);
+        LastBlend = gl.IsEnabled(gl.GL_BLEND);
 
         gl.GetIntegerv(gl.GL_FRONT_FACE, out LastFrontFace);
 
@@ -174,7 +190,7 @@ internal class CubismRendererProfile_OpenGLES2(OpenGLApi gl)
     /// <param name="enabled">trueなら有効にする</param>
     internal void SetGlEnable(int index, bool enabled)
     {
-        if ( enabled )
+        if (enabled)
         {
             gl.Enable(index);
         }
@@ -191,7 +207,7 @@ internal class CubismRendererProfile_OpenGLES2(OpenGLApi gl)
     /// <param name="enabled">trueなら有効にする</param>
     internal void SetGlEnableVertexAttribArray(int index, bool enabled)
     {
-        if ( enabled )
+        if (enabled)
         {
             gl.EnableVertexAttribArray(index);
         }

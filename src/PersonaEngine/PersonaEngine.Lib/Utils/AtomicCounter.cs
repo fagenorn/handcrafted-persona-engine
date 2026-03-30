@@ -9,7 +9,13 @@ public class AtomicCounter
 {
     private uint _value;
 
-    public uint GetValue() { return _value; }
+    public uint GetValue()
+    {
+        return _value;
+    }
 
-    public uint Increment() { return (uint)Interlocked.Increment(ref Unsafe.As<uint, int>(ref _value)); }
+    public uint Increment()
+    {
+        return (uint)Interlocked.Increment(ref Unsafe.As<uint, int>(ref _value));
+    }
 }

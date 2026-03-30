@@ -9,7 +9,7 @@ public record EmotionTiming
     /// Timestamp in seconds when the emotion occurs
     /// </summary>
     public double Timestamp { get; set; }
-        
+
     /// <summary>
     /// Emotion emoji
     /// </summary>

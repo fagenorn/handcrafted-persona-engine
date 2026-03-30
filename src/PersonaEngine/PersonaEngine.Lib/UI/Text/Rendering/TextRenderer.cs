@@ -1,11 +1,7 @@
 ﻿using System.Numerics;
-
 using FontStashSharp.Interfaces;
-
 using PersonaEngine.Lib.UI.Common;
-
 using Silk.NET.OpenGL;
-
 using Shader = PersonaEngine.Lib.UI.Common.Shader;
 using Texture = PersonaEngine.Lib.UI.Common.Texture;
 
@@ -33,7 +29,9 @@ internal class TextRenderer : IFontStashRenderer2, IDisposable
 
     private readonly BufferObject<VertexPositionColorTexture> _vertexBuffer;
 
-    private readonly VertexPositionColorTexture[] _vertexData = new VertexPositionColorTexture[MAX_VERTICES];
+    private readonly VertexPositionColorTexture[] _vertexData = new VertexPositionColorTexture[
+        MAX_VERTICES
+    ];
 
     private object _lastTexture;
 
@@ -49,8 +47,18 @@ internal class TextRenderer : IFontStashRenderer2, IDisposable
 
         _textureManager = new Texture2DManager(_gl);
 
-        _vertexBuffer = new BufferObject<VertexPositionColorTexture>(_gl, MAX_VERTICES, BufferTargetARB.ArrayBuffer, true);
-        _indexBuffer  = new BufferObject<short>(_gl, indexData.Length, BufferTargetARB.ElementArrayBuffer, false);
+        _vertexBuffer = new BufferObject<VertexPositionColorTexture>(
+            _gl,
+            MAX_VERTICES,
+            BufferTargetARB.ArrayBuffer,
+            true
+        );
+        _indexBuffer = new BufferObject<short>(
+            _gl,
+            indexData.Length,
+            BufferTargetARB.ElementArrayBuffer,
+            false
+        );
         _indexBuffer.SetData(indexData, 0, indexData.Length);
 
         var vertSrc = File.ReadAllText(Path.Combine(@"Resources/Shaders", "t_shader.vert"));
@@ -71,13 +79,22 @@ internal class TextRenderer : IFontStashRenderer2, IDisposable
         _vao.VertexAttribPointer(location, 2, VertexAttribPointerType.Float, false, 16);
     }
 
-    public void Dispose() { Dispose(true); }
+    public void Dispose()
+    {
+        Dispose(true);
+    }
 
     public ITexture2DManager TextureManager => _textureManager;
 
-    public void DrawQuad(object texture, ref VertexPositionColorTexture topLeft, ref VertexPositionColorTexture topRight, ref VertexPositionColorTexture bottomLeft, ref VertexPositionColorTexture bottomRight)
+    public void DrawQuad(
+        object texture,
+        ref VertexPositionColorTexture topLeft,
+        ref VertexPositionColorTexture topRight,
+        ref VertexPositionColorTexture bottomLeft,
+        ref VertexPositionColorTexture bottomRight
+    )
     {
-        if ( _lastTexture != texture )
+        if (_lastTexture != texture)
         {
             FlushBuffer();
         }
@@ -90,11 +107,14 @@ internal class TextRenderer : IFontStashRenderer2, IDisposable
         _lastTexture = texture;
     }
 
-    ~TextRenderer() { Dispose(false); }
+    ~TextRenderer()
+    {
+        Dispose(false);
+    }
 
     protected virtual void Dispose(bool disposing)
     {
-        if ( !disposing )
+        if (!disposing)
         {
             return;
         }
@@ -117,7 +137,14 @@ internal class TextRenderer : IFontStashRenderer2, IDisposable
         _shader.Use();
         _shader.SetUniform("TextureSampler", 0);
 
-        var transform = Matrix4x4.CreateOrthographicOffCenter(0, _viewportWidth, _viewportHeight, 0, 0, -1);
+        var transform = Matrix4x4.CreateOrthographicOffCenter(
+            0,
+            _viewportWidth,
+            _viewportHeight,
+            0,
+            0,
+            -1
+        );
         _shader.SetUniform("MatrixTransform", transform);
 
         _vao.Bind();
@@ -125,13 +152,16 @@ internal class TextRenderer : IFontStashRenderer2, IDisposable
         _vertexBuffer.Bind();
     }
 
-    public void End() { FlushBuffer(); }
+    public void End()
+    {
+        FlushBuffer();
+    }
 
     private void FlushBuffer()
     {
         unsafe
         {
-            if ( _vertexIndex == 0 || _lastTexture == null )
+            if (_vertexIndex == 0 || _lastTexture == null)
             {
                 return;
             }
@@ -141,7 +171,12 @@ internal class TextRenderer : IFontStashRenderer2, IDisposable
             var texture = (Texture)_lastTexture;
             texture.Bind();
 
-            _gl.DrawElements(PrimitiveType.Triangles, (uint)(_vertexIndex * 6 / 4), DrawElementsType.UnsignedShort, null);
+            _gl.DrawElements(
+                PrimitiveType.Triangles,
+                (uint)(_vertexIndex * 6 / 4),
+                DrawElementsType.UnsignedShort,
+                null
+            );
             _vertexIndex = 0;
         }
     }
@@ -149,10 +184,9 @@ internal class TextRenderer : IFontStashRenderer2, IDisposable
     private static short[] GenerateIndexArray()
     {
         var result = new short[MAX_INDICES];
-        for ( int i = 0,
-                  j = 0; i < MAX_INDICES; i += 6, j += 4 )
+        for (int i = 0, j = 0; i < MAX_INDICES; i += 6, j += 4)
         {
-            result[i]     = (short)j;
+            result[i] = (short)j;
             result[i + 1] = (short)(j + 1);
             result[i + 2] = (short)(j + 2);
             result[i + 3] = (short)(j + 3);
@@ -165,7 +199,7 @@ internal class TextRenderer : IFontStashRenderer2, IDisposable
 
     public void OnViewportChanged(int width, int height)
     {
-        _viewportWidth  = width;
+        _viewportWidth = width;
         _viewportHeight = height;
     }
 }

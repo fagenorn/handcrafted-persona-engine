@@ -1,7 +1,6 @@
 ﻿using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-
 using PersonaEngine.Lib.TTS.Profanity;
 using PersonaEngine.Lib.TTS.Synthesis;
 
@@ -34,7 +33,9 @@ public class BlacklistAudioFilter : IAudioFilter
     private readonly HashSet<string> _profanityDictionary;
 
     // Cache for previously checked words to improve performance
-    private readonly Dictionary<string, bool> _wordCheckCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, bool> _wordCheckCache = new(
+        StringComparer.OrdinalIgnoreCase
+    );
 
     /// <summary>
     ///     Initializes a new instance of the <see cref="BlacklistAudioFilter" /> class.
@@ -52,12 +53,14 @@ public class BlacklistAudioFilter : IAudioFilter
     /// <exception cref="ArgumentNullException">Thrown when profanityDetector is null.</exception>
     public BlacklistAudioFilter(
         ProfanityDetector profanityDetector,
-        float             beepFrequency = DEFAULT_BEEP_FREQUENCY,
-        float             beepVolume    = DEFAULT_BEEP_VOLUME)
+        float beepFrequency = DEFAULT_BEEP_FREQUENCY,
+        float beepVolume = DEFAULT_BEEP_VOLUME
+    )
     {
-        _profanityDetector = profanityDetector ?? throw new ArgumentNullException(nameof(profanityDetector));
-        _beepFrequency     = beepFrequency;
-        _beepVolume        = Math.Clamp(beepVolume, 0.0f, 1.0f);
+        _profanityDetector =
+            profanityDetector ?? throw new ArgumentNullException(nameof(profanityDetector));
+        _beepFrequency = beepFrequency;
+        _beepVolume = Math.Clamp(beepVolume, 0.0f, 1.0f);
 
         // Load profanity dictionary
         var profanityListPath = ModelUtils.GetModelPath(ModelType.BadWords);
@@ -68,7 +71,7 @@ public class BlacklistAudioFilter : IAudioFilter
         var samplesPerCycle = (int)(REFERENCE_SAMPLE_RATE / _beepFrequency);
         _beepCycle = new float[samplesPerCycle];
 
-        for ( var i = 0; i < samplesPerCycle; i++ )
+        for (var i = 0; i < samplesPerCycle; i++)
         {
             // Generate square wave (values are either +volume or -volume)
             _beepCycle[i] = i < samplesPerCycle / 2 ? _beepVolume : -_beepVolume;
@@ -81,22 +84,27 @@ public class BlacklistAudioFilter : IAudioFilter
     /// <param name="segment">The audio segment to process.</param>
     public void Process(AudioSegment segment)
     {
-        if ( segment == null || segment.AudioData.IsEmpty || segment.Tokens == null || segment.Tokens.Count == 0 )
+        if (
+            segment == null
+            || segment.AudioData.IsEmpty
+            || segment.Tokens == null
+            || segment.Tokens.Count == 0
+        )
         {
             return; // Early exit for invalid segments
         }
 
-        var tokens     = segment.Tokens;
-        var audioSpan  = segment.AudioData.Span;
+        var tokens = segment.Tokens;
+        var audioSpan = segment.AudioData.Span;
         var sampleRate = segment.SampleRate;
 
         // First step: Identify and mark profane tokens
         MarkProfaneTokens(tokens);
 
         // Second step: Apply beep sound to marked tokens
-        foreach ( var (token, index) in tokens.Select((t, i) => (t, i)) )
+        foreach (var (token, index) in tokens.Select((t, i) => (t, i)))
         {
-            if ( token is not { Text: "[REDACTED]" } )
+            if (token is not { Text: "[REDACTED]" })
             {
                 continue; // Skip null or non-redacted tokens
             }
@@ -106,13 +114,13 @@ public class BlacklistAudioFilter : IAudioFilter
 
             // Convert timestamps to sample indices
             var startIndex = (int)(startTime * sampleRate);
-            var endIndex   = (int)(endTime * sampleRate);
+            var endIndex = (int)(endTime * sampleRate);
 
             // Validate indices to prevent out-of-bounds access
             startIndex = Math.Max(0, startIndex);
-            endIndex   = Math.Min(audioSpan.Length, endIndex);
+            endIndex = Math.Min(audioSpan.Length, endIndex);
 
-            if ( startIndex >= endIndex || startIndex >= audioSpan.Length )
+            if (startIndex >= endIndex || startIndex >= audioSpan.Length)
             {
                 continue; // Invalid range
             }
@@ -129,9 +137,12 @@ public class BlacklistAudioFilter : IAudioFilter
     /// </summary>
     /// <param name="tokens">The list of tokens to process.</param>
     /// <param name="tolerance">The tolerance level for profanity.</param>
-    private void MarkProfaneTokens(IReadOnlyList<Token> tokens, ProfanitySeverity tolerance = ProfanitySeverity.Clean)
+    private void MarkProfaneTokens(
+        IReadOnlyList<Token> tokens,
+        ProfanitySeverity tolerance = ProfanitySeverity.Clean
+    )
     {
-        if ( tokens.Count == 0 )
+        if (tokens.Count == 0)
         {
             return;
         }
@@ -143,15 +154,15 @@ public class BlacklistAudioFilter : IAudioFilter
         var overallSeverity = _profanityDetector.EvaluateProfanity(sentence);
 
         // If the overall severity is within tolerance, no need to censor
-        if ( overallSeverity <= tolerance )
+        if (overallSeverity <= tolerance)
         {
             return;
         }
 
         // Mark individual profane tokens
-        foreach ( var token in tokens )
+        foreach (var token in tokens)
         {
-            if ( token == null || string.IsNullOrWhiteSpace(token.Text) )
+            if (token == null || string.IsNullOrWhiteSpace(token.Text))
             {
                 continue;
             }
@@ -159,9 +170,9 @@ public class BlacklistAudioFilter : IAudioFilter
             // Split the token into words to check each individually
             var words = SplitIntoWords(token.Text);
 
-            foreach ( var word in words )
+            foreach (var word in words)
             {
-                if ( IsProfaneWord(word) )
+                if (IsProfaneWord(word))
                 {
                     token.Text = "[REDACTED]";
 
@@ -176,7 +187,7 @@ public class BlacklistAudioFilter : IAudioFilter
     /// </summary>
     private static IEnumerable<string> SplitIntoWords(string text)
     {
-        if ( string.IsNullOrWhiteSpace(text) )
+        if (string.IsNullOrWhiteSpace(text))
         {
             yield break;
         }
@@ -184,7 +195,7 @@ public class BlacklistAudioFilter : IAudioFilter
         // Use regex to split text into words (sequences of letters)
         var matches = Regex.Matches(text, @"\b[a-zA-Z]+\b");
 
-        foreach ( Match match in matches )
+        foreach (Match match in matches)
         {
             yield return match.Value;
         }
@@ -195,7 +206,7 @@ public class BlacklistAudioFilter : IAudioFilter
     /// </summary>
     private static string BuildSentenceFromTokens(IReadOnlyList<Token> tokens)
     {
-        if ( tokens.Count == 0 )
+        if (tokens.Count == 0)
         {
             return string.Empty;
         }
@@ -203,22 +214,22 @@ public class BlacklistAudioFilter : IAudioFilter
         var builder = new StringBuilder();
 
         // Add all tokens except the last one with their whitespace
-        for ( var i = 0; i < tokens.Count - 1; i++ )
+        for (var i = 0; i < tokens.Count - 1; i++)
         {
-            if ( tokens[i] == null || tokens[i].Text == null )
+            if (tokens[i] == null || tokens[i].Text == null)
             {
                 continue;
             }
 
             builder.Append(tokens[i].Text);
-            if ( tokens[i].Whitespace == " " )
+            if (tokens[i].Whitespace == " ")
             {
                 builder.Append(' ');
             }
         }
 
         // Add the last token
-        if ( tokens[^1] != null && tokens[^1].Text != null )
+        if (tokens[^1] != null && tokens[^1].Text != null)
         {
             builder.Append(tokens[^1].Text);
         }
@@ -229,18 +240,22 @@ public class BlacklistAudioFilter : IAudioFilter
     /// <summary>
     ///     Determines the start and end time boundaries for audio replacement.
     /// </summary>
-    private (double Start, double End) DetermineTimeBoundaries(Token token, IReadOnlyList<Token> allTokens, int tokenIndex)
+    private (double Start, double End) DetermineTimeBoundaries(
+        Token token,
+        IReadOnlyList<Token> allTokens,
+        int tokenIndex
+    )
     {
-        if ( token == null )
+        if (token == null)
         {
             return (0, 0); // Default for null tokens
         }
 
         double startTime,
-               endTime;
+            endTime;
 
         // Handle the case where this is the first token with missing timestamps
-        if ( tokenIndex == 0 && (!token.StartTs.HasValue || !token.EndTs.HasValue) )
+        if (tokenIndex == 0 && (!token.StartTs.HasValue || !token.EndTs.HasValue))
         {
             startTime = 0;
 
@@ -250,10 +265,10 @@ public class BlacklistAudioFilter : IAudioFilter
         else
         {
             // Determine start time
-            if ( !token.StartTs.HasValue )
+            if (!token.StartTs.HasValue)
             {
                 // If no start time is available, use previous token's end time if possible
-                if ( tokenIndex > 0 && allTokens[tokenIndex - 1] != null )
+                if (tokenIndex > 0 && allTokens[tokenIndex - 1] != null)
                 {
                     var prevToken = allTokens[tokenIndex - 1];
                     startTime = prevToken.EndTs ?? prevToken.StartTs ?? 0;
@@ -269,10 +284,10 @@ public class BlacklistAudioFilter : IAudioFilter
             }
 
             // Determine end time
-            if ( !token.EndTs.HasValue )
+            if (!token.EndTs.HasValue)
             {
                 // If no end time is available, check if we can use the next token's start time
-                if ( tokenIndex < allTokens.Count - 1 && allTokens[tokenIndex + 1] != null )
+                if (tokenIndex < allTokens.Count - 1 && allTokens[tokenIndex + 1] != null)
                 {
                     var nextToken = allTokens[tokenIndex + 1];
                     endTime = nextToken.StartTs ?? startTime + EstimateTokenDuration(token);
@@ -290,7 +305,7 @@ public class BlacklistAudioFilter : IAudioFilter
         }
 
         // Ensure we always have a positive duration
-        if ( endTime <= startTime )
+        if (endTime <= startTime)
         {
             endTime = startTime + 0.1; // Add minimal duration if times are invalid
         }
@@ -303,7 +318,7 @@ public class BlacklistAudioFilter : IAudioFilter
     /// </summary>
     private double EstimateTokenDuration(Token token)
     {
-        if ( token == null )
+        if (token == null)
         {
             return 0.1; // Default for null tokens
         }
@@ -323,7 +338,7 @@ public class BlacklistAudioFilter : IAudioFilter
     private void ApplyBeepTone(Span<float> audioData, int startIndex, int endIndex, int sampleRate)
     {
         var length = endIndex - startIndex;
-        if ( length <= 0 )
+        if (length <= 0)
         {
             return;
         }
@@ -342,7 +357,7 @@ public class BlacklistAudioFilter : IAudioFilter
         var fadeLength = Math.Min((int)(0.005 * sampleRate), length / 4);
         fadeLength = Math.Max(1, fadeLength); // Ensure at least 1 sample for fade
 
-        for ( var i = 0; i < length; i++ )
+        for (var i = 0; i < length; i++)
         {
             // Calculate the position in the beep cycle
             var cycleIndex = (int)(i % samplesPerCycle / cycleScaleFactor) % _beepCycle.Length;
@@ -352,11 +367,11 @@ public class BlacklistAudioFilter : IAudioFilter
 
             // Apply fade-in and fade-out for smoother audio transitions
             var fadeMultiplier = 1.0f;
-            if ( i < fadeLength )
+            if (i < fadeLength)
             {
                 fadeMultiplier = (float)i / fadeLength; // Linear fade-in
             }
-            else if ( i > length - fadeLength )
+            else if (i > length - fadeLength)
             {
                 fadeMultiplier = (float)(length - i) / fadeLength; // Linear fade-out
             }
@@ -371,13 +386,13 @@ public class BlacklistAudioFilter : IAudioFilter
     /// </summary>
     private bool IsProfaneWord(string word)
     {
-        if ( string.IsNullOrWhiteSpace(word) )
+        if (string.IsNullOrWhiteSpace(word))
         {
             return false;
         }
 
         // Check cache first to avoid redundant processing
-        if ( _wordCheckCache.TryGetValue(word, out var result) )
+        if (_wordCheckCache.TryGetValue(word, out var result))
         {
             return result;
         }
@@ -386,7 +401,7 @@ public class BlacklistAudioFilter : IAudioFilter
         var normalized = NormalizeText(word);
 
         // Direct match check
-        if ( _profanityDictionary.Contains(normalized) )
+        if (_profanityDictionary.Contains(normalized))
         {
             _wordCheckCache[word] = true;
 
@@ -394,15 +409,15 @@ public class BlacklistAudioFilter : IAudioFilter
         }
 
         // Check for variations with common suffixes
-        foreach ( var suffix in COMMON_SUFFIXES )
+        foreach (var suffix in COMMON_SUFFIXES)
         {
-            if ( normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) )
+            if (normalized.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
             {
                 // Try removing the suffix and check if the base word is profane
                 var baseWord = normalized.Substring(0, normalized.Length - suffix.Length);
 
                 // Only check non-empty base words
-                if ( !string.IsNullOrEmpty(baseWord) && _profanityDictionary.Contains(baseWord) )
+                if (!string.IsNullOrEmpty(baseWord) && _profanityDictionary.Contains(baseWord))
                 {
                     _wordCheckCache[word] = true;
 
@@ -422,7 +437,7 @@ public class BlacklistAudioFilter : IAudioFilter
     /// </summary>
     private static string NormalizeText(string text)
     {
-        if ( string.IsNullOrEmpty(text) )
+        if (string.IsNullOrEmpty(text))
         {
             return string.Empty;
         }
@@ -432,10 +447,13 @@ public class BlacklistAudioFilter : IAudioFilter
 
         // Remove diacritical marks and punctuation in a single pass for efficiency
         var sb = new StringBuilder(normalized.Length);
-        foreach ( var c in normalized )
+        foreach (var c in normalized)
         {
             // Keep only characters that are not diacritics or punctuation
-            if ( CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark && !char.IsPunctuation(c) )
+            if (
+                CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark
+                && !char.IsPunctuation(c)
+            )
             {
                 sb.Append(c);
             }
@@ -451,7 +469,7 @@ public class BlacklistAudioFilter : IAudioFilter
     {
         try
         {
-            if ( string.IsNullOrEmpty(filePath) || !File.Exists(filePath) )
+            if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
             {
                 Console.Error.WriteLine($"Warning: Profanity list file not found at: {filePath}");
 
@@ -459,11 +477,11 @@ public class BlacklistAudioFilter : IAudioFilter
             }
 
             return new HashSet<string>(
-                                       File.ReadAllLines(filePath)
-                                           .Where(line => !string.IsNullOrWhiteSpace(line))
-                                           .Select(word => NormalizeText(word.Trim())),
-                                       StringComparer.OrdinalIgnoreCase
-                                      );
+                File.ReadAllLines(filePath)
+                    .Where(line => !string.IsNullOrWhiteSpace(line))
+                    .Select(word => NormalizeText(word.Trim())),
+                StringComparer.OrdinalIgnoreCase
+            );
         }
         catch (Exception ex)
         {

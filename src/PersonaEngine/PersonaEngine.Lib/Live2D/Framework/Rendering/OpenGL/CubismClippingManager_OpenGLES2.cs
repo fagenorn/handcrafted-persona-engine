@@ -2,7 +2,8 @@
 
 namespace PersonaEngine.Lib.Live2D.Framework.Rendering.OpenGL;
 
-public class CubismClippingManager_OpenGLES2(OpenGLApi gl) : CubismClippingManager(RenderType.OpenGL)
+public class CubismClippingManager_OpenGLES2(OpenGLApi gl)
+    : CubismClippingManager(RenderType.OpenGL)
 {
     /// <summary>
     ///     クリッピングコンテキストを作成する。モデル描画時に実行する。
@@ -11,12 +12,17 @@ public class CubismClippingManager_OpenGLES2(OpenGLApi gl) : CubismClippingManag
     /// <param name="renderer">レンダラのインスタンス</param>
     /// <param name="lastFBO">フレームバッファ</param>
     /// <param name="lastViewport">ビューポート</param>
-    internal unsafe void SetupClippingContext(CubismModel model, CubismRenderer_OpenGLES2 renderer, int lastFBO, int[] lastViewport)
+    internal unsafe void SetupClippingContext(
+        CubismModel model,
+        CubismRenderer_OpenGLES2 renderer,
+        int lastFBO,
+        int[] lastViewport
+    )
     {
         // 全てのクリッピングを用意する
         // 同じクリップ（複数の場合はまとめて１つのクリップ）を使う場合は１度だけ設定する
         var usingClipCount = 0;
-        for ( var clipIndex = 0; clipIndex < ClippingContextListForMask.Count; clipIndex++ )
+        for (var clipIndex = 0; clipIndex < ClippingContextListForMask.Count; clipIndex++)
         {
             // １つのクリッピングマスクに関して
             var cc = ClippingContextListForMask[clipIndex];
@@ -24,13 +30,13 @@ public class CubismClippingManager_OpenGLES2(OpenGLApi gl) : CubismClippingManag
             // このクリップを利用する描画オブジェクト群全体を囲む矩形を計算
             CalcClippedDrawTotalBounds(model, cc!);
 
-            if ( cc!.IsUsing )
+            if (cc!.IsUsing)
             {
                 usingClipCount++; //使用中としてカウント
             }
         }
 
-        if ( usingClipCount <= 0 )
+        if (usingClipCount <= 0)
         {
             return;
         }
@@ -50,11 +56,11 @@ public class CubismClippingManager_OpenGLES2(OpenGLApi gl) : CubismClippingManag
         SetupLayoutBounds(usingClipCount);
 
         // サイズがレンダーテクスチャの枚数と合わない場合は合わせる
-        if ( ClearedMaskBufferFlags.Count != RenderTextureCount )
+        if (ClearedMaskBufferFlags.Count != RenderTextureCount)
         {
             ClearedMaskBufferFlags.Clear();
 
-            for ( var i = 0; i < RenderTextureCount; ++i )
+            for (var i = 0; i < RenderTextureCount; ++i)
             {
                 ClearedMaskBufferFlags.Add(false);
             }
@@ -62,7 +68,7 @@ public class CubismClippingManager_OpenGLES2(OpenGLApi gl) : CubismClippingManag
         else
         {
             // マスクのクリアフラグを毎フレーム開始時に初期化
-            for ( var i = 0; i < RenderTextureCount; ++i )
+            for (var i = 0; i < RenderTextureCount; ++i)
             {
                 ClearedMaskBufferFlags[i] = false;
             }
@@ -70,19 +76,19 @@ public class CubismClippingManager_OpenGLES2(OpenGLApi gl) : CubismClippingManag
 
         // 実際にマスクを生成する
         // 全てのマスクをどの様にレイアウトして描くかを決定し、ClipContext , ClippedDrawContext に記憶する
-        for ( var clipIndex = 0; clipIndex < ClippingContextListForMask.Count; clipIndex++ )
+        for (var clipIndex = 0; clipIndex < ClippingContextListForMask.Count; clipIndex++)
         {
             // --- 実際に１つのマスクを描く ---
-            var clipContext         = ClippingContextListForMask[clipIndex];
-            var allClippedDrawRect  = clipContext!.AllClippedDrawRect; //このマスクを使う、全ての描画オブジェクトの論理座標上の囲み矩形
-            var layoutBoundsOnTex01 = clipContext.LayoutBounds;        //この中にマスクを収める
-            var MARGIN              = 0.05f;
+            var clipContext = ClippingContextListForMask[clipIndex];
+            var allClippedDrawRect = clipContext!.AllClippedDrawRect; //このマスクを使う、全ての描画オブジェクトの論理座標上の囲み矩形
+            var layoutBoundsOnTex01 = clipContext.LayoutBounds; //この中にマスクを収める
+            var MARGIN = 0.05f;
 
             // clipContextに設定したオフスクリーンサーフェイスをインデックスで取得
             var clipContextOffscreenSurface = renderer.GetMaskBuffer(clipContext.BufferIndex);
 
             // 現在のオフスクリーンサーフェイスがclipContextのものと異なる場合
-            if ( CurrentMaskBuffer != clipContextOffscreenSurface )
+            if (CurrentMaskBuffer != clipContextOffscreenSurface)
             {
                 CurrentMaskBuffer.EndDraw();
                 CurrentMaskBuffer = clipContextOffscreenSurface;
@@ -95,7 +101,10 @@ public class CubismClippingManager_OpenGLES2(OpenGLApi gl) : CubismClippingManag
 
             // モデル座標上の矩形を、適宜マージンを付けて使う
             TmpBoundsOnModel.SetRect(allClippedDrawRect);
-            TmpBoundsOnModel.Expand(allClippedDrawRect.Width * MARGIN, allClippedDrawRect.Height * MARGIN);
+            TmpBoundsOnModel.Expand(
+                allClippedDrawRect.Width * MARGIN,
+                allClippedDrawRect.Height * MARGIN
+            );
             //########## 本来は割り当てられた領域の全体を使わず必要最低限のサイズがよい
             // シェーダ用の計算式を求める。回転を考慮しない場合は以下のとおり
             // movePeriod' = movePeriod * scaleX + offX     [[ movePeriod' = (movePeriod - tmpBoundsOnModel.movePeriod)*scale + layoutBoundsOnTex01.movePeriod ]]
@@ -110,12 +119,12 @@ public class CubismClippingManager_OpenGLES2(OpenGLApi gl) : CubismClippingManag
 
             // 実際の描画を行う
             var clipDrawCount = clipContext.ClippingIdCount;
-            for ( var i = 0; i < clipDrawCount; i++ )
+            for (var i = 0; i < clipDrawCount; i++)
             {
                 var clipDrawIndex = clipContext.ClippingIdList[i];
 
                 // 頂点情報が更新されておらず、信頼性がない場合は描画をパスする
-                if ( !model.GetDrawableDynamicFlagVertexPositionsDidChange(clipDrawIndex) )
+                if (!model.GetDrawableDynamicFlagVertexPositionsDidChange(clipDrawIndex))
                 {
                     continue;
                 }
@@ -123,7 +132,7 @@ public class CubismClippingManager_OpenGLES2(OpenGLApi gl) : CubismClippingManag
                 renderer.IsCulling = model.GetDrawableCulling(clipDrawIndex);
 
                 // マスクがクリアされていないなら処理する
-                if ( !ClearedMaskBufferFlags[clipContext.BufferIndex] )
+                if (!ClearedMaskBufferFlags[clipContext.BufferIndex])
                 {
                     // マスクをクリアする
                     // 1が無効（描かれない）領域、0が有効（描かれる）領域。（シェーダーCd*Csで0に近い値をかけてマスクを作る。1をかけると何も起こらない）

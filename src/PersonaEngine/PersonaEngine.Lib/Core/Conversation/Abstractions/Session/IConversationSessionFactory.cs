@@ -5,5 +5,9 @@ namespace PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
 
 public interface IConversationSessionFactory
 {
-    IConversationSession CreateSession(ConversationContext context, ConversationOptions? options = null, Guid? sessionId = null);
+    IConversationSession CreateSession(
+        ConversationContext context,
+        ConversationOptions? options = null,
+        Guid? sessionId = null
+    );
 }

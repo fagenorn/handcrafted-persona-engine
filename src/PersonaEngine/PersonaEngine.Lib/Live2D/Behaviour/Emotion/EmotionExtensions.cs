@@ -10,5 +10,11 @@ public static class EmotionExtensions
     /// <summary>
     ///     Gets the emotions associated with an audio segment
     /// </summary>
-    public static IReadOnlyList<EmotionTiming> GetEmotions(this AudioSegment segment, IEmotionService emotionService) { return emotionService.GetEmotions(segment.Id); }
+    public static IReadOnlyList<EmotionTiming> GetEmotions(
+        this AudioSegment segment,
+        IEmotionService emotionService
+    )
+    {
+        return emotionService.GetEmotions(segment.Id);
+    }
 }

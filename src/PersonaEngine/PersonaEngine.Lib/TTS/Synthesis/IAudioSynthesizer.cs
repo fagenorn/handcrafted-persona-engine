@@ -16,7 +16,8 @@ public interface IAudioSynthesizer : IAsyncDisposable
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Audio data with timing information</returns>
     Task<AudioData> SynthesizeAsync(
-        string              phonemes,
-        KokoroVoiceOptions? options           = null,
-        CancellationToken   cancellationToken = default);
+        string phonemes,
+        KokoroVoiceOptions? options = null,
+        CancellationToken cancellationToken = default
+    );
 }

@@ -1,8 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Numerics;
-
 using Hexa.NET.ImGui;
-
 using PersonaEngine.Lib.Audio;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.UI.GUI;
@@ -35,8 +33,9 @@ public class MicrophoneConfigEditor : ConfigSectionEditorBase
     /// <param name="microphone">The microphone service.</param>
     public MicrophoneConfigEditor(
         IUiConfigurationManager configManager,
-        IEditorStateManager     stateManager,
-        IMicrophone             microphone)
+        IEditorStateManager stateManager,
+        IMicrophone microphone
+    )
         : base(configManager, stateManager)
     {
         _microphone = microphone ?? throw new ArgumentNullException(nameof(microphone));
@@ -87,59 +86,67 @@ public class MicrophoneConfigEditor : ConfigSectionEditorBase
             ImGui.SetNextItemWidth(availWidth - 120 - 100); // Width calculation: Available - Label - Refresh Button
 
             var currentSelectionDisplay = string.IsNullOrEmpty(_selectedDeviceName)
-                                              ? DefaultDeviceDisplayName
-                                              : _selectedDeviceName;
+                ? DefaultDeviceDisplayName
+                : _selectedDeviceName;
 
-            if ( _loadingDevices )
+            if (_loadingDevices)
             {
                 // Show loading state
                 ImGui.BeginDisabled();
                 var loadingText = "Loading devices...";
                 // Use InputText as a visual placeholder during loading
-                ImGui.InputText("##DeviceLoading", ref loadingText, 100, ImGuiInputTextFlags.ReadOnly);
+                ImGui.InputText(
+                    "##DeviceLoading",
+                    ref loadingText,
+                    100,
+                    ImGuiInputTextFlags.ReadOnly
+                );
                 ImGui.EndDisabled();
             }
             else
             {
                 // Actual combo box
-                if ( ImGui.BeginCombo("##DeviceSelector", currentSelectionDisplay) )
+                if (ImGui.BeginCombo("##DeviceSelector", currentSelectionDisplay))
                 {
                     // Add "(Default Device)" option first
                     var isDefaultSelected = string.IsNullOrEmpty(_selectedDeviceName);
-                    if ( ImGui.Selectable(DefaultDeviceDisplayName, isDefaultSelected) )
+                    if (ImGui.Selectable(DefaultDeviceDisplayName, isDefaultSelected))
                     {
-                        if ( _selectedDeviceName != null ) // Check if changed
+                        if (_selectedDeviceName != null) // Check if changed
                         {
                             _selectedDeviceName = null;
                             UpdateConfiguration();
                         }
                     }
 
-                    if ( isDefaultSelected )
+                    if (isDefaultSelected)
                     {
                         ImGui.SetItemDefaultFocus();
                     }
 
                     // Add actual devices if available
-                    if ( _availableDevices.Count == 0 && !_loadingDevices )
+                    if (_availableDevices.Count == 0 && !_loadingDevices)
                     {
-                        ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "No input devices found.");
+                        ImGui.TextColored(
+                            new Vector4(0.7f, 0.7f, 0.7f, 1.0f),
+                            "No input devices found."
+                        );
                     }
                     else
                     {
-                        foreach ( var device in _availableDevices )
+                        foreach (var device in _availableDevices)
                         {
                             var isSelected = device == _selectedDeviceName;
-                            if ( ImGui.Selectable(device, isSelected) )
+                            if (ImGui.Selectable(device, isSelected))
                             {
-                                if ( _selectedDeviceName != device ) // Check if changed
+                                if (_selectedDeviceName != device) // Check if changed
                                 {
                                     _selectedDeviceName = device;
                                     UpdateConfiguration();
                                 }
                             }
 
-                            if ( isSelected )
+                            if (isSelected)
                             {
                                 ImGui.SetItemDefaultFocus();
                             }
@@ -151,13 +158,13 @@ public class MicrophoneConfigEditor : ConfigSectionEditorBase
             }
 
             // Refresh Button
-            ImGui.SameLine(0, 10);                                  // Add spacing before button
-            if ( ImGui.Button("Refresh##Dev", new Vector2(80, 0)) ) // Unique ID for button
+            ImGui.SameLine(0, 10); // Add spacing before button
+            if (ImGui.Button("Refresh##Dev", new Vector2(80, 0))) // Unique ID for button
             {
                 LoadAvailableDevices();
             }
 
-            if ( ImGui.IsItemHovered() )
+            if (ImGui.IsItemHovered())
             {
                 ImGui.SetTooltip("Refresh the list of available input devices.");
             }
@@ -171,10 +178,10 @@ public class MicrophoneConfigEditor : ConfigSectionEditorBase
 
         // --- Action Buttons ---
         // Center the buttons roughly
-        float buttonWidth      = 150;
-        var   totalButtonWidth = buttonWidth * 2 + 10; // Two buttons + spacing
-        var   initialPadding   = (availWidth - totalButtonWidth) * 0.5f;
-        if ( initialPadding < 0 )
+        float buttonWidth = 150;
+        var totalButtonWidth = buttonWidth * 2 + 10; // Two buttons + spacing
+        var initialPadding = (availWidth - totalButtonWidth) * 0.5f;
+        if (initialPadding < 0)
         {
             initialPadding = 0;
         }
@@ -182,12 +189,12 @@ public class MicrophoneConfigEditor : ConfigSectionEditorBase
         ImGui.SetCursorPosX(initialPadding);
 
         // Reset Button
-        if ( ImGui.Button("Reset", new Vector2(buttonWidth, 0)) )
+        if (ImGui.Button("Reset", new Vector2(buttonWidth, 0)))
         {
             ResetToDefaults();
         }
 
-        if ( ImGui.IsItemHovered() )
+        if (ImGui.IsItemHovered())
         {
             ImGui.SetTooltip("Reset microphone settings to default values.");
         }
@@ -196,22 +203,22 @@ public class MicrophoneConfigEditor : ConfigSectionEditorBase
 
         // Save Button (Disabled if no changes)
         var hasChanges = StateManager.HasUnsavedChanges; // Check unsaved state
-        if ( !hasChanges )
+        if (!hasChanges)
         {
             ImGui.BeginDisabled();
         }
 
-        if ( ImGui.Button("Save", new Vector2(buttonWidth, 0)) )
+        if (ImGui.Button("Save", new Vector2(buttonWidth, 0)))
         {
             SaveConfiguration();
         }
 
-        if ( ImGui.IsItemHovered() && hasChanges )
+        if (ImGui.IsItemHovered() && hasChanges)
         {
             ImGui.SetTooltip("Save the current microphone settings.");
         }
 
-        if ( !hasChanges )
+        if (!hasChanges)
         {
             ImGui.EndDisabled();
         }
@@ -235,7 +242,7 @@ public class MicrophoneConfigEditor : ConfigSectionEditorBase
         base.OnConfigurationChanged(args); // Call base implementation
 
         // Reload configuration if the source indicates a full reload
-        if ( args.Type == ConfigurationChangedEventArgs.ChangeType.Reloaded )
+        if (args.Type == ConfigurationChangedEventArgs.ChangeType.Reloaded)
         {
             LoadConfiguration();
             // Optionally reload devices if the config might affect them,
@@ -260,8 +267,9 @@ public class MicrophoneConfigEditor : ConfigSectionEditorBase
     /// </summary>
     private void LoadConfiguration()
     {
-        _currentConfig = ConfigManager.GetConfiguration<MicrophoneConfiguration>(SectionKey)
-                         ?? new MicrophoneConfiguration(); // Get or create default
+        _currentConfig =
+            ConfigManager.GetConfiguration<MicrophoneConfiguration>(SectionKey)
+            ?? new MicrophoneConfiguration(); // Get or create default
 
         // Update local state from loaded config
         _selectedDeviceName = _currentConfig.DeviceName;
@@ -275,7 +283,7 @@ public class MicrophoneConfigEditor : ConfigSectionEditorBase
     /// </summary>
     private void LoadAvailableDevices()
     {
-        if ( _loadingDevices )
+        if (_loadingDevices)
         {
             return; // Prevent concurrent loading
         }
@@ -291,13 +299,17 @@ public class MicrophoneConfigEditor : ConfigSectionEditorBase
             _availableDevices = _microphone.GetAvailableDevices().ToList();
 
             // Ensure the currently selected device still exists
-            if ( !string.IsNullOrEmpty(_selectedDeviceName) &&
-                 !_availableDevices.Contains(_selectedDeviceName) )
+            if (
+                !string.IsNullOrEmpty(_selectedDeviceName)
+                && !_availableDevices.Contains(_selectedDeviceName)
+            )
             {
-                Debug.WriteLine($"Warning: Configured microphone '{_selectedDeviceName}' not found. Reverting to default.");
+                Debug.WriteLine(
+                    $"Warning: Configured microphone '{_selectedDeviceName}' not found. Reverting to default."
+                );
                 // Optionally notify the user here
                 _selectedDeviceName = null; // Revert to default
-                UpdateConfiguration();      // Update the config state
+                UpdateConfiguration(); // Update the config state
             }
 
             // StateManager.ClearActiveOperation(operation.Id);
@@ -321,12 +333,12 @@ public class MicrophoneConfigEditor : ConfigSectionEditorBase
     {
         // Create the updated configuration record
         var updatedConfig = _currentConfig with // Use record 'with' expression
-                            {
-                                DeviceName = _selectedDeviceName
-                            };
+        {
+            DeviceName = _selectedDeviceName,
+        };
 
         // Check if the configuration actually changed before updating
-        if ( !_currentConfig.Equals(updatedConfig) )
+        if (!_currentConfig.Equals(updatedConfig))
         {
             _currentConfig = updatedConfig;
             ConfigManager.UpdateConfiguration(_currentConfig, SectionKey);
@@ -354,7 +366,7 @@ public class MicrophoneConfigEditor : ConfigSectionEditorBase
         _selectedDeviceName = defaultConfig.DeviceName; // Should be null
 
         // Update configuration only if it differs from current
-        if ( !_currentConfig.Equals(defaultConfig) )
+        if (!_currentConfig.Equals(defaultConfig))
         {
             _currentConfig = defaultConfig;
             ConfigManager.UpdateConfiguration(_currentConfig, SectionKey);

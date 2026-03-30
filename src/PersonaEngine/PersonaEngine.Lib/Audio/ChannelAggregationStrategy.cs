@@ -25,7 +25,8 @@ public static class DefaultChannelAggregationStrategies
     /// <summary>
     ///     Gets the average aggregation strategy for float audio channels.
     /// </summary>
-    public static IChannelAggregationStrategy Average { get; } = new AverageChannelAggregationStrategy();
+    public static IChannelAggregationStrategy Average { get; } =
+        new AverageChannelAggregationStrategy();
 
     /// <summary>
     ///     Gets the max aggregation strategy for float audio channels.
@@ -37,7 +38,10 @@ public static class DefaultChannelAggregationStrategies
     /// </summary>
     /// <param name="channelIndex">The index of the channel to use for aggregation.</param>
     /// <returns>The channel selection strategy.</returns>
-    public static IChannelAggregationStrategy SelectChannel(int channelIndex) { return new SelectChannelAggregationStrategy(channelIndex); }
+    public static IChannelAggregationStrategy SelectChannel(int channelIndex)
+    {
+        return new SelectChannelAggregationStrategy(channelIndex);
+    }
 }
 
 /// <summary>
@@ -45,17 +49,35 @@ public static class DefaultChannelAggregationStrategies
 /// </summary>
 internal class AverageChannelAggregationStrategy : IChannelAggregationStrategy
 {
-    public void Aggregate(ReadOnlyMemory<float> frame, Memory<float> destination) { destination.Span[0] = GetAverageFloat(frame); }
+    public void Aggregate(ReadOnlyMemory<float> frame, Memory<float> destination)
+    {
+        destination.Span[0] = GetAverageFloat(frame);
+    }
 
-    public void Aggregate(ReadOnlyMemory<byte> frame, Memory<byte> destination, ushort bitsPerSample)
+    public void Aggregate(
+        ReadOnlyMemory<byte> frame,
+        Memory<byte> destination,
+        ushort bitsPerSample
+    )
     {
         var sampleValue = GetAverageFloat(frame, bitsPerSample);
         SampleSerializer.WriteSample(destination.Span, 0, sampleValue, bitsPerSample);
     }
 
-    public void Aggregate(ReadOnlyMemory<byte> frame, Memory<float> destination, ushort bitsPerSample) { destination.Span[0] = GetAverageFloat(frame, bitsPerSample); }
+    public void Aggregate(
+        ReadOnlyMemory<byte> frame,
+        Memory<float> destination,
+        ushort bitsPerSample
+    )
+    {
+        destination.Span[0] = GetAverageFloat(frame, bitsPerSample);
+    }
 
-    public void Aggregate(ReadOnlyMemory<float> frame, Memory<byte> destination, ushort bitsPerSample)
+    public void Aggregate(
+        ReadOnlyMemory<float> frame,
+        Memory<byte> destination,
+        ushort bitsPerSample
+    )
     {
         var sampleValue = GetAverageFloat(frame);
         SampleSerializer.WriteSample(destination.Span, 0, sampleValue, bitsPerSample);
@@ -64,8 +86,8 @@ internal class AverageChannelAggregationStrategy : IChannelAggregationStrategy
     private static float GetAverageFloat(ReadOnlyMemory<float> frame)
     {
         var span = frame.Span;
-        var sum  = 0.0f;
-        for ( var i = 0; i < span.Length; i++ )
+        var sum = 0.0f;
+        for (var i = 0; i < span.Length; i++)
         {
             sum += span[i];
         }
@@ -76,9 +98,9 @@ internal class AverageChannelAggregationStrategy : IChannelAggregationStrategy
     private static float GetAverageFloat(ReadOnlyMemory<byte> frame, ushort bitsPerSample)
     {
         var index = 0;
-        var sum   = 0f;
-        var span  = frame.Span;
-        while ( index < frame.Length )
+        var sum = 0f;
+        var span = frame.Span;
+        while (index < frame.Length)
         {
             sum += SampleSerializer.ReadSample(span, ref index, bitsPerSample);
         }
@@ -93,17 +115,35 @@ internal class AverageChannelAggregationStrategy : IChannelAggregationStrategy
 /// </summary>
 internal class SumChannelAggregationStrategy : IChannelAggregationStrategy
 {
-    public void Aggregate(ReadOnlyMemory<float> frame, Memory<float> destination) { destination.Span[0] = GetSumFloat(frame); }
+    public void Aggregate(ReadOnlyMemory<float> frame, Memory<float> destination)
+    {
+        destination.Span[0] = GetSumFloat(frame);
+    }
 
-    public void Aggregate(ReadOnlyMemory<byte> frame, Memory<byte> destination, ushort bitsPerSample)
+    public void Aggregate(
+        ReadOnlyMemory<byte> frame,
+        Memory<byte> destination,
+        ushort bitsPerSample
+    )
     {
         var sampleValue = GetSumFloat(frame, bitsPerSample);
         SampleSerializer.WriteSample(destination.Span, 0, sampleValue, bitsPerSample);
     }
 
-    public void Aggregate(ReadOnlyMemory<byte> frame, Memory<float> destination, ushort bitsPerSample) { destination.Span[0] = GetSumFloat(frame, bitsPerSample); }
+    public void Aggregate(
+        ReadOnlyMemory<byte> frame,
+        Memory<float> destination,
+        ushort bitsPerSample
+    )
+    {
+        destination.Span[0] = GetSumFloat(frame, bitsPerSample);
+    }
 
-    public void Aggregate(ReadOnlyMemory<float> frame, Memory<byte> destination, ushort bitsPerSample)
+    public void Aggregate(
+        ReadOnlyMemory<float> frame,
+        Memory<byte> destination,
+        ushort bitsPerSample
+    )
     {
         var sampleValue = GetSumFloat(frame);
         SampleSerializer.WriteSample(destination.Span, 0, sampleValue, bitsPerSample);
@@ -112,18 +152,18 @@ internal class SumChannelAggregationStrategy : IChannelAggregationStrategy
     private static float GetSumFloat(ReadOnlyMemory<float> frame)
     {
         var span = frame.Span;
-        var sum  = 0.0f;
-        for ( var i = 0; i < span.Length; i++ )
+        var sum = 0.0f;
+        for (var i = 0; i < span.Length; i++)
         {
             sum += span[i];
         }
 
         // Ensure the float value is within the range (-1, 1)
-        if ( sum > 1 )
+        if (sum > 1)
         {
             sum = 1;
         }
-        else if ( sum < -1 )
+        else if (sum < -1)
         {
             sum = -1;
         }
@@ -134,19 +174,19 @@ internal class SumChannelAggregationStrategy : IChannelAggregationStrategy
     private static float GetSumFloat(ReadOnlyMemory<byte> frame, ushort bitsPerSample)
     {
         var index = 0;
-        var sum   = 0f;
-        var span  = frame.Span;
-        while ( index < frame.Length )
+        var sum = 0f;
+        var span = frame.Span;
+        while (index < frame.Length)
         {
             sum += SampleSerializer.ReadSample(span, ref index, bitsPerSample);
         }
 
         // Ensure the float value is within the range (-1, 1)
-        if ( sum > 1 )
+        if (sum > 1)
         {
             sum = 1;
         }
-        else if ( sum < -1 )
+        else if (sum < -1)
         {
             sum = -1;
         }
@@ -161,25 +201,50 @@ internal class SumChannelAggregationStrategy : IChannelAggregationStrategy
 /// <param name="channelIndex">The index of the channel to use for aggregation.</param>
 internal class SelectChannelAggregationStrategy(int channelIndex) : IChannelAggregationStrategy
 {
-    public void Aggregate(ReadOnlyMemory<float> frame, Memory<float> destination) { destination.Span[0] = GetChannelFloat(frame, channelIndex); }
+    public void Aggregate(ReadOnlyMemory<float> frame, Memory<float> destination)
+    {
+        destination.Span[0] = GetChannelFloat(frame, channelIndex);
+    }
 
-    public void Aggregate(ReadOnlyMemory<byte> frame, Memory<byte> destination, ushort bitsPerSample)
+    public void Aggregate(
+        ReadOnlyMemory<byte> frame,
+        Memory<byte> destination,
+        ushort bitsPerSample
+    )
     {
         var sampleValue = GetChannelFloat(frame, channelIndex, bitsPerSample);
         SampleSerializer.WriteSample(destination.Span, 0, sampleValue, bitsPerSample);
     }
 
-    public void Aggregate(ReadOnlyMemory<byte> frame, Memory<float> destination, ushort bitsPerSample) { destination.Span[0] = GetChannelFloat(frame, channelIndex, bitsPerSample); }
+    public void Aggregate(
+        ReadOnlyMemory<byte> frame,
+        Memory<float> destination,
+        ushort bitsPerSample
+    )
+    {
+        destination.Span[0] = GetChannelFloat(frame, channelIndex, bitsPerSample);
+    }
 
-    public void Aggregate(ReadOnlyMemory<float> frame, Memory<byte> destination, ushort bitsPerSample)
+    public void Aggregate(
+        ReadOnlyMemory<float> frame,
+        Memory<byte> destination,
+        ushort bitsPerSample
+    )
     {
         var sampleValue = GetChannelFloat(frame, channelIndex);
         SampleSerializer.WriteSample(destination.Span, 0, sampleValue, bitsPerSample);
     }
 
-    private static float GetChannelFloat(ReadOnlyMemory<float> frame, int channelIndex) { return frame.Span[channelIndex]; }
+    private static float GetChannelFloat(ReadOnlyMemory<float> frame, int channelIndex)
+    {
+        return frame.Span[channelIndex];
+    }
 
-    private static float GetChannelFloat(ReadOnlyMemory<byte> frame, int channelIndex, ushort bitsPerSample)
+    private static float GetChannelFloat(
+        ReadOnlyMemory<byte> frame,
+        int channelIndex,
+        ushort bitsPerSample
+    )
     {
         var byteIndex = channelIndex * bitsPerSample / 8;
 

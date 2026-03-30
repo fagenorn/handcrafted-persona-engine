@@ -1,6 +1,5 @@
 ﻿using System.Text;
 using System.Text.RegularExpressions;
-
 using Microsoft.Extensions.Logging;
 
 namespace PersonaEngine.Lib.TTS.Synthesis;
@@ -9,22 +8,30 @@ namespace PersonaEngine.Lib.TTS.Synthesis;
 ///     High-performance sentence segmentation using both rule-based and ML approaches with
 ///     advanced handling of edge cases and text structures
 /// </summary>
-public partial class SentenceSegmenter(IMlSentenceDetector mlDetector, ILogger<SentenceSegmenter> logger) : ISentenceSegmenter
+public partial class SentenceSegmenter(
+    IMlSentenceDetector mlDetector,
+    ILogger<SentenceSegmenter> logger
+) : ISentenceSegmenter
 {
     private const int MinimumSentences = 2;
 
-    private static readonly Regex SpecialTokenPattern = new(@"\[[A-Z]+:[^\]]+\]", RegexOptions.Compiled);
+    private static readonly Regex SpecialTokenPattern = new(
+        @"\[[A-Z]+:[^\]]+\]",
+        RegexOptions.Compiled
+    );
 
-    private readonly ILogger<SentenceSegmenter> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly ILogger<SentenceSegmenter> _logger =
+        logger ?? throw new ArgumentNullException(nameof(logger));
 
-    private readonly IMlSentenceDetector _mlDetector = mlDetector ?? throw new ArgumentNullException(nameof(mlDetector));
+    private readonly IMlSentenceDetector _mlDetector =
+        mlDetector ?? throw new ArgumentNullException(nameof(mlDetector));
 
     /// <summary>
     ///     Segments text into sentences with optimized handling and pre-processing for boundary detection
     /// </summary>
     public IReadOnlyList<string> Segment(string text)
     {
-        if ( string.IsNullOrEmpty(text) )
+        if (string.IsNullOrEmpty(text))
         {
             return Array.Empty<string>();
         }
@@ -35,9 +42,12 @@ public partial class SentenceSegmenter(IMlSentenceDetector mlDetector, ILogger<S
             var sentences = _mlDetector.Detect(text);
 
             // If we have fewer than minimum required sentences, try pre-processing
-            if ( sentences.Count < MinimumSentences )
+            if (sentences.Count < MinimumSentences)
             {
-                _logger.LogTrace("Initial segmentation yielded only {count} sentence(s), attempting pre-processing", sentences.Count);
+                _logger.LogTrace(
+                    "Initial segmentation yielded only {count} sentence(s), attempting pre-processing",
+                    sentences.Count
+                );
 
                 // Apply pre-processing to create potential sentence boundaries
                 var preprocessedText = AddPotentialSentenceBoundaries(text);
@@ -45,7 +55,10 @@ public partial class SentenceSegmenter(IMlSentenceDetector mlDetector, ILogger<S
                 // Re-detect sentences with the pre-processed text
                 sentences = _mlDetector.Detect(preprocessedText);
 
-                _logger.LogTrace("After pre-processing, segmentation yielded {count} sentence(s)", sentences.Count);
+                _logger.LogTrace(
+                    "After pre-processing, segmentation yielded {count} sentence(s)",
+                    sentences.Count
+                );
             }
 
             return sentences;
@@ -64,26 +77,26 @@ public partial class SentenceSegmenter(IMlSentenceDetector mlDetector, ILogger<S
     /// </summary>
     private string AddPotentialSentenceBoundaries(string text)
     {
-        if ( string.IsNullOrEmpty(text) )
+        if (string.IsNullOrEmpty(text))
         {
             return text;
         }
 
         try
         {
-            if ( !SpecialTokenPattern.IsMatch(text) )
+            if (!SpecialTokenPattern.IsMatch(text))
             {
                 // No special tokens - apply normal processing
                 return ApplyBasicPreprocessing(text);
             }
 
-            var result          = new StringBuilder(text.Length + 20);
+            var result = new StringBuilder(text.Length + 20);
             var currentPosition = 0;
 
-            foreach ( Match match in SpecialTokenPattern.Matches(text) )
+            foreach (Match match in SpecialTokenPattern.Matches(text))
             {
                 // Process the text between the last token and this one
-                if ( match.Index > currentPosition )
+                if (match.Index > currentPosition)
                 {
                     var segment = text.Substring(currentPosition, match.Index - currentPosition);
                     result.Append(ApplyBasicPreprocessing(segment));
@@ -94,7 +107,7 @@ public partial class SentenceSegmenter(IMlSentenceDetector mlDetector, ILogger<S
                 currentPosition = match.Index + match.Length;
             }
 
-            if ( currentPosition < text.Length )
+            if (currentPosition < text.Length)
             {
                 var segment = text[currentPosition..];
                 result.Append(ApplyBasicPreprocessing(segment));
@@ -104,7 +117,10 @@ public partial class SentenceSegmenter(IMlSentenceDetector mlDetector, ILogger<S
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error during preprocessing for sentence boundaries. Using original text.");
+            _logger.LogWarning(
+                ex,
+                "Error during preprocessing for sentence boundaries. Using original text."
+            );
 
             return text;
         }
@@ -132,5 +148,6 @@ public partial class SentenceSegmenter(IMlSentenceDetector mlDetector, ILogger<S
         return text;
     }
 
-    [GeneratedRegex(@"\.([A-Za-z0-9])")] private static partial Regex TextAfterSpaceRegex();
+    [GeneratedRegex(@"\.([A-Za-z0-9])")]
+    private static partial Regex TextAfterSpaceRegex();
 }

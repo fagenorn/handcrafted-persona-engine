@@ -40,20 +40,28 @@ public class CubismModelUserData
     public CubismModelUserData(string data)
     {
         using var stream = File.Open(data, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        var obj = JsonSerializer.Deserialize(stream, CubismModelUserDataObjContext.Default.CubismModelUserDataObj)
-                  ?? throw new Exception("Load UserData error");
+        var obj =
+            JsonSerializer.Deserialize(
+                stream,
+                CubismModelUserDataObjContext.Default.CubismModelUserDataObj
+            ) ?? throw new Exception("Load UserData error");
 
         var typeOfArtMesh = CubismFramework.CubismIdManager.GetId(ArtMesh);
 
         var nodeCount = obj.Meta.UserDataCount;
 
-        for ( var i = 0; i < nodeCount; i++ )
+        for (var i = 0; i < nodeCount; i++)
         {
-            var                     node    = obj.UserData[i];
-            CubismModelUserDataNode addNode = new() { TargetId = CubismFramework.CubismIdManager.GetId(node.Id), TargetType = CubismFramework.CubismIdManager.GetId(node.Target), Value = CubismFramework.CubismIdManager.GetId(node.Value) };
+            var node = obj.UserData[i];
+            CubismModelUserDataNode addNode = new()
+            {
+                TargetId = CubismFramework.CubismIdManager.GetId(node.Id),
+                TargetType = CubismFramework.CubismIdManager.GetId(node.Target),
+                Value = CubismFramework.CubismIdManager.GetId(node.Value),
+            };
             _userDataNodes.Add(addNode);
 
-            if ( addNode.TargetType == typeOfArtMesh )
+            if (addNode.TargetType == typeOfArtMesh)
             {
                 ArtMeshUserDataNodes.Add(addNode);
             }

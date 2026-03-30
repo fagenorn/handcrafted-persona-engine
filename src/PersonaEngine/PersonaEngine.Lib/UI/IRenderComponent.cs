@@ -9,7 +9,7 @@ public interface IRenderComponent : IDisposable
     bool UseSpout { get; }
 
     string SpoutTarget { get; }
-    
+
     /// <summary>
     ///     Priority of the filter (higher values run first)
     /// </summary>

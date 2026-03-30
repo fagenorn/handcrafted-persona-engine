@@ -1,12 +1,11 @@
 ﻿using System.Runtime.InteropServices;
-
 using PersonaEngine.Lib.UI.Common;
-
 using Silk.NET.OpenGL;
 
 namespace PersonaEngine.Lib.UI.Text.Rendering;
 
-public class BufferObject<T> : IDisposable where T : unmanaged
+public class BufferObject<T> : IDisposable
+    where T : unmanaged
 {
     private readonly BufferTargetARB _bufferType;
 
@@ -21,7 +20,7 @@ public class BufferObject<T> : IDisposable where T : unmanaged
         _gl = glApi;
 
         _bufferType = bufferType;
-        _size       = size;
+        _size = size;
 
         _handle = _gl.GenBuffer();
         _gl.CheckError();
@@ -29,7 +28,12 @@ public class BufferObject<T> : IDisposable where T : unmanaged
         Bind();
 
         var elementSizeInBytes = Marshal.SizeOf<T>();
-        _gl.BufferData(bufferType, (nuint)(size * elementSizeInBytes), null, isDynamic ? BufferUsageARB.StreamDraw : BufferUsageARB.StaticDraw);
+        _gl.BufferData(
+            bufferType,
+            (nuint)(size * elementSizeInBytes),
+            null,
+            isDynamic ? BufferUsageARB.StreamDraw : BufferUsageARB.StaticDraw
+        );
         _gl.CheckError();
     }
 

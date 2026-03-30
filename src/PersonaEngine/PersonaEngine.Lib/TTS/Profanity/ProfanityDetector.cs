@@ -41,7 +41,10 @@ public class ProfanityDetector : IDisposable
     /// </summary>
     public float SevereThreshold { get; set; } = 0.9f;
 
-    public void Dispose() { _onnxDetector.Dispose(); }
+    public void Dispose()
+    {
+        _onnxDetector.Dispose();
+    }
 
     /// <summary>
     ///     Evaluates the given sentence and determines the severity of profanity.
@@ -53,7 +56,7 @@ public class ProfanityDetector : IDisposable
     /// </returns>
     public ProfanitySeverity EvaluateProfanity(string sentence)
     {
-        if ( string.IsNullOrWhiteSpace(sentence) )
+        if (string.IsNullOrWhiteSpace(sentence))
         {
             _logger.LogWarning("Empty or whitespace sentence provided.");
 
@@ -63,17 +66,17 @@ public class ProfanityDetector : IDisposable
         var score = _onnxDetector.Run(sentence);
         _logger.LogDebug("Sentence: \"{sentence}\" scored {score}.", sentence, score);
 
-        if ( score < FilterThreshold )
+        if (score < FilterThreshold)
         {
             return ProfanitySeverity.Clean;
         }
 
-        if ( score < ModerateThreshold )
+        if (score < ModerateThreshold)
         {
             return ProfanitySeverity.Mild;
         }
 
-        if ( score < SevereThreshold )
+        if (score < SevereThreshold)
         {
             return ProfanitySeverity.Moderate;
         }
@@ -89,64 +92,83 @@ public class ProfanityDetector : IDisposable
     /// </summary>
     /// <param name="testData">A collection of test sentences with their expected results.</param>
     /// <returns>A <see cref="BenchmarkResult" /> instance containing detailed metrics.</returns>
-    public BenchmarkResult Benchmark(IEnumerable<(string Sentence, bool ExpectedIsProfane)> testData)
+    public BenchmarkResult Benchmark(
+        IEnumerable<(string Sentence, bool ExpectedIsProfane)> testData
+    )
     {
-        if ( testData == null )
+        if (testData == null)
         {
             throw new ArgumentNullException(nameof(testData));
         }
 
-        int total          = 0,
-            truePositives  = 0,
+        int total = 0,
+            truePositives = 0,
             falsePositives = 0,
-            trueNegatives  = 0,
+            trueNegatives = 0,
             falseNegatives = 0;
 
-        foreach ( var (sentence, expected) in testData )
+        foreach (var (sentence, expected) in testData)
         {
             total++;
             var severity = EvaluateProfanity(sentence);
             // For benchmarking, any severity other than Clean is considered profane.
             var actual = severity != ProfanitySeverity.Clean;
 
-            if ( expected && actual )
+            if (expected && actual)
             {
                 truePositives++;
             }
-            else if ( !expected && actual )
+            else if (!expected && actual)
             {
                 falsePositives++;
             }
-            else if ( !expected && !actual )
+            else if (!expected && !actual)
             {
                 trueNegatives++;
             }
-            else if ( expected && !actual )
+            else if (expected && !actual)
             {
                 falseNegatives++;
             }
 
-            _logger.LogDebug("Benchmarking sentence: \"{sentence}\" | Severity: {severity} | Expected: {expected} | Actual: {actual}",
-                             sentence, severity, expected, actual);
+            _logger.LogDebug(
+                "Benchmarking sentence: \"{sentence}\" | Severity: {severity} | Expected: {expected} | Actual: {actual}",
+                sentence,
+                severity,
+                expected,
+                actual
+            );
         }
 
-        var accuracy  = total > 0 ? (double)(truePositives + trueNegatives) / total : 0;
-        var precision = truePositives + falsePositives > 0 ? (double)truePositives / (truePositives + falsePositives) : 0;
-        var recall    = truePositives + falseNegatives > 0 ? (double)truePositives / (truePositives + falseNegatives) : 0;
+        var accuracy = total > 0 ? (double)(truePositives + trueNegatives) / total : 0;
+        var precision =
+            truePositives + falsePositives > 0
+                ? (double)truePositives / (truePositives + falsePositives)
+                : 0;
+        var recall =
+            truePositives + falseNegatives > 0
+                ? (double)truePositives / (truePositives + falseNegatives)
+                : 0;
 
-        var result = new BenchmarkResult {
-                                             Total          = total,
-                                             TruePositives  = truePositives,
-                                             FalsePositives = falsePositives,
-                                             TrueNegatives  = trueNegatives,
-                                             FalseNegatives = falseNegatives,
-                                             Accuracy       = accuracy,
-                                             Precision      = precision,
-                                             Recall         = recall
-                                         };
+        var result = new BenchmarkResult
+        {
+            Total = total,
+            TruePositives = truePositives,
+            FalsePositives = falsePositives,
+            TrueNegatives = trueNegatives,
+            FalseNegatives = falseNegatives,
+            Accuracy = accuracy,
+            Precision = precision,
+            Recall = recall,
+        };
 
-        _logger.LogInformation("Benchmark results: {result} [Thresholds: FilterThreshold={FilterThreshold}, ModerateThreshold={ModerateThreshold}, SevereThreshold={SevereThreshold}]",
-                               result, FilterThreshold, ModerateThreshold, SevereThreshold);
+        _logger.LogInformation(
+            "Benchmark results: {result} [Thresholds: FilterThreshold={FilterThreshold}, ModerateThreshold={ModerateThreshold}, SevereThreshold={SevereThreshold}]",
+            result,
+            FilterThreshold,
+            ModerateThreshold,
+            SevereThreshold
+        );
 
         return result;
     }

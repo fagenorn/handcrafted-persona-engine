@@ -13,5 +13,8 @@ public interface IVadDetector
     /// </summary>
     /// <param name="source">The audio source to analyze.</param>
     /// <param name="cancellationToken">The cancellation token to observe.</param>
-    IAsyncEnumerable<VadSegment> DetectSegmentsAsync(IAudioSource source, CancellationToken cancellationToken);
+    IAsyncEnumerable<VadSegment> DetectSegmentsAsync(
+        IAudioSource source,
+        CancellationToken cancellationToken
+    );
 }

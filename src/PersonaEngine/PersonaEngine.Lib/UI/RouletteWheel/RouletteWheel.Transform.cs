@@ -22,7 +22,7 @@ public partial class RouletteWheel
         /// <summary>
         ///     Position is based on viewport anchors and will adapt during resizing.
         /// </summary>
-        Anchored
+        Anchored,
     }
 
     /// <summary>
@@ -46,7 +46,7 @@ public partial class RouletteWheel
 
         BottomCenter,
 
-        BottomRight
+        BottomRight,
     }
 
     private Vector2 _anchorOffset = Vector2.Zero;
@@ -65,7 +65,8 @@ public partial class RouletteWheel
     /// <summary>
     ///     Gets the current diameter of the wheel in pixels.
     /// </summary>
-    public float Diameter => Math.Min(_viewportWidth, _viewportHeight) * _wheelSize * OUTER_RADIUS_FACTOR;
+    public float Diameter =>
+        Math.Min(_viewportWidth, _viewportHeight) * _wheelSize * OUTER_RADIUS_FACTOR;
 
     /// <summary>
     ///     Gets or sets the rotation of the wheel in radians.
@@ -79,11 +80,11 @@ public partial class RouletteWheel
 
     public void Resize()
     {
-        _viewportWidth  = _config.CurrentValue.Width;
+        _viewportWidth = _config.CurrentValue.Width;
         _viewportHeight = _config.CurrentValue.Height;
         _textRenderer.OnViewportChanged(_viewportWidth, _viewportHeight);
 
-        switch ( _positionMode )
+        switch (_positionMode)
         {
             case PositionMode.Anchored:
                 UpdatePositionFromAnchor();
@@ -99,7 +100,7 @@ public partial class RouletteWheel
                 throw new ArgumentOutOfRangeException();
         }
 
-        if ( _useAdaptiveTextSize )
+        if (_useAdaptiveTextSize)
         {
             CalculateAllSegmentFontSizes();
         }
@@ -108,12 +109,18 @@ public partial class RouletteWheel
     /// <summary>
     ///     Rotates the wheel by the specified angle in radians.
     /// </summary>
-    public void RotateBy(float angleRadians) { Rotation += angleRadians; }
+    public void RotateBy(float angleRadians)
+    {
+        Rotation += angleRadians;
+    }
 
     /// <summary>
     ///     Rotates the wheel by the specified angle in radians.
     /// </summary>
-    public void RotateByDegrees(float angleDegrees) { Rotation += angleDegrees * MathF.PI / 180; }
+    public void RotateByDegrees(float angleDegrees)
+    {
+        Rotation += angleDegrees * MathF.PI / 180;
+    }
 
     /// <summary>
     ///     Sets the diameter of the wheel in pixels.
@@ -127,18 +134,27 @@ public partial class RouletteWheel
     /// <summary>
     ///     Sets the radius of the wheel in pixels.
     /// </summary>
-    public void SetRadius(float radius) { SetDiameter(radius * 2); }
+    public void SetRadius(float radius)
+    {
+        SetDiameter(radius * 2);
+    }
 
     /// <summary>
     ///     Sets the wheel size as a percentage of the viewport (0.0 to 1.0).
     /// </summary>
     /// <param name="percentage">Value between 0.0 and 1.0</param>
-    public void SetSizePercentage(float percentage) { _wheelSize = Math.Clamp(percentage, 0.1f, 1.0f); }
+    public void SetSizePercentage(float percentage)
+    {
+        _wheelSize = Math.Clamp(percentage, 0.1f, 1.0f);
+    }
 
     /// <summary>
     ///     Scales the wheel size by the specified factor relative to its current size.
     /// </summary>
-    public void Scale(float factor) { _wheelSize = Math.Clamp(_wheelSize * factor, 0.1f, 1.0f); }
+    public void Scale(float factor)
+    {
+        _wheelSize = Math.Clamp(_wheelSize * factor, 0.1f, 1.0f);
+    }
 
     /// <summary>
     ///     Translates the wheel by the specified amount.
@@ -146,7 +162,7 @@ public partial class RouletteWheel
     public void Translate(float deltaX, float deltaY)
     {
         _positionMode = PositionMode.Absolute;
-        _position     = new Vector2(_position.X + deltaX, _position.Y + deltaY);
+        _position = new Vector2(_position.X + deltaX, _position.Y + deltaY);
     }
 
     /// <summary>
@@ -154,8 +170,8 @@ public partial class RouletteWheel
     /// </summary>
     public void Translate(Vector2 delta)
     {
-        _positionMode =  PositionMode.Absolute;
-        _position     += delta;
+        _positionMode = PositionMode.Absolute;
+        _position += delta;
     }
 
     /// <summary>
@@ -164,10 +180,7 @@ public partial class RouletteWheel
     public void PositionByPercentage(float xPercent, float yPercent)
     {
         _positionMode = PositionMode.Percentage;
-        _positionPercentage = new Vector2(
-                                          Math.Clamp(xPercent, 0, 1),
-                                          Math.Clamp(yPercent, 0, 1)
-                                         );
+        _positionPercentage = new Vector2(Math.Clamp(xPercent, 0, 1), Math.Clamp(yPercent, 0, 1));
 
         UpdatePositionFromPercentage();
     }
@@ -178,9 +191,9 @@ public partial class RouletteWheel
     private void UpdatePositionFromPercentage()
     {
         _position = new Vector2(
-                                _viewportWidth * _positionPercentage.X,
-                                _viewportHeight * _positionPercentage.Y
-                               );
+            _viewportWidth * _positionPercentage.X,
+            _viewportHeight * _positionPercentage.Y
+        );
     }
 
     /// <summary>
@@ -189,7 +202,7 @@ public partial class RouletteWheel
     public void SetAbsolutePosition(float x, float y)
     {
         _positionMode = PositionMode.Absolute;
-        _position     = new Vector2(x, y);
+        _position = new Vector2(x, y);
     }
 
     /// <summary>
@@ -197,9 +210,9 @@ public partial class RouletteWheel
     /// </summary>
     public void PositionAt(ViewportAnchor anchor, Vector2 offset = default)
     {
-        _positionMode  = PositionMode.Anchored;
+        _positionMode = PositionMode.Anchored;
         _currentAnchor = anchor;
-        _anchorOffset  = offset;
+        _anchorOffset = offset;
 
         UpdatePositionFromAnchor();
     }
@@ -210,9 +223,9 @@ public partial class RouletteWheel
     private void UpdatePositionFromAnchor()
     {
         float x = 0,
-              y = 0;
+            y = 0;
 
-        switch ( _currentAnchor )
+        switch (_currentAnchor)
         {
             case ViewportAnchor.Center:
                 x = _viewportWidth / 2.0f;
@@ -267,5 +280,8 @@ public partial class RouletteWheel
     /// <summary>
     ///     Centers the wheel in the viewport.
     /// </summary>
-    public void CenterInViewport() { _position = new Vector2(_viewportWidth / 2.0f, _viewportHeight / 2.0f); }
+    public void CenterInViewport()
+    {
+        _position = new Vector2(_viewportWidth / 2.0f, _viewportHeight / 2.0f);
+    }
 }

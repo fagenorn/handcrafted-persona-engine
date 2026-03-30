@@ -1,17 +1,12 @@
 ﻿using System.Drawing;
 using System.Numerics;
-
 using FontStashSharp;
-
 using Microsoft.Extensions.Options;
-
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.UI.Text.Rendering;
-
 using Silk.NET.Input;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
-
 using Shader = PersonaEngine.Lib.UI.Common.Shader;
 
 namespace PersonaEngine.Lib.UI.RouletteWheel;
@@ -94,7 +89,7 @@ public partial class RouletteWheel : IRenderComponent
 
     public RouletteWheel(IOptionsMonitor<RouletteWheelOptions> config, FontProvider fontProvider)
     {
-        _config       = config;
+        _config = config;
         _fontProvider = fontProvider;
     }
 
@@ -107,12 +102,12 @@ public partial class RouletteWheel : IRenderComponent
         get => _numSections;
         private set
         {
-            _numSections   = Math.Clamp(value, 2, 24);
+            _numSections = Math.Clamp(value, 2, 24);
             _targetSegment = Math.Min(_targetSegment, _numSections - 1);
-            _startSegment  = Math.Min(_startSegment, _numSections - 1);
+            _startSegment = Math.Min(_startSegment, _numSections - 1);
             ResizeSectionLabels();
 
-            if ( _useAdaptiveTextSize )
+            if (_useAdaptiveTextSize)
             {
                 CalculateAllSegmentFontSizes();
             }
@@ -127,12 +122,22 @@ public partial class RouletteWheel : IRenderComponent
 
     public void Initialize(GL gl, IView view, IInputContext input)
     {
-        _gl           = gl;
+        _gl = gl;
         _textRenderer = new TextRenderer(gl);
 
         // Initialize buffers
-        _vertexBuffer = new BufferObject<VertexPositionTexture>(gl, MAX_VERTICES, BufferTargetARB.ArrayBuffer, true);
-        _indexBuffer  = new BufferObject<short>(gl, _indexData.Length, BufferTargetARB.ElementArrayBuffer, false);
+        _vertexBuffer = new BufferObject<VertexPositionTexture>(
+            gl,
+            MAX_VERTICES,
+            BufferTargetARB.ArrayBuffer,
+            true
+        );
+        _indexBuffer = new BufferObject<short>(
+            gl,
+            _indexData.Length,
+            BufferTargetARB.ElementArrayBuffer,
+            false
+        );
         _indexBuffer.SetData(_indexData, 0, _indexData.Length);
 
         // Initialize shader
@@ -167,13 +172,13 @@ public partial class RouletteWheel : IRenderComponent
     {
         _time += deltaTime;
 
-        if ( IsSpinning )
+        if (IsSpinning)
         {
             var progress = Math.Min((_time - _spinStartTime) / _spinDuration, 1.0f);
             Progress = progress;
         }
 
-        if ( IsSpinning && _time - _spinStartTime >= _spinDuration )
+        if (IsSpinning && _time - _spinStartTime >= _spinDuration)
         {
             IsSpinning = false;
             _onSpinCompleteCallback?.Invoke((int)_targetSegment);
@@ -188,7 +193,7 @@ public partial class RouletteWheel : IRenderComponent
         lock (_applyingConfig)
         {
             // Skip rendering if wheel is disabled and not animating
-            if ( !IsEnabled && CurrentAnimationState == AnimationState.Idle )
+            if (!IsEnabled && CurrentAnimationState == AnimationState.Idle)
             {
                 return;
             }
@@ -201,7 +206,7 @@ public partial class RouletteWheel : IRenderComponent
             End();
 
             // Only render labels if wheel is sufficiently visible
-            if ( _animationCurrentScale > 0.25f )
+            if (_animationCurrentScale > 0.25f)
             {
                 RenderSectionLabels();
             }
@@ -223,28 +228,34 @@ public partial class RouletteWheel : IRenderComponent
         _textRenderer.Dispose();
     }
 
-    public string GetLabel(int index) { return _sectionLabels[index]; }
+    public string GetLabel(int index)
+    {
+        return _sectionLabels[index];
+    }
 
-    public string[] GetLabels() { return _sectionLabels.ToArray(); }
+    public string[] GetLabels()
+    {
+        return _sectionLabels.ToArray();
+    }
 
     public void Spin(int targetSection, Action<int>? onSpinComplete = null)
     {
-        if ( IsSpinning || !IsEnabled || CurrentAnimationState != AnimationState.Idle )
+        if (IsSpinning || !IsEnabled || CurrentAnimationState != AnimationState.Idle)
         {
             return;
         }
 
-        _targetSegment          = Math.Clamp(targetSection, 0, _numSections - 1);
-        _startSegment           = GetCurrentWheelPosition();
-        _spinStartTime          = _time;
-        IsSpinning              = true;
+        _targetSegment = Math.Clamp(targetSection, 0, _numSections - 1);
+        _startSegment = GetCurrentWheelPosition();
+        _spinStartTime = _time;
+        IsSpinning = true;
         _onSpinCompleteCallback = onSpinComplete;
-        Progress                = 0;
+        Progress = 0;
     }
 
     public int SpinRandom(Action<int>? onSpinComplete = null)
     {
-        if ( IsSpinning || !IsEnabled || CurrentAnimationState != AnimationState.Idle )
+        if (IsSpinning || !IsEnabled || CurrentAnimationState != AnimationState.Idle)
         {
             return -1;
         }
@@ -257,12 +268,12 @@ public partial class RouletteWheel : IRenderComponent
 
     public Task<int> SpinAsync(int? targetSection = null)
     {
-        if ( IsSpinning || !IsEnabled || CurrentAnimationState != AnimationState.Idle )
+        if (IsSpinning || !IsEnabled || CurrentAnimationState != AnimationState.Idle)
         {
             return Task.FromResult(-1);
         }
 
-        var tcs    = new TaskCompletionSource<int>();
+        var tcs = new TaskCompletionSource<int>();
         var target = targetSection ?? Random.Shared.Next(_numSections);
 
         Spin(target, result => tcs.SetResult(result));
@@ -272,43 +283,44 @@ public partial class RouletteWheel : IRenderComponent
 
     public void SetSectionLabels(string[] labels)
     {
-        if ( labels.Length == 0 )
+        if (labels.Length == 0)
         {
             return;
         }
 
-        if ( labels.Length != _numSections )
+        if (labels.Length != _numSections)
         {
             NumberOfSections = labels.Length;
         }
 
-        for ( var i = 0; i < _numSections; i++ )
+        for (var i = 0; i < _numSections; i++)
         {
             _sectionLabels[i] = labels[i];
         }
 
-        if ( _useAdaptiveTextSize )
+        if (_useAdaptiveTextSize)
         {
             CalculateAllSegmentFontSizes();
         }
     }
 
     public void ConfigureTextStyle(
-        bool   radialText      = true,
-        Color? textColor       = null,
-        float  scale           = 1.0f,
-        int    strokeWidth     = 2,
-        bool   useAdaptiveSize = true)
+        bool radialText = true,
+        Color? textColor = null,
+        float scale = 1.0f,
+        int strokeWidth = 2,
+        bool useAdaptiveSize = true
+    )
     {
         var color = textColor ?? Color.White;
 
-        _textColor             = new FSColor(color.R, color.G, color.B, color.A);
-        _textScale             = scale;
-        _textStrokeWidth       = strokeWidth;
+        _textColor = new FSColor(color.R, color.G, color.B, color.A);
+        _textScale = scale;
+        _textStrokeWidth = strokeWidth;
         _radialTextOrientation = radialText;
-        _useAdaptiveTextSize   = useAdaptiveSize;
+        _useAdaptiveTextSize = useAdaptiveSize;
 
-        if ( _useAdaptiveTextSize )
+        if (_useAdaptiveTextSize)
         {
             CalculateAllSegmentFontSizes();
         }
@@ -317,10 +329,9 @@ public partial class RouletteWheel : IRenderComponent
     private static short[] GenerateIndexArray()
     {
         var result = new short[MAX_INDICES];
-        for ( int i = 0,
-                  vi = 0; i < MAX_INDICES; i += 6, vi += 4 )
+        for (int i = 0, vi = 0; i < MAX_INDICES; i += 6, vi += 4)
         {
-            result[i]     = (short)vi;
+            result[i] = (short)vi;
             result[i + 1] = (short)(vi + 1);
             result[i + 2] = (short)(vi + 2);
             result[i + 3] = (short)(vi + 1);
@@ -340,7 +351,14 @@ public partial class RouletteWheel : IRenderComponent
         _shader.Use();
         UpdateShaderParameters();
 
-        var projectionMatrix = Matrix4x4.CreateOrthographicOffCenter(0, _viewportWidth, _viewportHeight, 0, -1, 1);
+        var projectionMatrix = Matrix4x4.CreateOrthographicOffCenter(
+            0,
+            _viewportWidth,
+            _viewportHeight,
+            0,
+            -1,
+            1
+        );
         _shader.SetUniform("MatrixTransform", projectionMatrix);
 
         _vao.Bind();
@@ -348,17 +366,25 @@ public partial class RouletteWheel : IRenderComponent
         _indexBuffer.Bind();
     }
 
-    private void End() { FlushBuffer(); }
+    private void End()
+    {
+        FlushBuffer();
+    }
 
     private unsafe void FlushBuffer()
     {
-        if ( _vertexIndex == 0 )
+        if (_vertexIndex == 0)
         {
             return;
         }
 
         _vertexBuffer.SetData(_vertexData, 0, _vertexIndex);
-        _gl.DrawElements(PrimitiveType.Triangles, (uint)(_vertexIndex * 6 / 4), DrawElementsType.UnsignedShort, null);
+        _gl.DrawElements(
+            PrimitiveType.Triangles,
+            (uint)(_vertexIndex * 6 / 4),
+            DrawElementsType.UnsignedShort,
+            null
+        );
         _vertexIndex = 0;
     }
 
@@ -366,52 +392,56 @@ public partial class RouletteWheel : IRenderComponent
     {
         // Cache these calculations for performance
         float minDimension = Math.Min(_viewportWidth, _viewportHeight);
-        var   radius       = minDimension * _wheelSize * OUTER_RADIUS_FACTOR / 2.0f;
-        var   centerX      = _position.X;
-        var   centerY      = _position.Y;
-        var   cosR         = (float)Math.Cos(Rotation);
-        var   sinR         = (float)Math.Sin(Rotation);
-        var   left         = centerX - radius;
-        var   right        = centerX + radius;
-        var   top          = centerY - radius;
-        var   bottom       = centerY + radius;
+        var radius = minDimension * _wheelSize * OUTER_RADIUS_FACTOR / 2.0f;
+        var centerX = _position.X;
+        var centerY = _position.Y;
+        var cosR = (float)Math.Cos(Rotation);
+        var sinR = (float)Math.Sin(Rotation);
+        var left = centerX - radius;
+        var right = centerX + radius;
+        var top = centerY - radius;
+        var bottom = centerY + radius;
 
         // Top-left vertex
         _vertexData[_vertexIndex++] = new VertexPositionTexture(
-                                                                RotatePoint(new Vector3(left, top, 0), centerX, centerY, cosR, sinR),
-                                                                new Vector2(0, 0));
+            RotatePoint(new Vector3(left, top, 0), centerX, centerY, cosR, sinR),
+            new Vector2(0, 0)
+        );
 
         // Top-right vertex
         _vertexData[_vertexIndex++] = new VertexPositionTexture(
-                                                                RotatePoint(new Vector3(right, top, 0), centerX, centerY, cosR, sinR),
-                                                                new Vector2(1, 0));
+            RotatePoint(new Vector3(right, top, 0), centerX, centerY, cosR, sinR),
+            new Vector2(1, 0)
+        );
 
         // Bottom-left vertex
         _vertexData[_vertexIndex++] = new VertexPositionTexture(
-                                                                RotatePoint(new Vector3(left, bottom, 0), centerX, centerY, cosR, sinR),
-                                                                new Vector2(0, 1));
+            RotatePoint(new Vector3(left, bottom, 0), centerX, centerY, cosR, sinR),
+            new Vector2(0, 1)
+        );
 
         // Bottom-right vertex
         _vertexData[_vertexIndex++] = new VertexPositionTexture(
-                                                                RotatePoint(new Vector3(right, bottom, 0), centerX, centerY, cosR, sinR),
-                                                                new Vector2(1, 1));
+            RotatePoint(new Vector3(right, bottom, 0), centerX, centerY, cosR, sinR),
+            new Vector2(1, 1)
+        );
     }
 
     private void RenderSectionLabels()
     {
         // Cache these calculations for performance
-        float minDimension         = Math.Min(_viewportWidth, _viewportHeight);
-        var   radius               = minDimension * _wheelSize * OUTER_RADIUS_FACTOR / 2.0f;
-        var   innerRadius          = radius * INNER_RADIUS_FACTOR;
-        var   centerRadius         = radius * CENTER_RADIUS_FACTOR;
-        var   centerX              = _position.X != 0 ? _position.X : _viewportWidth / 2.0f;
-        var   centerY              = _position.Y != 0 ? _position.Y : _viewportHeight / 2.0f;
-        var   availableRadialSpace = innerRadius - centerRadius;
-        var   textRadius           = centerRadius + availableRadialSpace * 0.5f;
-        var   currentRotation      = GetCurrentWheelRotation();
-        var   segmentAngle         = 2.0f * MathF.PI / _numSections;
+        float minDimension = Math.Min(_viewportWidth, _viewportHeight);
+        var radius = minDimension * _wheelSize * OUTER_RADIUS_FACTOR / 2.0f;
+        var innerRadius = radius * INNER_RADIUS_FACTOR;
+        var centerRadius = radius * CENTER_RADIUS_FACTOR;
+        var centerX = _position.X != 0 ? _position.X : _viewportWidth / 2.0f;
+        var centerY = _position.Y != 0 ? _position.Y : _viewportHeight / 2.0f;
+        var availableRadialSpace = innerRadius - centerRadius;
+        var textRadius = centerRadius + availableRadialSpace * 0.5f;
+        var currentRotation = GetCurrentWheelRotation();
+        var segmentAngle = 2.0f * MathF.PI / _numSections;
 
-        if ( _useAdaptiveTextSize && _segmentFontSizes.Count != _numSections )
+        if (_useAdaptiveTextSize && _segmentFontSizes.Count != _numSections)
         {
             CalculateAllSegmentFontSizes();
         }
@@ -423,23 +453,27 @@ public partial class RouletteWheel : IRenderComponent
         // Reusable Vector2 for text position to avoid allocation in the loop
         var position = new Vector2();
 
-        for ( var i = 0; i < _numSections; i++ )
+        for (var i = 0; i < _numSections; i++)
         {
-            if ( string.IsNullOrEmpty(_sectionLabels[i]) )
+            if (string.IsNullOrEmpty(_sectionLabels[i]))
             {
                 continue;
             }
 
-            var fontSize    = _useAdaptiveTextSize ? _segmentFontSizes[i] : _config.CurrentValue.FontSize;
+            var fontSize = _useAdaptiveTextSize
+                ? _segmentFontSizes[i]
+                : _config.CurrentValue.FontSize;
             var segmentFont = fontSystem.GetFont(fontSize);
 
             var rotatedStartAngle = -currentRotation;
-            var rotatedEndAngle   = segmentAngle - currentRotation;
-            var segmentCenter     = (rotatedStartAngle + rotatedEndAngle) / 2.0f + (_numSections - 1 - i) * segmentAngle;
+            var rotatedEndAngle = segmentAngle - currentRotation;
+            var segmentCenter =
+                (rotatedStartAngle + rotatedEndAngle) / 2.0f
+                + (_numSections - 1 - i) * segmentAngle;
 
             // Position text
-            var textX    = centerX + textRadius * MathF.Cos(segmentCenter);
-            var textY    = centerY + textRadius * MathF.Sin(segmentCenter);
+            var textX = centerX + textRadius * MathF.Cos(segmentCenter);
+            var textY = centerY + textRadius * MathF.Sin(segmentCenter);
             var textSize = segmentFont.MeasureString(_sectionLabels[i]);
 
             // Update position instead of creating a new Vector2
@@ -448,20 +482,21 @@ public partial class RouletteWheel : IRenderComponent
 
             // Calculate text rotation
             var textRotation = _radialTextOrientation
-                                   ? MathF.Atan2(textY - centerY, textX - centerX)
-                                   : 0.0f;
+                ? MathF.Atan2(textY - centerY, textX - centerX)
+                : 0.0f;
 
             // Draw text
             segmentFont.DrawText(
-                                 _textRenderer,
-                                 _sectionLabels[i],
-                                 position,
-                                 _textColor,
-                                 textRotation,
-                                 scale: new Vector2(_textScale),
-                                 effect: FontSystemEffect.Stroked,
-                                 effectAmount: _textStrokeWidth,
-                                 origin: textSize / 2);
+                _textRenderer,
+                _sectionLabels[i],
+                position,
+                _textColor,
+                textRotation,
+                scale: new Vector2(_textScale),
+                effect: FontSystemEffect.Stroked,
+                effectAmount: _textStrokeWidth,
+                origin: textSize / 2
+            );
         }
 
         _textRenderer.End();
@@ -480,12 +515,12 @@ public partial class RouletteWheel : IRenderComponent
 
     private float GetCurrentWheelPosition()
     {
-        if ( !IsSpinning )
+        if (!IsSpinning)
         {
             return _targetSegment;
         }
 
-        if ( Progress >= 1.0f )
+        if (Progress >= 1.0f)
         {
             IsSpinning = false;
 
@@ -495,7 +530,7 @@ public partial class RouletteWheel : IRenderComponent
         var easedProgress = EaseOutQuint(Progress);
 
         var segmentDiff = (_targetSegment - _startSegment + _numSections) % _numSections;
-        if ( segmentDiff > _numSections / 2.0f )
+        if (segmentDiff > _numSections / 2.0f)
         {
             segmentDiff -= _numSections;
         }
@@ -510,21 +545,22 @@ public partial class RouletteWheel : IRenderComponent
 
         var targetAngle = baseRotation + -(_targetSegment + 0.5f) * segmentAngle + MathF.PI * 1.5f;
 
-        if ( !IsSpinning )
+        if (!IsSpinning)
         {
             return targetAngle;
         }
 
-        var startAngle    = baseRotation + -(_startSegment + 0.5f) * segmentAngle + MathF.PI * 1.5f;
+        var startAngle = baseRotation + -(_startSegment + 0.5f) * segmentAngle + MathF.PI * 1.5f;
         var easedProgress = EaseOutQuint(Progress);
 
         var adjustedExtraAngle = targetAngle - startAngle;
-        if ( adjustedExtraAngle > 0.0 )
+        if (adjustedExtraAngle > 0.0)
         {
             adjustedExtraAngle -= 2.0f * MathF.PI;
         }
 
-        var spinningAngle = startAngle + (adjustedExtraAngle - _minRotations * 2.0f * MathF.PI) * easedProgress;
+        var spinningAngle =
+            startAngle + (adjustedExtraAngle - _minRotations * 2.0f * MathF.PI) * easedProgress;
 
         return spinningAngle;
     }
@@ -545,40 +581,40 @@ public partial class RouletteWheel : IRenderComponent
 
     private int CalculateOptimalTextSizeForSegment(string label, int segmentIndex)
     {
-        if ( string.IsNullOrEmpty(label) )
+        if (string.IsNullOrEmpty(label))
         {
             return 24;
         }
 
         // Cache these calculations for performance
-        float minDimension         = Math.Min(_viewportWidth, _viewportHeight);
-        var   radius               = minDimension * _wheelSize * OUTER_RADIUS_FACTOR / 2.0f;
-        var   innerRadius          = radius * INNER_RADIUS_FACTOR;
-        var   centerRadius         = radius * CENTER_RADIUS_FACTOR;
-        var   availableRadialSpace = innerRadius - centerRadius;
-        var   textRadius           = centerRadius + availableRadialSpace * 0.5f;
-        var   segmentAngle         = 2.0f * MathF.PI / _numSections;
-        var   maxWidth             = 2.0f * textRadius * MathF.Sin(segmentAngle / 2.0f);
+        float minDimension = Math.Min(_viewportWidth, _viewportHeight);
+        var radius = minDimension * _wheelSize * OUTER_RADIUS_FACTOR / 2.0f;
+        var innerRadius = radius * INNER_RADIUS_FACTOR;
+        var centerRadius = radius * CENTER_RADIUS_FACTOR;
+        var availableRadialSpace = innerRadius - centerRadius;
+        var textRadius = centerRadius + availableRadialSpace * 0.5f;
+        var segmentAngle = 2.0f * MathF.PI / _numSections;
+        var maxWidth = 2.0f * textRadius * MathF.Sin(segmentAngle / 2.0f);
 
         var fontSystem = _fontProvider.GetFontSystem(_config.CurrentValue.Font);
 
         // Binary search for optimal font size
-        var minFontSize     = 1;
-        var maxFontSize     = 72;
+        var minFontSize = 1;
+        var maxFontSize = 72;
         var optimalFontSize = _config.CurrentValue.FontSize;
 
-        while ( minFontSize <= maxFontSize )
+        while (minFontSize <= maxFontSize)
         {
             var currentFontSize = (minFontSize + maxFontSize) / 2;
 
-            var testFont    = fontSystem.GetFont(currentFontSize);
-            var textSize    = testFont.MeasureString(label);
+            var testFont = fontSystem.GetFont(currentFontSize);
+            var textSize = testFont.MeasureString(label);
             var scaledWidth = textSize.X * _textScale * _textSizeAdaptationFactor;
 
-            if ( scaledWidth <= maxWidth * INNER_RADIUS_FACTOR )
+            if (scaledWidth <= maxWidth * INNER_RADIUS_FACTOR)
             {
                 optimalFontSize = currentFontSize;
-                minFontSize     = currentFontSize + 1;
+                minFontSize = currentFontSize + 1;
             }
             else
             {
@@ -591,25 +627,25 @@ public partial class RouletteWheel : IRenderComponent
 
     private void CalculateAllSegmentFontSizes()
     {
-        if ( !_useAdaptiveTextSize )
+        if (!_useAdaptiveTextSize)
         {
             return;
         }
 
         _segmentFontSizes.Clear();
 
-        for ( var i = 0; i < _numSections; i++ )
+        for (var i = 0; i < _numSections; i++)
         {
             _segmentFontSizes[i] = string.IsNullOrEmpty(_sectionLabels[i])
-                                       ? 24
-                                       : CalculateOptimalTextSizeForSegment(_sectionLabels[i], i);
+                ? 24
+                : CalculateOptimalTextSizeForSegment(_sectionLabels[i], i);
         }
     }
 
     private void ResizeSectionLabels()
     {
         var newLabels = new string[_numSections];
-        for ( var i = 0; i < _numSections; i++ )
+        for (var i = 0; i < _numSections; i++)
         {
             newLabels[i] = i < _sectionLabels?.Length ? _sectionLabels[i] : $"Section {i + 1}";
         }
@@ -617,7 +653,10 @@ public partial class RouletteWheel : IRenderComponent
         _sectionLabels = newLabels;
     }
 
-    private static float EaseOutQuint(float t) { return 1.0f - MathF.Pow(1.0f - t, 5); }
+    private static float EaseOutQuint(float t)
+    {
+        return 1.0f - MathF.Pow(1.0f - t, 5);
+    }
 
     private void ApplyConfiguration(RouletteWheelOptions options)
     {
@@ -625,18 +664,18 @@ public partial class RouletteWheel : IRenderComponent
         {
             // Apply text configuration
             _radialTextOrientation = options.RadialTextOrientation;
-            _textScale             = options.TextScale;
-            _textStrokeWidth       = options.TextStroke;
-            _useAdaptiveTextSize   = options.AdaptiveText;
+            _textScale = options.TextScale;
+            _textStrokeWidth = options.TextStroke;
+            _useAdaptiveTextSize = options.AdaptiveText;
 
-            if ( !string.IsNullOrEmpty(options.TextColor) )
+            if (!string.IsNullOrEmpty(options.TextColor))
             {
                 var color = ColorTranslator.FromHtml(options.TextColor);
                 _textColor = new FSColor(color.R, color.G, color.B, color.A);
             }
 
             // Apply section labels
-            if ( options.SectionLabels?.Length > 0 )
+            if (options.SectionLabels?.Length > 0)
             {
                 SetSectionLabels(options.SectionLabels);
             }
@@ -649,9 +688,9 @@ public partial class RouletteWheel : IRenderComponent
             _wheelSize = Math.Clamp(options.WheelSizePercentage, 0.1f, 1.0f);
 
             // Apply positioning
-            if ( !string.IsNullOrEmpty(options.PositionMode) )
+            if (!string.IsNullOrEmpty(options.PositionMode))
             {
-                switch ( options.PositionMode )
+                switch (options.PositionMode)
                 {
                     case "Absolute":
                         _positionMode = PositionMode.Absolute;
@@ -660,14 +699,20 @@ public partial class RouletteWheel : IRenderComponent
                         break;
                     case "Percentage":
                         _positionMode = PositionMode.Percentage;
-                        PositionByPercentage(options.PositionXPercentage, options.PositionYPercentage);
+                        PositionByPercentage(
+                            options.PositionXPercentage,
+                            options.PositionYPercentage
+                        );
 
                         break;
                     case "Anchored":
                         _positionMode = PositionMode.Anchored;
-                        if ( Enum.TryParse(options.ViewportAnchor, out ViewportAnchor anchor) )
+                        if (Enum.TryParse(options.ViewportAnchor, out ViewportAnchor anchor))
                         {
-                            PositionAt(anchor, new Vector2(options.AnchorOffsetX, options.AnchorOffsetY));
+                            PositionAt(
+                                anchor,
+                                new Vector2(options.AnchorOffsetX, options.AnchorOffsetY)
+                            );
                         }
                         else
                         {
@@ -682,17 +727,18 @@ public partial class RouletteWheel : IRenderComponent
             Rotation = options.RotationDegrees * MathF.PI / 180;
 
             // Handle viewport size changes
-            var viewportChanged = _viewportWidth != options.Width || _viewportHeight != options.Height;
-            if ( viewportChanged )
+            var viewportChanged =
+                _viewportWidth != options.Width || _viewportHeight != options.Height;
+            if (viewportChanged)
             {
-                _viewportWidth  = options.Width;
+                _viewportWidth = options.Width;
                 _viewportHeight = options.Height;
 
                 // Update text renderer viewport
                 _textRenderer.OnViewportChanged(_viewportWidth, _viewportHeight);
 
                 // Update position based on mode
-                switch ( _positionMode )
+                switch (_positionMode)
                 {
                     case PositionMode.Anchored:
                         UpdatePositionFromAnchor();
@@ -706,9 +752,9 @@ public partial class RouletteWheel : IRenderComponent
             }
 
             // Apply enabled state (if changed)
-            if ( options.Enabled != IsEnabled )
+            if (options.Enabled != IsEnabled)
             {
-                if ( options.Enabled )
+                if (options.Enabled)
                 {
                     Enable();
                 }
@@ -719,7 +765,7 @@ public partial class RouletteWheel : IRenderComponent
             }
 
             // Recalculate font sizes if needed (after all other changes)
-            if ( _useAdaptiveTextSize )
+            if (_useAdaptiveTextSize)
             {
                 CalculateAllSegmentFontSizes();
             }

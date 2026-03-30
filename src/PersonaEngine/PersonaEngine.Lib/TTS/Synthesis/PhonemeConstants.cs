@@ -5,7 +5,10 @@
 /// </summary>
 public class PhonemeConstants
 {
-    public PhonemeConstants(bool useBritishEnglish) { UseBritishEnglish = useBritishEnglish; }
+    public PhonemeConstants(bool useBritishEnglish)
+    {
+        UseBritishEnglish = useBritishEnglish;
+    }
 
     /// <summary>
     ///     Whether to use British English pronunciation
@@ -20,7 +23,13 @@ public class PhonemeConstants
     /// <summary>
     ///     Currency symbols with their word representations
     /// </summary>
-    public Dictionary<char, (string Units, string Subunits)> CurrencyRepresentations { get; } = new() { { '$', ("dollar", "cent") }, { '£', ("pound", "pence") }, { '€', ("euro", "cent") } };
+    public Dictionary<char, (string Units, string Subunits)> CurrencyRepresentations { get; } =
+        new()
+        {
+            { '$', ("dollar", "cent") },
+            { '£', ("pound", "pence") },
+            { '€', ("euro", "cent") },
+        };
 
     public Dictionary<string, string> Symbols { get; } = new();
 }

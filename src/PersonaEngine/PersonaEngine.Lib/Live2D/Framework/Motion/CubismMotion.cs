@@ -1,5 +1,4 @@
 ﻿using System.Text.Json;
-
 using PersonaEngine.Lib.Live2D.Framework.Math;
 using PersonaEngine.Lib.Live2D.Framework.Model;
 
@@ -85,30 +84,32 @@ public class CubismMotion : ACubismMotion
     /// <param name="onFinishedMotionHandler">モーション再生終了時に呼び出されるコールバック関数。NULLの場合、呼び出されない。</param>
     public CubismMotion(string buffer, FinishedMotionCallback? onFinishedMotionHandler = null)
     {
-        _sourceFrameRate     = 30.0f;
+        _sourceFrameRate = 30.0f;
         _loopDurationSeconds = -1.0f;
-        IsLoopFadeIn         = true; // ループ時にフェードインが有効かどうかのフラグ
-        _modelOpacity        = 1.0f;
+        IsLoopFadeIn = true; // ループ時にフェードインが有効かどうかのフラグ
+        _modelOpacity = 1.0f;
 
         using var stream = File.Open(buffer, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        var obj = JsonSerializer.Deserialize(stream, CubismMotionObjContext.Default.CubismMotionObj)
-                  ?? throw new Exception("Load Motion error");
+        var obj =
+            JsonSerializer.Deserialize(stream, CubismMotionObjContext.Default.CubismMotionObj)
+            ?? throw new Exception("Load Motion error");
 
-        _motionData = new CubismMotionData {
-                                               Duration   = obj.Meta.Duration,
-                                               Loop       = obj.Meta.Loop,
-                                               CurveCount = obj.Meta.CurveCount,
-                                               Fps        = obj.Meta.Fps,
-                                               EventCount = obj.Meta.UserDataCount,
-                                               Curves     = new CubismMotionCurve[obj.Meta.CurveCount],
-                                               Segments   = new CubismMotionSegment[obj.Meta.TotalSegmentCount],
-                                               Points     = new CubismMotionPoint[obj.Meta.TotalPointCount],
-                                               Events     = new CubismMotionEvent[obj.Meta.UserDataCount]
-                                           };
+        _motionData = new CubismMotionData
+        {
+            Duration = obj.Meta.Duration,
+            Loop = obj.Meta.Loop,
+            CurveCount = obj.Meta.CurveCount,
+            Fps = obj.Meta.Fps,
+            EventCount = obj.Meta.UserDataCount,
+            Curves = new CubismMotionCurve[obj.Meta.CurveCount],
+            Segments = new CubismMotionSegment[obj.Meta.TotalSegmentCount],
+            Points = new CubismMotionPoint[obj.Meta.TotalPointCount],
+            Events = new CubismMotionEvent[obj.Meta.UserDataCount],
+        };
 
         var areBeziersRestructed = obj.Meta.AreBeziersRestricted;
 
-        if ( obj.Meta.FadeInTime != null )
+        if (obj.Meta.FadeInTime != null)
         {
             FadeInSeconds = obj.Meta.FadeInTime < 0.0f ? 1.0f : (float)obj.Meta.FadeInTime;
         }
@@ -117,7 +118,7 @@ public class CubismMotion : ACubismMotion
             FadeInSeconds = 1.0f;
         }
 
-        if ( obj.Meta.FadeOutTime != null )
+        if (obj.Meta.FadeOutTime != null)
         {
             FadeOutSeconds = obj.Meta.FadeOutTime < 0.0f ? 1.0f : (float)obj.Meta.FadeOutTime;
         }
@@ -126,51 +127,70 @@ public class CubismMotion : ACubismMotion
             FadeOutSeconds = 1.0f;
         }
 
-        var totalPointCount   = 0;
+        var totalPointCount = 0;
         var totalSegmentCount = 0;
 
         // Curves
-        for ( var curveCount = 0; curveCount < _motionData.CurveCount; ++curveCount )
+        for (var curveCount = 0; curveCount < _motionData.CurveCount; ++curveCount)
         {
             var item = obj.Curves[curveCount];
-            var key  = item.Target;
-            _motionData.Curves[curveCount] = new CubismMotionCurve {
-                                                                       Id               = CubismFramework.CubismIdManager.GetId(item.Id),
-                                                                       BaseSegmentIndex = totalSegmentCount,
-                                                                       FadeInTime       = item.FadeInTime != null ? (float)item.FadeInTime : -1.0f,
-                                                                       FadeOutTime      = item.FadeOutTime != null ? (float)item.FadeOutTime : -1.0f,
-                                                                       Type = key switch {
-                                                                           TargetNameModel => CubismMotionCurveTarget.Model,
-                                                                           TargetNameParameter => CubismMotionCurveTarget.Parameter,
-                                                                           TargetNamePartOpacity => CubismMotionCurveTarget.PartOpacity,
-                                                                           _ => throw new Exception("Error: Unable to get segment type from Curve! The number of \"CurveCount\" may be incorrect!")
-                                                                       }
-                                                                   };
+            var key = item.Target;
+            _motionData.Curves[curveCount] = new CubismMotionCurve
+            {
+                Id = CubismFramework.CubismIdManager.GetId(item.Id),
+                BaseSegmentIndex = totalSegmentCount,
+                FadeInTime = item.FadeInTime != null ? (float)item.FadeInTime : -1.0f,
+                FadeOutTime = item.FadeOutTime != null ? (float)item.FadeOutTime : -1.0f,
+                Type = key switch
+                {
+                    TargetNameModel => CubismMotionCurveTarget.Model,
+                    TargetNameParameter => CubismMotionCurveTarget.Parameter,
+                    TargetNamePartOpacity => CubismMotionCurveTarget.PartOpacity,
+                    _ => throw new Exception(
+                        "Error: Unable to get segment type from Curve! The number of \"CurveCount\" may be incorrect!"
+                    ),
+                },
+            };
 
             // Segments
-            for ( var segmentPosition = 0; segmentPosition < item.Segments.Count; )
+            for (var segmentPosition = 0; segmentPosition < item.Segments.Count; )
             {
-                if ( segmentPosition == 0 )
+                if (segmentPosition == 0)
                 {
-                    _motionData.Segments[totalSegmentCount] = new CubismMotionSegment { BasePointIndex = totalPointCount };
-                    _motionData.Points[totalPointCount]     = new CubismMotionPoint { Time             = item.Segments[segmentPosition], Value = item.Segments[segmentPosition + 1] };
+                    _motionData.Segments[totalSegmentCount] = new CubismMotionSegment
+                    {
+                        BasePointIndex = totalPointCount,
+                    };
+                    _motionData.Points[totalPointCount] = new CubismMotionPoint
+                    {
+                        Time = item.Segments[segmentPosition],
+                        Value = item.Segments[segmentPosition + 1],
+                    };
 
                     totalPointCount += 1;
                     segmentPosition += 2;
                 }
                 else
                 {
-                    _motionData.Segments[totalSegmentCount] = new CubismMotionSegment { BasePointIndex = totalPointCount - 1 };
+                    _motionData.Segments[totalSegmentCount] = new CubismMotionSegment
+                    {
+                        BasePointIndex = totalPointCount - 1,
+                    };
                 }
 
-                switch ( (CubismMotionSegmentType)item.Segments[segmentPosition] )
+                switch ((CubismMotionSegmentType)item.Segments[segmentPosition])
                 {
                     case CubismMotionSegmentType.Linear:
                     {
-                        _motionData.Segments[totalSegmentCount].SegmentType = CubismMotionSegmentType.Linear;
-                        _motionData.Segments[totalSegmentCount].Evaluate    = LinearEvaluate;
+                        _motionData.Segments[totalSegmentCount].SegmentType =
+                            CubismMotionSegmentType.Linear;
+                        _motionData.Segments[totalSegmentCount].Evaluate = LinearEvaluate;
 
-                        _motionData.Points[totalPointCount] = new CubismMotionPoint { Time = item.Segments[segmentPosition + 1], Value = item.Segments[segmentPosition + 2] };
+                        _motionData.Points[totalPointCount] = new CubismMotionPoint
+                        {
+                            Time = item.Segments[segmentPosition + 1],
+                            Value = item.Segments[segmentPosition + 2],
+                        };
 
                         totalPointCount += 1;
                         segmentPosition += 3;
@@ -179,21 +199,35 @@ public class CubismMotion : ACubismMotion
                     }
                     case CubismMotionSegmentType.Bezier:
                     {
-                        _motionData.Segments[totalSegmentCount].SegmentType = CubismMotionSegmentType.Bezier;
-                        if ( areBeziersRestructed || UseOldBeziersCurveMotion )
+                        _motionData.Segments[totalSegmentCount].SegmentType =
+                            CubismMotionSegmentType.Bezier;
+                        if (areBeziersRestructed || UseOldBeziersCurveMotion)
                         {
                             _motionData.Segments[totalSegmentCount].Evaluate = BezierEvaluate;
                         }
                         else
                         {
-                            _motionData.Segments[totalSegmentCount].Evaluate = BezierEvaluateCardanoInterpretation;
+                            _motionData.Segments[totalSegmentCount].Evaluate =
+                                BezierEvaluateCardanoInterpretation;
                         }
 
-                        _motionData.Points[totalPointCount] = new CubismMotionPoint { Time = item.Segments[segmentPosition + 1], Value = item.Segments[segmentPosition + 2] };
+                        _motionData.Points[totalPointCount] = new CubismMotionPoint
+                        {
+                            Time = item.Segments[segmentPosition + 1],
+                            Value = item.Segments[segmentPosition + 2],
+                        };
 
-                        _motionData.Points[totalPointCount + 1] = new CubismMotionPoint { Time = item.Segments[segmentPosition + 3], Value = item.Segments[segmentPosition + 4] };
+                        _motionData.Points[totalPointCount + 1] = new CubismMotionPoint
+                        {
+                            Time = item.Segments[segmentPosition + 3],
+                            Value = item.Segments[segmentPosition + 4],
+                        };
 
-                        _motionData.Points[totalPointCount + 2] = new CubismMotionPoint { Time = item.Segments[segmentPosition + 5], Value = item.Segments[segmentPosition + 6] };
+                        _motionData.Points[totalPointCount + 2] = new CubismMotionPoint
+                        {
+                            Time = item.Segments[segmentPosition + 5],
+                            Value = item.Segments[segmentPosition + 6],
+                        };
 
                         totalPointCount += 3;
                         segmentPosition += 7;
@@ -202,10 +236,15 @@ public class CubismMotion : ACubismMotion
                     }
                     case CubismMotionSegmentType.Stepped:
                     {
-                        _motionData.Segments[totalSegmentCount].SegmentType = CubismMotionSegmentType.Stepped;
-                        _motionData.Segments[totalSegmentCount].Evaluate    = SteppedEvaluate;
+                        _motionData.Segments[totalSegmentCount].SegmentType =
+                            CubismMotionSegmentType.Stepped;
+                        _motionData.Segments[totalSegmentCount].Evaluate = SteppedEvaluate;
 
-                        _motionData.Points[totalPointCount] = new CubismMotionPoint { Time = item.Segments[segmentPosition + 1], Value = item.Segments[segmentPosition + 2] };
+                        _motionData.Points[totalPointCount] = new CubismMotionPoint
+                        {
+                            Time = item.Segments[segmentPosition + 1],
+                            Value = item.Segments[segmentPosition + 2],
+                        };
 
                         totalPointCount += 1;
                         segmentPosition += 3;
@@ -214,10 +253,15 @@ public class CubismMotion : ACubismMotion
                     }
                     case CubismMotionSegmentType.InverseStepped:
                     {
-                        _motionData.Segments[totalSegmentCount].SegmentType = CubismMotionSegmentType.InverseStepped;
-                        _motionData.Segments[totalSegmentCount].Evaluate    = InverseSteppedEvaluate;
+                        _motionData.Segments[totalSegmentCount].SegmentType =
+                            CubismMotionSegmentType.InverseStepped;
+                        _motionData.Segments[totalSegmentCount].Evaluate = InverseSteppedEvaluate;
 
-                        _motionData.Points[totalPointCount] = new CubismMotionPoint { Time = item.Segments[segmentPosition + 1], Value = item.Segments[segmentPosition + 2] };
+                        _motionData.Points[totalPointCount] = new CubismMotionPoint
+                        {
+                            Time = item.Segments[segmentPosition + 1],
+                            Value = item.Segments[segmentPosition + 2],
+                        };
 
                         totalPointCount += 1;
                         segmentPosition += 3;
@@ -235,14 +279,18 @@ public class CubismMotion : ACubismMotion
             }
         }
 
-        for ( var userdatacount = 0; userdatacount < obj.Meta.UserDataCount; ++userdatacount )
+        for (var userdatacount = 0; userdatacount < obj.Meta.UserDataCount; ++userdatacount)
         {
-            _motionData.Events[userdatacount] = new CubismMotionEvent { FireTime = obj.UserData[userdatacount].Time, Value = obj.UserData[userdatacount].Value };
+            _motionData.Events[userdatacount] = new CubismMotionEvent
+            {
+                FireTime = obj.UserData[userdatacount].Time,
+                Value = obj.UserData[userdatacount].Value,
+            };
         }
 
-        _sourceFrameRate     = _motionData.Fps;
+        _sourceFrameRate = _motionData.Fps;
         _loopDurationSeconds = _motionData.Duration;
-        OnFinishedMotion     = onFinishedMotionHandler;
+        OnFinishedMotion = onFinishedMotionHandler;
     }
 
     /// <summary>
@@ -255,13 +303,20 @@ public class CubismMotion : ACubismMotion
     /// </summary>
     public bool IsLoopFadeIn { get; set; }
 
-    private static CubismMotionPoint LerpPoints(CubismMotionPoint a, CubismMotionPoint b, float t) { return new CubismMotionPoint { Time = a.Time + (b.Time - a.Time) * t, Value = a.Value + (b.Value - a.Value) * t }; }
+    private static CubismMotionPoint LerpPoints(CubismMotionPoint a, CubismMotionPoint b, float t)
+    {
+        return new CubismMotionPoint
+        {
+            Time = a.Time + (b.Time - a.Time) * t,
+            Value = a.Value + (b.Value - a.Value) * t,
+        };
+    }
 
     private static float LinearEvaluate(CubismMotionPoint[] points, int start, float time)
     {
         var t = (time - points[start].Time) / (points[start + 1].Time - points[start].Time);
 
-        if ( t < 0.0f )
+        if (t < 0.0f)
         {
             t = 0.0f;
         }
@@ -273,7 +328,7 @@ public class CubismMotion : ACubismMotion
     {
         var t = (time - points[start].Time) / (points[start + 3].Time - points[start].Time);
 
-        if ( t < 0.0f )
+        if (t < 0.0f)
         {
             t = 0.0f;
         }
@@ -372,11 +427,15 @@ public class CubismMotion : ACubismMotion
     //    return LerpPoints(p012, p123, t).Value;
     //}
 
-    private static float BezierEvaluateCardanoInterpretation(CubismMotionPoint[] points, int start, float time)
+    private static float BezierEvaluateCardanoInterpretation(
+        CubismMotionPoint[] points,
+        int start,
+        float time
+    )
     {
-        var x   = time;
-        var x1  = points[start].Time;
-        var x2  = points[start + 3].Time;
+        var x = time;
+        var x1 = points[start].Time;
+        var x2 = points[start + 3].Time;
         var cx1 = points[start + 1].Time;
         var cx2 = points[start + 2].Time;
 
@@ -397,29 +456,33 @@ public class CubismMotion : ACubismMotion
         return LerpPoints(p012, p123, t).Value;
     }
 
-    private static float SteppedEvaluate(CubismMotionPoint[] points, int start, float time) { return points[start].Value; }
+    private static float SteppedEvaluate(CubismMotionPoint[] points, int start, float time)
+    {
+        return points[start].Value;
+    }
 
-    private static float InverseSteppedEvaluate(CubismMotionPoint[] points, int start, float time) { return points[start + 1].Value; }
+    private static float InverseSteppedEvaluate(CubismMotionPoint[] points, int start, float time)
+    {
+        return points[start + 1].Value;
+    }
 
     private static float EvaluateCurve(CubismMotionData motionData, int index, float time)
     {
         // Find segment to evaluate.
         var curve = motionData.Curves[index];
 
-        var target            = -1;
+        var target = -1;
         var totalSegmentCount = curve.BaseSegmentIndex + curve.SegmentCount;
-        var pointPosition     = 0;
-        for ( var i = curve.BaseSegmentIndex; i < totalSegmentCount; ++i )
+        var pointPosition = 0;
+        for (var i = curve.BaseSegmentIndex; i < totalSegmentCount; ++i)
         {
             // Get first point of next segment.
-            pointPosition = motionData.Segments[i].BasePointIndex
-                            + (motionData.Segments[i].SegmentType ==
-                               CubismMotionSegmentType.Bezier
-                                   ? 3
-                                   : 1);
+            pointPosition =
+                motionData.Segments[i].BasePointIndex
+                + (motionData.Segments[i].SegmentType == CubismMotionSegmentType.Bezier ? 3 : 1);
 
             // Break if time lies within current segment.
-            if ( motionData.Points[pointPosition].Time > time )
+            if (motionData.Points[pointPosition].Time > time)
             {
                 target = i;
 
@@ -427,7 +490,7 @@ public class CubismMotion : ACubismMotion
             }
         }
 
-        if ( target == -1 )
+        if (target == -1)
         {
             return motionData.Points[pointPosition].Value;
         }
@@ -444,7 +507,12 @@ public class CubismMotion : ACubismMotion
     /// <param name="userTimeSeconds">現在の時刻[秒]</param>
     /// <param name="fadeWeight">モーションの重み</param>
     /// <param name="motionQueueEntry">CubismMotionQueueManagerで管理されているモーション</param>
-    public override void DoUpdateParameters(CubismModel model, float userTimeSeconds, float fadeWeight, CubismMotionQueueEntry motionQueueEntry)
+    public override void DoUpdateParameters(
+        CubismModel model,
+        float userTimeSeconds,
+        float fadeWeight,
+        CubismMotionQueueEntry motionQueueEntry
+    )
     {
         _modelCurveIdEyeBlink ??= CubismFramework.CubismIdManager.GetId(EffectNameEyeBlink);
 
@@ -454,33 +522,47 @@ public class CubismMotion : ACubismMotion
 
         var timeOffsetSeconds = userTimeSeconds - motionQueueEntry.StartTime;
 
-        if ( timeOffsetSeconds < 0.0f )
+        if (timeOffsetSeconds < 0.0f)
         {
             timeOffsetSeconds = 0.0f; // エラー回避
         }
 
-        var lipSyncValue  = float.MaxValue;
+        var lipSyncValue = float.MaxValue;
         var eyeBlinkValue = float.MaxValue;
 
         //まばたき、リップシンクのうちモーションの適用を検出するためのビット（maxFlagCount個まで
-        var   MaxTargetSize = 64;
-        ulong lipSyncFlags  = 0;
+        var MaxTargetSize = 64;
+        ulong lipSyncFlags = 0;
         ulong eyeBlinkFlags = 0;
 
         //瞬き、リップシンクのターゲット数が上限を超えている場合
-        if ( _eyeBlinkParameterIds.Count > MaxTargetSize )
+        if (_eyeBlinkParameterIds.Count > MaxTargetSize)
         {
-            CubismLog.Warning($"[Live2D SDK]too many eye blink targets : {_eyeBlinkParameterIds.Count}");
+            CubismLog.Warning(
+                $"[Live2D SDK]too many eye blink targets : {_eyeBlinkParameterIds.Count}"
+            );
         }
 
-        if ( _lipSyncParameterIds.Count > MaxTargetSize )
+        if (_lipSyncParameterIds.Count > MaxTargetSize)
         {
-            CubismLog.Warning($"[Live2D SDK]too many lip sync targets : {_lipSyncParameterIds.Count}");
+            CubismLog.Warning(
+                $"[Live2D SDK]too many lip sync targets : {_lipSyncParameterIds.Count}"
+            );
         }
 
-        var tmpFadeIn = FadeInSeconds <= 0.0f ? 1.0f : CubismMath.GetEasingSine((userTimeSeconds - motionQueueEntry.FadeInStartTime) / FadeInSeconds);
+        var tmpFadeIn =
+            FadeInSeconds <= 0.0f
+                ? 1.0f
+                : CubismMath.GetEasingSine(
+                    (userTimeSeconds - motionQueueEntry.FadeInStartTime) / FadeInSeconds
+                );
 
-        var tmpFadeOut = FadeOutSeconds <= 0.0f || motionQueueEntry.EndTime < 0.0f ? 1.0f : CubismMath.GetEasingSine((motionQueueEntry.EndTime - userTimeSeconds) / FadeOutSeconds);
+        var tmpFadeOut =
+            FadeOutSeconds <= 0.0f || motionQueueEntry.EndTime < 0.0f
+                ? 1.0f
+                : CubismMath.GetEasingSine(
+                    (motionQueueEntry.EndTime - userTimeSeconds) / FadeOutSeconds
+                );
 
         float value;
         int c,
@@ -489,9 +571,9 @@ public class CubismMotion : ACubismMotion
         // 'Repeat' time as necessary.
         var time = timeOffsetSeconds;
 
-        if ( IsLoop )
+        if (IsLoop)
         {
-            while ( time > _motionData.Duration )
+            while (time > _motionData.Duration)
             {
                 time -= _motionData.Duration;
             }
@@ -500,20 +582,24 @@ public class CubismMotion : ACubismMotion
         var curves = _motionData.Curves;
 
         // Evaluate model curves.
-        for ( c = 0; c < _motionData.CurveCount && curves[c].Type == CubismMotionCurveTarget.Model; ++c )
+        for (
+            c = 0;
+            c < _motionData.CurveCount && curves[c].Type == CubismMotionCurveTarget.Model;
+            ++c
+        )
         {
             // Evaluate curve and call handler.
             value = EvaluateCurve(_motionData, c, time);
 
-            if ( curves[c].Id == _modelCurveIdEyeBlink )
+            if (curves[c].Id == _modelCurveIdEyeBlink)
             {
                 eyeBlinkValue = value;
             }
-            else if ( curves[c].Id == _modelCurveIdLipSync )
+            else if (curves[c].Id == _modelCurveIdLipSync)
             {
                 lipSyncValue = value;
             }
-            else if ( curves[c].Id == _modelCurveIdOpacity )
+            else if (curves[c].Id == _modelCurveIdOpacity)
             {
                 _modelOpacity = value;
 
@@ -524,7 +610,11 @@ public class CubismMotion : ACubismMotion
 
         var parameterMotionCurveCount = 0;
 
-        for ( ; c < _motionData.CurveCount && curves[c].Type == CubismMotionCurveTarget.Parameter; ++c )
+        for (
+            ;
+            c < _motionData.CurveCount && curves[c].Type == CubismMotionCurveTarget.Parameter;
+            ++c
+        )
         {
             parameterMotionCurveCount++;
 
@@ -532,7 +622,7 @@ public class CubismMotion : ACubismMotion
             parameterIndex = model.GetParameterIndex(curves[c].Id);
 
             // Skip curve evaluation if no value in sink.
-            if ( parameterIndex == -1 )
+            if (parameterIndex == -1)
             {
                 continue;
             }
@@ -542,13 +632,13 @@ public class CubismMotion : ACubismMotion
             // Evaluate curve and apply value.
             value = EvaluateCurve(_motionData, c, time);
 
-            if ( eyeBlinkValue != float.MaxValue )
+            if (eyeBlinkValue != float.MaxValue)
             {
-                for ( var i = 0; i < _eyeBlinkParameterIds.Count && i < MaxTargetSize; ++i )
+                for (var i = 0; i < _eyeBlinkParameterIds.Count && i < MaxTargetSize; ++i)
                 {
-                    if ( _eyeBlinkParameterIds[i] == curves[c].Id )
+                    if (_eyeBlinkParameterIds[i] == curves[c].Id)
                     {
-                        value         *= eyeBlinkValue;
+                        value *= eyeBlinkValue;
                         eyeBlinkFlags |= 1UL << i;
 
                         break;
@@ -556,13 +646,13 @@ public class CubismMotion : ACubismMotion
                 }
             }
 
-            if ( lipSyncValue != float.MaxValue )
+            if (lipSyncValue != float.MaxValue)
             {
-                for ( var i = 0; i < _lipSyncParameterIds.Count && i < MaxTargetSize; ++i )
+                for (var i = 0; i < _lipSyncParameterIds.Count && i < MaxTargetSize; ++i)
                 {
-                    if ( _lipSyncParameterIds[i] == curves[c].Id )
+                    if (_lipSyncParameterIds[i] == curves[c].Id)
                     {
-                        value        += lipSyncValue;
+                        value += lipSyncValue;
                         lipSyncFlags |= 1UL << i;
 
                         break;
@@ -572,7 +662,7 @@ public class CubismMotion : ACubismMotion
 
             float v;
             // パラメータごとのフェード
-            if ( curves[c].FadeInTime < 0.0f && curves[c].FadeOutTime < 0.0f )
+            if (curves[c].FadeInTime < 0.0f && curves[c].FadeOutTime < 0.0f)
             {
                 //モーションのフェードを適用
                 v = sourceValue + (value - sourceValue) * fadeWeight;
@@ -583,26 +673,33 @@ public class CubismMotion : ACubismMotion
                 float fin;
                 float fout;
 
-                if ( curves[c].FadeInTime < 0.0f )
+                if (curves[c].FadeInTime < 0.0f)
                 {
                     fin = tmpFadeIn;
                 }
                 else
                 {
-                    fin = curves[c].FadeInTime == 0.0f
-                              ? 1.0f
-                              : CubismMath.GetEasingSine((userTimeSeconds - motionQueueEntry.FadeInStartTime) / curves[c].FadeInTime);
+                    fin =
+                        curves[c].FadeInTime == 0.0f
+                            ? 1.0f
+                            : CubismMath.GetEasingSine(
+                                (userTimeSeconds - motionQueueEntry.FadeInStartTime)
+                                    / curves[c].FadeInTime
+                            );
                 }
 
-                if ( curves[c].FadeOutTime < 0.0f )
+                if (curves[c].FadeOutTime < 0.0f)
                 {
                     fout = tmpFadeOut;
                 }
                 else
                 {
-                    fout = curves[c].FadeOutTime == 0.0f || motionQueueEntry.EndTime < 0.0f
-                               ? 1.0f
-                               : CubismMath.GetEasingSine((motionQueueEntry.EndTime - userTimeSeconds) / curves[c].FadeOutTime);
+                    fout =
+                        curves[c].FadeOutTime == 0.0f || motionQueueEntry.EndTime < 0.0f
+                            ? 1.0f
+                            : CubismMath.GetEasingSine(
+                                (motionQueueEntry.EndTime - userTimeSeconds) / curves[c].FadeOutTime
+                            );
                 }
 
                 var paramWeight = Weight * fin * fout;
@@ -614,13 +711,13 @@ public class CubismMotion : ACubismMotion
             model.SetParameterValue(parameterIndex, v);
         }
 
-        if ( eyeBlinkValue != float.MaxValue )
+        if (eyeBlinkValue != float.MaxValue)
         {
-            for ( var i = 0; i < _eyeBlinkParameterIds.Count && i < MaxTargetSize; ++i )
+            for (var i = 0; i < _eyeBlinkParameterIds.Count && i < MaxTargetSize; ++i)
             {
                 var sourceValue = model.GetParameterValue(_eyeBlinkParameterIds[i]);
                 //モーションでの上書きがあった時にはまばたきは適用しない
-                if ( ((eyeBlinkFlags >> i) & 0x01) != 0UL )
+                if (((eyeBlinkFlags >> i) & 0x01) != 0UL)
                 {
                     continue;
                 }
@@ -631,13 +728,13 @@ public class CubismMotion : ACubismMotion
             }
         }
 
-        if ( lipSyncValue != float.MaxValue )
+        if (lipSyncValue != float.MaxValue)
         {
-            for ( var i = 0; i < _lipSyncParameterIds.Count && i < MaxTargetSize; ++i )
+            for (var i = 0; i < _lipSyncParameterIds.Count && i < MaxTargetSize; ++i)
             {
                 var sourceValue = model.GetParameterValue(_lipSyncParameterIds[i]);
                 //モーションでの上書きがあった時にはリップシンクは適用しない
-                if ( ((lipSyncFlags >> i) & 0x01) != 0UL )
+                if (((lipSyncFlags >> i) & 0x01) != 0UL)
                 {
                     continue;
                 }
@@ -648,13 +745,17 @@ public class CubismMotion : ACubismMotion
             }
         }
 
-        for ( ; c < _motionData.CurveCount && curves[c].Type == CubismMotionCurveTarget.PartOpacity; ++c )
+        for (
+            ;
+            c < _motionData.CurveCount && curves[c].Type == CubismMotionCurveTarget.PartOpacity;
+            ++c
+        )
         {
             // Find parameter index.
             parameterIndex = model.GetParameterIndex(curves[c].Id);
 
             // Skip curve evaluation if no value in sink.
-            if ( parameterIndex == -1 )
+            if (parameterIndex == -1)
             {
                 continue;
             }
@@ -665,12 +766,12 @@ public class CubismMotion : ACubismMotion
             model.SetParameterValue(parameterIndex, value);
         }
 
-        if ( timeOffsetSeconds >= _motionData.Duration )
+        if (timeOffsetSeconds >= _motionData.Duration)
         {
-            if ( IsLoop )
+            if (IsLoop)
             {
                 motionQueueEntry.StartTime = userTimeSeconds; //最初の状態へ
-                if ( IsLoopFadeIn )
+                if (IsLoopFadeIn)
                 {
                     //ループ中でループ用フェードインが有効のときは、フェードイン設定し直し
                     motionQueueEntry.FadeInStartTime = userTimeSeconds;
@@ -691,13 +792,19 @@ public class CubismMotion : ACubismMotion
     ///     モーションの長さを取得する。
     /// </summary>
     /// <returns>モーションの長さ[秒]</returns>
-    public override float GetDuration() { return IsLoop ? -1.0f : _loopDurationSeconds; }
+    public override float GetDuration()
+    {
+        return IsLoop ? -1.0f : _loopDurationSeconds;
+    }
 
     /// <summary>
     ///     モーションのループ時の長さを取得する。
     /// </summary>
     /// <returns>モーションのループ時の長さ[秒]</returns>
-    public override float GetLoopDuration() { return _loopDurationSeconds; }
+    public override float GetLoopDuration()
+    {
+        return _loopDurationSeconds;
+    }
 
     /// <summary>
     ///     パラメータに対するフェードインの時間を設定する。
@@ -708,9 +815,9 @@ public class CubismMotion : ACubismMotion
     {
         var curves = _motionData.Curves;
 
-        for ( var i = 0; i < _motionData.CurveCount; ++i )
+        for (var i = 0; i < _motionData.CurveCount; ++i)
         {
-            if ( parameterId == curves[i].Id )
+            if (parameterId == curves[i].Id)
             {
                 curves[i].FadeInTime = value;
 
@@ -728,9 +835,9 @@ public class CubismMotion : ACubismMotion
     {
         var curves = _motionData.Curves;
 
-        for ( var i = 0; i < _motionData.CurveCount; ++i )
+        for (var i = 0; i < _motionData.CurveCount; ++i)
         {
-            if ( parameterId == curves[i].Id )
+            if (parameterId == curves[i].Id)
             {
                 curves[i].FadeOutTime = value;
 
@@ -748,9 +855,9 @@ public class CubismMotion : ACubismMotion
     {
         var curves = _motionData.Curves;
 
-        for ( var i = 0; i < _motionData.CurveCount; ++i )
+        for (var i = 0; i < _motionData.CurveCount; ++i)
         {
-            if ( parameterId == curves[i].Id )
+            if (parameterId == curves[i].Id)
             {
                 return curves[i].FadeInTime;
             }
@@ -768,9 +875,9 @@ public class CubismMotion : ACubismMotion
     {
         var curves = _motionData.Curves;
 
-        for ( var i = 0; i < _motionData.CurveCount; ++i )
+        for (var i = 0; i < _motionData.CurveCount; ++i)
         {
-            if ( parameterId == curves[i].Id )
+            if (parameterId == curves[i].Id)
             {
                 return curves[i].FadeOutTime;
             }
@@ -787,7 +894,7 @@ public class CubismMotion : ACubismMotion
     public void SetEffectIds(List<string> eyeBlinkParameterIds, List<string> lipSyncParameterIds)
     {
         _eyeBlinkParameterIds = eyeBlinkParameterIds;
-        _lipSyncParameterIds  = lipSyncParameterIds;
+        _lipSyncParameterIds = lipSyncParameterIds;
     }
 
     /// <summary>
@@ -797,14 +904,19 @@ public class CubismMotion : ACubismMotion
     /// <param name="beforeCheckTimeSeconds">前回のイベントチェック時間[秒]</param>
     /// <param name="motionTimeSeconds">今回の再生時間[秒]</param>
     /// <returns></returns>
-    public override List<string> GetFiredEvent(float beforeCheckTimeSeconds, float motionTimeSeconds)
+    public override List<string> GetFiredEvent(
+        float beforeCheckTimeSeconds,
+        float motionTimeSeconds
+    )
     {
         FiredEventValues.Clear();
         /// イベントの発火チェック
-        for ( var u = 0; u < _motionData.EventCount; ++u )
+        for (var u = 0; u < _motionData.EventCount; ++u)
         {
-            if ( _motionData.Events[u].FireTime > beforeCheckTimeSeconds &&
-                 _motionData.Events[u].FireTime <= motionTimeSeconds )
+            if (
+                _motionData.Events[u].FireTime > beforeCheckTimeSeconds
+                && _motionData.Events[u].FireTime <= motionTimeSeconds
+            )
             {
                 FiredEventValues.Add(_motionData.Events[u].Value);
             }
@@ -822,16 +934,16 @@ public class CubismMotion : ACubismMotion
     /// </returns>
     public override bool IsExistModelOpacity()
     {
-        for ( var i = 0; i < _motionData.CurveCount; i++ )
+        for (var i = 0; i < _motionData.CurveCount; i++)
         {
             var curve = _motionData.Curves[i];
 
-            if ( curve.Type != CubismMotionCurveTarget.Model )
+            if (curve.Type != CubismMotionCurveTarget.Model)
             {
                 continue;
             }
 
-            if ( curve.Id == IdNameOpacity )
+            if (curve.Id == IdNameOpacity)
             {
                 return true;
             }
@@ -846,18 +958,18 @@ public class CubismMotion : ACubismMotion
     /// <returns>透明度のカーブのインデックス</returns>
     public override int GetModelOpacityIndex()
     {
-        if ( IsExistModelOpacity() )
+        if (IsExistModelOpacity())
         {
-            for ( var i = 0; i < _motionData.CurveCount; i++ )
+            for (var i = 0; i < _motionData.CurveCount; i++)
             {
                 var curve = _motionData.Curves[i];
 
-                if ( curve.Type != CubismMotionCurveTarget.Model )
+                if (curve.Type != CubismMotionCurveTarget.Model)
                 {
                     continue;
                 }
 
-                if ( curve.Id == IdNameOpacity )
+                if (curve.Id == IdNameOpacity)
                 {
                     return i;
                 }
@@ -873,13 +985,13 @@ public class CubismMotion : ACubismMotion
     /// <returns>透明度のId</returns>
     public override string? GetModelOpacityId(int index)
     {
-        if ( index != -1 )
+        if (index != -1)
         {
             var curve = _motionData.Curves[index];
 
-            if ( curve.Type == CubismMotionCurveTarget.Model )
+            if (curve.Type == CubismMotionCurveTarget.Model)
             {
-                if ( curve.Id == IdNameOpacity )
+                if (curve.Id == IdNameOpacity)
                 {
                     return CubismFramework.CubismIdManager.GetId(curve.Id);
                 }
@@ -894,5 +1006,8 @@ public class CubismMotion : ACubismMotion
     ///     更新後の値を取るにはUpdateParameters() の後に呼び出す。
     /// </summary>
     /// <returns>モーションの現在時間のOpacityの値</returns>
-    public override float GetModelOpacityValue() { return _modelOpacity; }
+    public override float GetModelOpacityValue()
+    {
+        return _modelOpacity;
+    }
 }

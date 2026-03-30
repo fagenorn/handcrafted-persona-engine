@@ -1,5 +1,4 @@
 ﻿using System.Numerics;
-
 using FontStashSharp;
 
 namespace PersonaEngine.Lib.UI.Text.Subtitles;
@@ -33,23 +32,24 @@ public class SubtitleTimeline
     private readonly IWordAnimator _wordAnimator;
 
     public SubtitleTimeline(
-        int           maxVisibleLines,
-        float         bottomMargin,
-        float         lineSpacing,
-        float         interSegmentSpacing,
-        TextMeasurer  textMeasurer,
+        int maxVisibleLines,
+        float bottomMargin,
+        float lineSpacing,
+        float interSegmentSpacing,
+        TextMeasurer textMeasurer,
         IWordAnimator wordAnimator,
-        FSColor       highlightColor,
-        FSColor       normalColor)
+        FSColor highlightColor,
+        FSColor normalColor
+    )
     {
-        _maxVisibleLines     = Math.Max(1, maxVisibleLines);
-        _bottomMargin        = bottomMargin;
-        _lineSpacing         = lineSpacing;
+        _maxVisibleLines = Math.Max(1, maxVisibleLines);
+        _bottomMargin = bottomMargin;
+        _lineSpacing = lineSpacing;
         _interSegmentSpacing = interSegmentSpacing;
-        _textMeasurer        = textMeasurer;
-        _wordAnimator        = wordAnimator;
-        _highlightColor      = highlightColor;
-        _normalColor         = normalColor;
+        _textMeasurer = textMeasurer;
+        _wordAnimator = wordAnimator;
+        _highlightColor = highlightColor;
+        _normalColor = normalColor;
 
         _visibleLinesCache = new List<SubtitleLine>(_maxVisibleLines * 2);
     }
@@ -66,7 +66,10 @@ public class SubtitleTimeline
     {
         lock (_lock)
         {
-            _activeSegments.RemoveAll(s => ReferenceEquals(s.OriginalAudioSegment, originalSegmentIdentifier) || s.OriginalAudioSegment.Equals(originalSegmentIdentifier));
+            _activeSegments.RemoveAll(s =>
+                ReferenceEquals(s.OriginalAudioSegment, originalSegmentIdentifier)
+                || s.OriginalAudioSegment.Equals(originalSegmentIdentifier)
+            );
 
             // TODO: If using object pooling for segments/lines/words, return them to the pool here.
         }
@@ -79,7 +82,7 @@ public class SubtitleTimeline
     {
         lock (_lock)
         {
-            for ( var i = _activeSegments.Count - 1; i >= 0; i-- )
+            for (var i = _activeSegments.Count - 1; i >= 0; i--)
             {
                 var segment = _activeSegments[i];
 
@@ -88,26 +91,30 @@ public class SubtitleTimeline
                 // Optimization: Potentially skip segments entirely in the future?
                 // if (segment.AbsoluteStartTime > currentTime + someBuffer) continue;
 
-                for ( var j = 0; j < segment.Lines.Count; j++ )
+                for (var j = 0; j < segment.Lines.Count; j++)
                 {
                     var line = segment.Lines[j];
                     // Use ref local for structs to avoid copying if SubtitleWordInfo is a struct
                     // Requires Words to be an array or Span<T> for direct ref access.
                     // With List<T>, we modify the copy and then update the list element.
-                    for ( var k = 0; k < line.Words.Count; k++ )
+                    for (var k = 0; k < line.Words.Count; k++)
                     {
                         var word = line.Words[k];
 
-                        if ( word.HasStarted(currentTime) )
+                        if (word.HasStarted(currentTime))
                         {
-                            if ( word.IsComplete(currentTime) )
+                            if (word.IsComplete(currentTime))
                             {
                                 word.AnimationProgress = 1.0f;
                             }
                             else
                             {
                                 var elapsed = currentTime - word.AbsoluteStartTime;
-                                word.AnimationProgress = Math.Clamp(elapsed / word.Duration, 0.0f, 1.0f);
+                                word.AnimationProgress = Math.Clamp(
+                                    elapsed / word.Duration,
+                                    0.0f,
+                                    1.0f
+                                );
                             }
                         }
                         else
@@ -116,7 +123,11 @@ public class SubtitleTimeline
                         }
 
                         word.CurrentScale = _wordAnimator.CalculateScale(word.AnimationProgress);
-                        word.CurrentColor = _wordAnimator.CalculateColor(_highlightColor, _normalColor, word.AnimationProgress);
+                        word.CurrentColor = _wordAnimator.CalculateColor(
+                            _highlightColor,
+                            _normalColor,
+                            word.AnimationProgress
+                        );
 
                         line.Words[k] = word;
                     }
@@ -125,30 +136,34 @@ public class SubtitleTimeline
         }
     }
 
-    public List<SubtitleLine> GetVisibleLinesAndPosition(float currentTime, int viewportWidth, int viewportHeight)
+    public List<SubtitleLine> GetVisibleLinesAndPosition(
+        float currentTime,
+        int viewportWidth,
+        int viewportHeight
+    )
     {
         _visibleLinesCache.Clear();
 
         lock (_lock)
         {
-            for ( var i = _activeSegments.Count - 1; i >= 0; i-- )
+            for (var i = _activeSegments.Count - 1; i >= 0; i--)
             {
                 var segment = _activeSegments[i];
 
                 // Optimization: If segment hasn't started, none of its lines are visible.
-                if ( segment.AbsoluteStartTime > currentTime )
+                if (segment.AbsoluteStartTime > currentTime)
                 {
                     continue;
                 }
 
-                for ( var j = segment.Lines.Count - 1; j >= 0; j-- )
+                for (var j = segment.Lines.Count - 1; j >= 0; j--)
                 {
                     var line = segment.Lines[j];
 
-                    if ( line.Words.Count > 0 && line.Words[0].HasStarted(currentTime) )
+                    if (line.Words.Count > 0 && line.Words[0].HasStarted(currentTime))
                     {
                         _visibleLinesCache.Add(line);
-                        if ( _visibleLinesCache.Count >= _maxVisibleLines )
+                        if (_visibleLinesCache.Count >= _maxVisibleLines)
                         {
                             goto FoundEnoughLines;
                         }
@@ -171,28 +186,28 @@ public class SubtitleTimeline
 
         var currentBaselineY = viewportHeight - _bottomMargin;
 
-        for ( var i = _visibleLinesCache.Count - 1; i >= 0; i-- )
+        for (var i = _visibleLinesCache.Count - 1; i >= 0; i--)
         {
             var line = _visibleLinesCache[i];
             line.BaselineY = currentBaselineY;
 
             var currentX = (viewportWidth - line.TotalWidth) / 2.0f;
 
-            for ( var k = 0; k < line.Words.Count; k++ )
+            for (var k = 0; k < line.Words.Count; k++)
             {
                 var word = line.Words[k];
 
                 var wordCenterX = currentX + word.Size.X / 2.0f;
                 var wordCenterY = currentBaselineY - _textMeasurer.LineHeight / 2.0f;
 
-                word.Position =  new Vector2(wordCenterX, wordCenterY);
-                line.Words[k] =  word;
-                currentX      += word.Size.X;
+                word.Position = new Vector2(wordCenterX, wordCenterY);
+                line.Words[k] = word;
+                currentX += word.Size.X;
             }
 
             currentBaselineY -= _lineSpacing;
 
-            if ( i > 0 && _visibleLinesCache[i - 1].SegmentIndex != line.SegmentIndex )
+            if (i > 0 && _visibleLinesCache[i - 1].SegmentIndex != line.SegmentIndex)
             {
                 currentBaselineY -= _interSegmentSpacing;
             }

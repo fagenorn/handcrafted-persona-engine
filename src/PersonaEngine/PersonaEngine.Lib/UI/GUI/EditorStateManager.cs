@@ -27,7 +27,10 @@ public class EditorStateManager : IEditorStateManager
         HasUnsavedChanges = false;
     }
 
-    public ActiveOperation? GetActiveOperation() { return _activeOperations.Values.FirstOrDefault(); }
+    public ActiveOperation? GetActiveOperation()
+    {
+        return _activeOperations.Values.FirstOrDefault();
+    }
 
     public void RegisterActiveOperation(ActiveOperation operation)
     {
@@ -37,7 +40,7 @@ public class EditorStateManager : IEditorStateManager
 
     public void ClearActiveOperation(string operationId)
     {
-        if ( _activeOperations.TryGetValue(operationId, out var operation) )
+        if (_activeOperations.TryGetValue(operationId, out var operation))
         {
             _activeOperations.Remove(operationId);
             operation.CancellationSource.Dispose();
@@ -45,13 +48,21 @@ public class EditorStateManager : IEditorStateManager
         }
     }
 
-    private void SetStateValue<T>(string key, T? oldValue, T newValue) where T : struct
+    private void SetStateValue<T>(string key, T? oldValue, T newValue)
+        where T : struct
     {
         _stateValues[key] = newValue;
         FireStateChanged(key, oldValue, newValue);
     }
 
-    private void FireStateChanged<T>(string key, T? oldValue, T newValue) where T : struct { StateChanged?.Invoke(this, new EditorStateChangedEventArgs(key, oldValue, newValue)); }
+    private void FireStateChanged<T>(string key, T? oldValue, T newValue)
+        where T : struct
+    {
+        StateChanged?.Invoke(this, new EditorStateChangedEventArgs(key, oldValue, newValue));
+    }
 
-    private void FireStateChanged<T>(string key, T? oldValue, T newValue) { StateChanged?.Invoke(this, new EditorStateChangedEventArgs(key, oldValue, newValue)); }
+    private void FireStateChanged<T>(string key, T? oldValue, T newValue)
+    {
+        StateChanged?.Invoke(this, new EditorStateChangedEventArgs(key, oldValue, newValue));
+    }
 }

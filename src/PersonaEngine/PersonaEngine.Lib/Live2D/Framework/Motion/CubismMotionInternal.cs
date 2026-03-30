@@ -19,7 +19,11 @@ public delegate void CubismMotionEventFunction(CubismUserModel? customData, stri
 /// </summary>
 /// <param name="points">モーションカーブの制御点リスト</param>
 /// <param name="time">評価する時間[秒]</param>
-public delegate float csmMotionSegmentEvaluationFunction(CubismMotionPoint[] points, int start, float time);
+public delegate float csmMotionSegmentEvaluationFunction(
+    CubismMotionPoint[] points,
+    int start,
+    float time
+);
 
 /// <summary>
 ///     モーションの優先度定数
@@ -31,10 +35,10 @@ public enum MotionPriority
     PriorityIdle = 1,
 
     PriorityLow = 2,
-    
+
     PriorityNormal = 3,
 
-    PriorityForce = 4
+    PriorityForce = 4,
 }
 
 /// <summary>
@@ -55,7 +59,7 @@ public enum ExpressionBlendType
     /// <summary>
     ///     上書き
     /// </summary>
-    Overwrite = 2
+    Overwrite = 2,
 }
 
 /// <summary>
@@ -97,7 +101,7 @@ public enum CubismMotionCurveTarget
     /// <summary>
     ///     パーツの不透明度に対して
     /// </summary>
-    PartOpacity
+    PartOpacity,
 }
 
 /// <summary>
@@ -123,7 +127,7 @@ public enum CubismMotionSegmentType
     /// <summary>
     ///     インバースステップ
     /// </summary>
-    InverseStepped = 3
+    InverseStepped = 3,
 }
 
 /// <summary>

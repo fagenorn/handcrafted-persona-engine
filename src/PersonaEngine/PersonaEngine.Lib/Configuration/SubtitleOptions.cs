@@ -22,7 +22,7 @@ public class SubtitleOptions
     public int MaxVisibleLines { get; set; } = 6;
 
     public float AnimationDuration { get; set; } = 0.3f;
-    
+
     public int StrokeThickness { get; set; } = 3;
 
     public int Width { get; set; } = 1920;

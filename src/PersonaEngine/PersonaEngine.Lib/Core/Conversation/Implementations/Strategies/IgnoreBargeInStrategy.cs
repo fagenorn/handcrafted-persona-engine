@@ -4,5 +4,8 @@ namespace PersonaEngine.Lib.Core.Conversation.Implementations.Strategies;
 
 public class IgnoreBargeInStrategy : IBargeInStrategy
 {
-    public bool ShouldAllowBargeIn(BargeInContext context) { return false; }
+    public bool ShouldAllowBargeIn(BargeInContext context)
+    {
+        return false;
+    }
 }

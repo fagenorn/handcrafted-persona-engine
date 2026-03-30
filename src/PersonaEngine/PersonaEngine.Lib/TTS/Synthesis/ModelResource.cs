@@ -7,7 +7,10 @@ public class ModelResource : IDisposable
 {
     private byte[]? _modelData;
 
-    public ModelResource(string path) { Path = path; }
+    public ModelResource(string path)
+    {
+        Path = path;
+    }
 
     /// <summary>
     ///     Path to the model
@@ -19,14 +22,17 @@ public class ModelResource : IDisposable
     /// </summary>
     public bool IsLoaded => _modelData != null;
 
-    public void Dispose() { _modelData = null; }
+    public void Dispose()
+    {
+        _modelData = null;
+    }
 
     /// <summary>
     ///     Gets the model data, loading it if necessary
     /// </summary>
     public async Task<byte[]> GetDataAsync()
     {
-        if ( _modelData == null )
+        if (_modelData == null)
         {
             _modelData = await File.ReadAllBytesAsync(Path);
         }

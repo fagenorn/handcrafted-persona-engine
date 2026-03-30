@@ -28,17 +28,17 @@ public class LexiconEntry
     /// </summary>
     public string? GetForTag(string? tag)
     {
-        if ( IsSimple )
+        if (IsSimple)
         {
             return Simple;
         }
 
-        if ( tag != null && ByTag != null && ByTag.TryGetValue(tag, out var value) )
+        if (tag != null && ByTag != null && ByTag.TryGetValue(tag, out var value))
         {
             return value;
         }
 
-        if ( ByTag != null && ByTag.TryGetValue("DEFAULT", out var def) )
+        if (ByTag != null && ByTag.TryGetValue("DEFAULT", out var def))
         {
             return def;
         }
@@ -49,5 +49,8 @@ public class LexiconEntry
     /// <summary>
     ///     Whether this entry has a specific tag
     /// </summary>
-    public bool HasTag(string tag) { return ByTag != null && ByTag.ContainsKey(tag); }
+    public bool HasTag(string tag)
+    {
+        return ByTag != null && ByTag.ContainsKey(tag);
+    }
 }

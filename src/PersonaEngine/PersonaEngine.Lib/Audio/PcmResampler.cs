@@ -32,23 +32,24 @@ public class PcmResampler
 
     public PcmResampler(int inputSampleRate = 48000, int outputSampleRate = 16000)
     {
-        if ( inputSampleRate <= 0 || outputSampleRate <= 0 )
+        if (inputSampleRate <= 0 || outputSampleRate <= 0)
         {
             throw new ArgumentException("Sample rates must be positive values");
         }
 
-        InputSampleRate  = inputSampleRate;
+        InputSampleRate = inputSampleRate;
         OutputSampleRate = outputSampleRate;
-        ResampleRatio    = (float)InputSampleRate / OutputSampleRate;
+        ResampleRatio = (float)InputSampleRate / OutputSampleRate;
 
-        _filterTaps  = DetermineOptimalFilterTaps(ResampleRatio);
+        _filterTaps = DetermineOptimalFilterTaps(ResampleRatio);
         _filterDelay = _filterTaps / 2;
 
-        var cutoffFrequency = Math.Min(0.45f * OutputSampleRate, 0.9f * OutputSampleRate / 2) / InputSampleRate;
+        var cutoffFrequency =
+            Math.Min(0.45f * OutputSampleRate, 0.9f * OutputSampleRate / 2) / InputSampleRate;
         _filterCoefficients = GenerateLowPassFilter(_filterTaps, cutoffFrequency);
 
-        _history       = new short[_filterTaps + 10];
-        _floatHistory  = new float[_filterTaps + 10];
+        _history = new short[_filterTaps + 10];
+        _floatHistory = new float[_filterTaps + 10];
         _historyLength = 0;
 
         _inputSamples = new short[MAX_FRAME_SIZE];
@@ -62,7 +63,7 @@ public class PcmResampler
 
     private int DetermineOptimalFilterTaps(float ratio)
     {
-        if ( Math.Abs(ratio - Math.Round(ratio)) < 0.01f )
+        if (Math.Abs(ratio - Math.Round(ratio)) < 0.01f)
         {
             return Math.Max(24, (int)(12 * ratio));
         }
@@ -73,12 +74,12 @@ public class PcmResampler
     private float[] GenerateLowPassFilter(int taps, float cutoff)
     {
         var coefficients = new float[taps];
-        var center       = taps / 2;
+        var center = taps / 2;
 
         var sum = 0.0;
-        for ( var i = 0; i < taps; i++ )
+        for (var i = 0; i < taps; i++)
         {
-            if ( i == center )
+            if (i == center)
             {
                 coefficients[i] = (float)(2.0 * Math.PI * cutoff);
             }
@@ -88,15 +89,17 @@ public class PcmResampler
                 coefficients[i] = (float)(Math.Sin(x) / x);
             }
 
-            var window = 0.42 - 0.5 * Math.Cos(2.0 * Math.PI * i / (taps - 1))
-                         + 0.08 * Math.Cos(4.0 * Math.PI * i / (taps - 1));
+            var window =
+                0.42
+                - 0.5 * Math.Cos(2.0 * Math.PI * i / (taps - 1))
+                + 0.08 * Math.Cos(4.0 * Math.PI * i / (taps - 1));
 
             coefficients[i] *= (float)window;
 
             sum += coefficients[i];
         }
 
-        for ( var i = 0; i < taps; i++ )
+        for (var i = 0; i < taps; i++)
         {
             coefficients[i] /= (float)sum;
         }
@@ -110,30 +113,33 @@ public class PcmResampler
         ConvertToShorts(input, _inputSamples, inputSampleCount);
 
         var maxOutputSamples = (int)Math.Ceiling(inputSampleCount / ResampleRatio) + 2;
-        if ( output.Length < maxOutputSamples * BYTES_PER_SAMPLE )
+        if (output.Length < maxOutputSamples * BYTES_PER_SAMPLE)
         {
             throw new ArgumentException("Output buffer is too small for the resampled data");
         }
 
         var outputIndex = 0;
 
-        while ( _position < inputSampleCount )
+        while (_position < inputSampleCount)
         {
-            float sum       = 0;
-            var   baseIndex = (int)Math.Floor(_position);
+            float sum = 0;
+            var baseIndex = (int)Math.Floor(_position);
 
-            for ( var tap = 0; tap < _filterTaps; tap++ )
+            for (var tap = 0; tap < _filterTaps; tap++)
             {
                 var sampleIndex = baseIndex - _filterDelay + tap;
-                var sample      = GetSampleWithHistory(sampleIndex, _inputSamples, inputSampleCount);
+                var sample = GetSampleWithHistory(sampleIndex, _inputSamples, inputSampleCount);
                 sum += sample * _filterCoefficients[tap];
             }
 
-            var outputValue = (short)Math.Clamp((int)Math.Round(sum), short.MinValue, short.MaxValue);
-            if ( outputIndex < maxOutputSamples )
+            var outputValue = (short)
+                Math.Clamp((int)Math.Round(sum), short.MinValue, short.MaxValue);
+            if (outputIndex < maxOutputSamples)
             {
                 BinaryPrimitives.WriteInt16LittleEndian(
-                                                        output.Slice(outputIndex * BYTES_PER_SAMPLE, BYTES_PER_SAMPLE), outputValue);
+                    output.Slice(outputIndex * BYTES_PER_SAMPLE, BYTES_PER_SAMPLE),
+                    outputValue
+                );
 
                 outputIndex++;
             }
@@ -149,7 +155,7 @@ public class PcmResampler
 
     public int Process(Stream input, Memory<byte> output)
     {
-        var buffer    = new byte[MAX_FRAME_SIZE * BYTES_PER_SAMPLE];
+        var buffer = new byte[MAX_FRAME_SIZE * BYTES_PER_SAMPLE];
         var bytesRead = input.Read(buffer, 0, buffer.Length);
 
         return Process(buffer.AsSpan(0, bytesRead), output.Span);
@@ -157,41 +163,46 @@ public class PcmResampler
 
     public int ProcessInPlace(Span<byte> buffer)
     {
-        if ( ResampleRatio < 1.0f )
+        if (ResampleRatio < 1.0f)
         {
-            throw new InvalidOperationException("In-place resampling only supports downsampling (input rate > output rate)");
+            throw new InvalidOperationException(
+                "In-place resampling only supports downsampling (input rate > output rate)"
+            );
         }
 
         var inputSampleCount = buffer.Length / BYTES_PER_SAMPLE;
 
         // Make a copy of the input for processing
         Span<short> inputCopy = stackalloc short[inputSampleCount];
-        for ( var i = 0; i < inputSampleCount; i++ )
+        for (var i = 0; i < inputSampleCount; i++)
         {
-            inputCopy[i] = BinaryPrimitives.ReadInt16LittleEndian(buffer.Slice(i * BYTES_PER_SAMPLE, BYTES_PER_SAMPLE));
+            inputCopy[i] = BinaryPrimitives.ReadInt16LittleEndian(
+                buffer.Slice(i * BYTES_PER_SAMPLE, BYTES_PER_SAMPLE)
+            );
         }
 
         var expectedOutputCount = (int)Math.Ceiling(inputSampleCount / ResampleRatio);
 
         // Calculate positions and work from last to first
-        var outputIndex  = expectedOutputCount - 1;
-        var lastPosition = _position + (inputSampleCount - 1) - ResampleRatio * (expectedOutputCount - 1);
+        var outputIndex = expectedOutputCount - 1;
+        var lastPosition =
+            _position + (inputSampleCount - 1) - ResampleRatio * (expectedOutputCount - 1);
 
-        while ( lastPosition >= 0 && outputIndex >= 0 )
+        while (lastPosition >= 0 && outputIndex >= 0)
         {
-            float sum       = 0;
-            var   baseIndex = (int)Math.Floor(lastPosition);
+            float sum = 0;
+            var baseIndex = (int)Math.Floor(lastPosition);
 
-            for ( var tap = 0; tap < _filterTaps; tap++ )
+            for (var tap = 0; tap < _filterTaps; tap++)
             {
-                var   sampleIndex = baseIndex - _filterDelay + tap;
+                var sampleIndex = baseIndex - _filterDelay + tap;
                 short sample;
 
-                if ( sampleIndex >= 0 && sampleIndex < inputSampleCount )
+                if (sampleIndex >= 0 && sampleIndex < inputSampleCount)
                 {
                     sample = inputCopy[sampleIndex];
                 }
-                else if ( sampleIndex < 0 && -sampleIndex <= _historyLength )
+                else if (sampleIndex < 0 && -sampleIndex <= _historyLength)
                 {
                     sample = _history[_historyLength + sampleIndex];
                 }
@@ -203,9 +214,12 @@ public class PcmResampler
                 sum += sample * _filterCoefficients[tap];
             }
 
-            var outputValue = (short)Math.Clamp((int)Math.Round(sum), short.MinValue, short.MaxValue);
+            var outputValue = (short)
+                Math.Clamp((int)Math.Round(sum), short.MinValue, short.MaxValue);
             BinaryPrimitives.WriteInt16LittleEndian(
-                                                    buffer.Slice(outputIndex * BYTES_PER_SAMPLE, BYTES_PER_SAMPLE), outputValue);
+                buffer.Slice(outputIndex * BYTES_PER_SAMPLE, BYTES_PER_SAMPLE),
+                outputValue
+            );
 
             outputIndex--;
             lastPosition -= ResampleRatio;
@@ -223,26 +237,26 @@ public class PcmResampler
         var inputSampleCount = input.Length;
 
         var maxOutputSamples = (int)Math.Ceiling(inputSampleCount / ResampleRatio) + 2;
-        if ( output.Length < maxOutputSamples )
+        if (output.Length < maxOutputSamples)
         {
             throw new ArgumentException("Output buffer is too small for the resampled data");
         }
 
         var outputIndex = 0;
 
-        while ( _position < inputSampleCount )
+        while (_position < inputSampleCount)
         {
-            float sum       = 0;
-            var   baseIndex = (int)Math.Floor(_position);
+            float sum = 0;
+            var baseIndex = (int)Math.Floor(_position);
 
-            for ( var tap = 0; tap < _filterTaps; tap++ )
+            for (var tap = 0; tap < _filterTaps; tap++)
             {
                 var sampleIndex = baseIndex - _filterDelay + tap;
-                var sample      = GetFloatSampleWithHistory(sampleIndex, input);
+                var sample = GetFloatSampleWithHistory(sampleIndex, input);
                 sum += sample * _filterCoefficients[tap];
             }
 
-            if ( outputIndex < maxOutputSamples )
+            if (outputIndex < maxOutputSamples)
             {
                 output[outputIndex] = sum;
                 outputIndex++;
@@ -260,12 +274,14 @@ public class PcmResampler
     public int ProcessFloatInPlace(Span<float> buffer)
     {
         // For in-place, we must work backward to avoid overwriting unprocessed input
-        if ( ResampleRatio < 1.0f )
+        if (ResampleRatio < 1.0f)
         {
-            throw new InvalidOperationException("In-place resampling only supports downsampling (input rate > output rate)");
+            throw new InvalidOperationException(
+                "In-place resampling only supports downsampling (input rate > output rate)"
+            );
         }
 
-        var inputSampleCount    = buffer.Length;
+        var inputSampleCount = buffer.Length;
         var expectedOutputCount = (int)Math.Ceiling(inputSampleCount / ResampleRatio);
 
         // First, store the full input for history and reference
@@ -273,24 +289,25 @@ public class PcmResampler
         buffer.CopyTo(inputCopy);
 
         // Calculate sample positions and work from last to first
-        var outputIndex  = expectedOutputCount - 1;
-        var lastPosition = _position + (inputSampleCount - 1) - ResampleRatio * (expectedOutputCount - 1);
+        var outputIndex = expectedOutputCount - 1;
+        var lastPosition =
+            _position + (inputSampleCount - 1) - ResampleRatio * (expectedOutputCount - 1);
 
-        while ( lastPosition >= 0 && outputIndex >= 0 )
+        while (lastPosition >= 0 && outputIndex >= 0)
         {
-            float sum       = 0;
-            var   baseIndex = (int)Math.Floor(lastPosition);
+            float sum = 0;
+            var baseIndex = (int)Math.Floor(lastPosition);
 
-            for ( var tap = 0; tap < _filterTaps; tap++ )
+            for (var tap = 0; tap < _filterTaps; tap++)
             {
-                var   sampleIndex = baseIndex - _filterDelay + tap;
+                var sampleIndex = baseIndex - _filterDelay + tap;
                 float sample;
 
-                if ( sampleIndex >= 0 && sampleIndex < inputSampleCount )
+                if (sampleIndex >= 0 && sampleIndex < inputSampleCount)
                 {
                     sample = inputCopy[sampleIndex];
                 }
-                else if ( sampleIndex < 0 && -sampleIndex <= _historyLength )
+                else if (sampleIndex < 0 && -sampleIndex <= _historyLength)
                 {
                     sample = _floatHistory[_historyLength + sampleIndex];
                 }
@@ -315,12 +332,12 @@ public class PcmResampler
 
     private short GetSampleWithHistory(int index, short[] inputSamples, int inputSampleCount)
     {
-        if ( index >= 0 && index < inputSampleCount )
+        if (index >= 0 && index < inputSampleCount)
         {
             return inputSamples[index];
         }
 
-        if ( index < 0 && -index <= _historyLength )
+        if (index < 0 && -index <= _historyLength)
         {
             return _history[_historyLength + index];
         }
@@ -330,12 +347,12 @@ public class PcmResampler
 
     private float GetFloatSampleWithHistory(int index, ReadOnlySpan<float> inputSamples)
     {
-        if ( index >= 0 && index < inputSamples.Length )
+        if (index >= 0 && index < inputSamples.Length)
         {
             return inputSamples[index];
         }
 
-        if ( index < 0 && -index <= _historyLength )
+        if (index < 0 && -index <= _historyLength)
         {
             return _floatHistory[_historyLength + index];
         }
@@ -347,15 +364,27 @@ public class PcmResampler
     {
         var samplesToKeep = Math.Min(frameLength, _history.Length);
 
-        if ( samplesToKeep > 0 )
+        if (samplesToKeep > 0)
         {
             var unusedHistorySamples = Math.Min(_historyLength, _history.Length - samplesToKeep);
-            if ( unusedHistorySamples > 0 )
+            if (unusedHistorySamples > 0)
             {
-                Array.Copy(_history, _historyLength - unusedHistorySamples, _history, 0, unusedHistorySamples);
+                Array.Copy(
+                    _history,
+                    _historyLength - unusedHistorySamples,
+                    _history,
+                    0,
+                    unusedHistorySamples
+                );
             }
 
-            Array.Copy(currentFrame, frameLength - samplesToKeep, _history, unusedHistorySamples, samplesToKeep);
+            Array.Copy(
+                currentFrame,
+                frameLength - samplesToKeep,
+                _history,
+                unusedHistorySamples,
+                samplesToKeep
+            );
             _historyLength = unusedHistorySamples + samplesToKeep;
         }
 
@@ -366,17 +395,28 @@ public class PcmResampler
     {
         var samplesToKeep = Math.Min(currentFrame.Length, _floatHistory.Length);
 
-        if ( samplesToKeep > 0 )
+        if (samplesToKeep > 0)
         {
-            var unusedHistorySamples = Math.Min(_historyLength, _floatHistory.Length - samplesToKeep);
-            if ( unusedHistorySamples > 0 )
+            var unusedHistorySamples = Math.Min(
+                _historyLength,
+                _floatHistory.Length - samplesToKeep
+            );
+            if (unusedHistorySamples > 0)
             {
-                Array.Copy(_floatHistory, _historyLength - unusedHistorySamples, _floatHistory, 0, unusedHistorySamples);
+                Array.Copy(
+                    _floatHistory,
+                    _historyLength - unusedHistorySamples,
+                    _floatHistory,
+                    0,
+                    unusedHistorySamples
+                );
             }
 
-            for ( var i = 0; i < samplesToKeep; i++ )
+            for (var i = 0; i < samplesToKeep; i++)
             {
-                _floatHistory[unusedHistorySamples + i] = currentFrame[currentFrame.Length - samplesToKeep + i];
+                _floatHistory[unusedHistorySamples + i] = currentFrame[
+                    currentFrame.Length - samplesToKeep + i
+                ];
             }
 
             _historyLength = unusedHistorySamples + samplesToKeep;
@@ -387,15 +427,17 @@ public class PcmResampler
 
     private void ConvertToShorts(ReadOnlySpan<byte> input, short[] output, int sampleCount)
     {
-        for ( var i = 0; i < sampleCount; i++ )
+        for (var i = 0; i < sampleCount; i++)
         {
-            output[i] = BinaryPrimitives.ReadInt16LittleEndian(input.Slice(i * BYTES_PER_SAMPLE, BYTES_PER_SAMPLE));
+            output[i] = BinaryPrimitives.ReadInt16LittleEndian(
+                input.Slice(i * BYTES_PER_SAMPLE, BYTES_PER_SAMPLE)
+            );
         }
     }
 
     public void Reset()
     {
-        _position      = 0;
+        _position = 0;
         _historyLength = 0;
         Array.Clear(_history, 0, _history.Length);
         Array.Clear(_floatHistory, 0, _floatHistory.Length);

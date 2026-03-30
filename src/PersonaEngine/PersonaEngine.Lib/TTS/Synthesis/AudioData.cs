@@ -7,7 +7,7 @@ public class AudioData
 {
     public AudioData(Memory<float> samples, ReadOnlyMemory<long> phonemeTimings)
     {
-        Samples        = samples;
+        Samples = samples;
         PhonemeTimings = phonemeTimings;
     }
 

@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Logging;
-
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Adapters;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
 
@@ -9,7 +8,10 @@ public class AudioProgressNotifier : IAudioProgressNotifier
 {
     private readonly ILogger<AudioProgressNotifier> _logger;
 
-    public AudioProgressNotifier(ILogger<AudioProgressNotifier> logger) { _logger = logger; }
+    public AudioProgressNotifier(ILogger<AudioProgressNotifier> logger)
+    {
+        _logger = logger;
+    }
 
     public event EventHandler<AudioChunkPlaybackStartedEvent>? ChunkPlaybackStarted;
 
@@ -19,13 +21,21 @@ public class AudioProgressNotifier : IAudioProgressNotifier
 
     public void RaiseChunkStarted(object? sender, AudioChunkPlaybackStartedEvent args)
     {
-        _logger.LogTrace("Raising ChunkPlaybackStarted event for TurnId: {TurnId}, Chunk Id: {Sequence}", args.TurnId, args.Chunk.Id);
+        _logger.LogTrace(
+            "Raising ChunkPlaybackStarted event for TurnId: {TurnId}, Chunk Id: {Sequence}",
+            args.TurnId,
+            args.Chunk.Id
+        );
         SafeInvoke(ChunkPlaybackStarted, sender, args);
     }
 
     public void RaiseChunkEnded(object? sender, AudioChunkPlaybackEndedEvent args)
     {
-        _logger.LogTrace("Raising ChunkPlaybackEnded event for TurnId: {TurnId}, Chunk Id: {Sequence}", args.TurnId, args.Chunk.Id);
+        _logger.LogTrace(
+            "Raising ChunkPlaybackEnded event for TurnId: {TurnId}, Chunk Id: {Sequence}",
+            args.TurnId,
+            args.Chunk.Id
+        );
         SafeInvoke(ChunkPlaybackEnded, sender, args);
     }
 
@@ -33,17 +43,21 @@ public class AudioProgressNotifier : IAudioProgressNotifier
     {
         SafeInvoke(PlaybackProgress, sender, args);
     }
-    
-    private void SafeInvoke<TEventArgs>(EventHandler<TEventArgs>? eventHandler, object? sender, TEventArgs args)
+
+    private void SafeInvoke<TEventArgs>(
+        EventHandler<TEventArgs>? eventHandler,
+        object? sender,
+        TEventArgs args
+    )
     {
-        if ( eventHandler == null )
+        if (eventHandler == null)
         {
             return;
         }
 
         var invocationList = eventHandler.GetInvocationList();
 
-        foreach ( var handlerDelegate in invocationList )
+        foreach (var handlerDelegate in invocationList)
         {
             try
             {
@@ -52,7 +66,11 @@ public class AudioProgressNotifier : IAudioProgressNotifier
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Exception in audio progress event handler ({EventType}).", typeof(TEventArgs).Name);
+                _logger.LogError(
+                    ex,
+                    "Exception in audio progress event handler ({EventType}).",
+                    typeof(TEventArgs).Name
+                );
             }
         }
     }

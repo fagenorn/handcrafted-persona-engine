@@ -25,5 +25,5 @@ public enum EyeState
     /// <summary>
     ///     まぶたが開いていく途中の状態
     /// </summary>
-    Opening
+    Opening,
 }

@@ -85,13 +85,19 @@ public abstract class CubismRenderer : IDisposable
     ///     配列は複製されるので元の配列は外で破棄して良い
     /// </summary>
     /// <param name="matrix4x4">Model-View-Projection 行列</param>
-    public void SetMvpMatrix(CubismMatrix44 matrix4x4) { _mvpMatrix4x4.SetMatrix(matrix4x4.Tr); }
+    public void SetMvpMatrix(CubismMatrix44 matrix4x4)
+    {
+        _mvpMatrix4x4.SetMatrix(matrix4x4.Tr);
+    }
 
     /// <summary>
     ///     Model-View-Projection 行列を取得する
     /// </summary>
     /// <returns>Model-View-Projection 行列</returns>
-    public CubismMatrix44 GetMvpMatrix() { return _mvpMatrix4x4; }
+    public CubismMatrix44 GetMvpMatrix()
+    {
+        return _mvpMatrix4x4;
+    }
 
     /// <summary>
     ///     透明度を考慮したモデルの色を計算する。
@@ -102,7 +108,7 @@ public abstract class CubismRenderer : IDisposable
     {
         CubismTextureColor modelColorRGBA = new(ModelColor);
         modelColorRGBA.A *= opacity;
-        if ( IsPremultipliedAlpha )
+        if (IsPremultipliedAlpha)
         {
             modelColorRGBA.R *= modelColorRGBA.A;
             modelColorRGBA.G *= modelColorRGBA.A;
@@ -122,38 +128,38 @@ public abstract class CubismRenderer : IDisposable
     /// <param name="alpha">αチャンネルの値</param>
     public void SetModelColor(float red, float green, float blue, float alpha)
     {
-        if ( red < 0.0f )
+        if (red < 0.0f)
         {
             red = 0.0f;
         }
-        else if ( red > 1.0f )
+        else if (red > 1.0f)
         {
             red = 1.0f;
         }
 
-        if ( green < 0.0f )
+        if (green < 0.0f)
         {
             green = 0.0f;
         }
-        else if ( green > 1.0f )
+        else if (green > 1.0f)
         {
             green = 1.0f;
         }
 
-        if ( blue < 0.0f )
+        if (blue < 0.0f)
         {
             blue = 0.0f;
         }
-        else if ( blue > 1.0f )
+        else if (blue > 1.0f)
         {
             blue = 1.0f;
         }
 
-        if ( alpha < 0.0f )
+        if (alpha < 0.0f)
         {
             alpha = 0.0f;
         }
-        else if ( alpha > 1.0f )
+        else if (alpha > 1.0f)
         {
             alpha = 1.0f;
         }
@@ -182,9 +188,17 @@ public abstract class CubismRenderer : IDisposable
     /// <param name="opacity">不透明度</param>
     /// <param name="colorBlendMode">カラーブレンディングのタイプ</param>
     /// <param name="invertedMask">マスク使用時のマスクの反転使用</param>
-    internal abstract unsafe void DrawMesh(int     textureNo,  int             indexCount,     int    vertexCount
-                                         , ushort* indexArray, float*          vertexArray,    float* uvArray
-                                         , float   opacity,    CubismBlendMode colorBlendMode, bool   invertedMask);
+    internal abstract unsafe void DrawMesh(
+        int textureNo,
+        int indexCount,
+        int vertexCount,
+        ushort* indexArray,
+        float* vertexArray,
+        float* uvArray,
+        float opacity,
+        CubismBlendMode colorBlendMode,
+        bool invertedMask
+    );
 
     /// <summary>
     ///     モデル描画直前のレンダラのステートを保持する

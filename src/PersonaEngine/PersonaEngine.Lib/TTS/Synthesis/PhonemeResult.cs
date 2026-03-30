@@ -8,7 +8,7 @@ public class PhonemeResult
     public PhonemeResult(string phonemes, IReadOnlyList<Token> tokens)
     {
         Phonemes = phonemes;
-        Tokens   = tokens;
+        Tokens = tokens;
     }
 
     /// <summary>

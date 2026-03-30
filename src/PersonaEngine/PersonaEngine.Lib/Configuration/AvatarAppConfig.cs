@@ -25,7 +25,7 @@ public record AvatarAppConfig
     public RouletteWheelOptions RouletteWheel { get; set; } = new();
 
     public ConversationOptions Conversation { get; set; } = new();
-    
+
     // This would need to be seperate per configured conversation session
     public ConversationContextOptions ConversationContext { get; set; } = new();
 }

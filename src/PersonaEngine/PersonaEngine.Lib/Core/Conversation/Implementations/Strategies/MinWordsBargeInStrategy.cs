@@ -8,7 +8,7 @@ public class MinWordsBargeInStrategy : IBargeInStrategy
 {
     public bool ShouldAllowBargeIn(BargeInContext context)
     {
-        switch ( context.InputEvent )
+        switch (context.InputEvent)
         {
             case SttSegmentRecognizing segmentRecognizing:
             {
