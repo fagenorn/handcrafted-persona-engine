@@ -188,7 +188,7 @@ public partial class ConversationSession
         };
 
         _logger.LogInformation("{SessionId} | {TurnId} | {Emoji} | {DestinationState}",
-                               SessionId, _currentTurnId ?? Guid.Empty, emoji, transition.Destination);
+                               SessionId, _pipeline.CurrentTurnId ?? Guid.Empty, emoji, transition.Destination);
     }
 
     private bool ShouldAllowBargeIn(IInputEvent inputEvent)
@@ -198,7 +198,7 @@ public partial class ConversationSession
                                          _stateMachine.State,
                                          inputEvent,
                                          SessionId,
-                                         _currentTurnId
+                                         _pipeline.CurrentTurnId
                                         );
 
         var allow = _bargeInStrategy.ShouldAllowBargeIn(context);
