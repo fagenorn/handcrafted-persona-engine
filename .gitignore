@@ -688,6 +688,10 @@ Cargo.lock
 
 # End of https://www.toptal.com/developers/gitignore/api/rust,rider,visualstudiocode,visualstudio,csharp
 
+# Claude Code
+CLAUDE.md
+.claude/
+
 src/PersonaEngine/PersonaEngine.Lib/Resources/*
 !src/PersonaEngine/PersonaEngine.Lib/Resources/.gitkeep 
 
