@@ -12,7 +12,7 @@ public readonly struct VertexPositionTexture
 
     public VertexPositionTexture(Vector3 position, Vector2 textureCoordinate)
     {
-        Position          = position;
+        Position = position;
         TextureCoordinate = textureCoordinate;
     }
 }

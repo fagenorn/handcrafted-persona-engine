@@ -1,8 +1,6 @@
 ﻿using System.Numerics;
-
 using Hexa.NET.ImGui;
 using Hexa.NET.Utilities.Text;
-
 using Silk.NET.Input;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
@@ -28,16 +26,19 @@ public class ConfigEditorComponent : IRenderComponent
 
     public ConfigEditorComponent(
         IUiConfigurationManager configManager,
-        IEditorStateManager     stateManager,
-        IConfigSectionRegistry  sectionRegistry,
-        IUiThemeManager         themeManager,
-        INotificationService    notificationService)
+        IEditorStateManager stateManager,
+        IConfigSectionRegistry sectionRegistry,
+        IUiThemeManager themeManager,
+        INotificationService notificationService
+    )
     {
-        _configManager       = configManager ?? throw new ArgumentNullException(nameof(configManager));
-        _stateManager        = stateManager ?? throw new ArgumentNullException(nameof(stateManager));
-        _sectionRegistry     = sectionRegistry ?? throw new ArgumentNullException(nameof(sectionRegistry));
-        _themeManager        = themeManager ?? throw new ArgumentNullException(nameof(themeManager));
-        _notificationService = notificationService ?? throw new ArgumentNullException(nameof(notificationService));
+        _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
+        _stateManager = stateManager ?? throw new ArgumentNullException(nameof(stateManager));
+        _sectionRegistry =
+            sectionRegistry ?? throw new ArgumentNullException(nameof(sectionRegistry));
+        _themeManager = themeManager ?? throw new ArgumentNullException(nameof(themeManager));
+        _notificationService =
+            notificationService ?? throw new ArgumentNullException(nameof(notificationService));
 
         // Subscribe to configuration change events
         _configManager.ConfigurationChanged += OnConfigurationChanged;
@@ -50,10 +51,10 @@ public class ConfigEditorComponent : IRenderComponent
     {
         // Unsubscribe from events
         _configManager.ConfigurationChanged -= OnConfigurationChanged;
-        _stateManager.StateChanged          -= OnStateChanged;
+        _stateManager.StateChanged -= OnStateChanged;
 
         // Dispose all registered section editors
-        foreach ( var section in _sectionRegistry.GetSections() )
+        foreach (var section in _sectionRegistry.GetSections())
         {
             (section as IDisposable)?.Dispose();
         }
@@ -71,7 +72,7 @@ public class ConfigEditorComponent : IRenderComponent
 
     public void Initialize(GL gl, IView view, IInputContext input)
     {
-        if ( _isInitialized )
+        if (_isInitialized)
         {
             return;
         }
@@ -80,7 +81,7 @@ public class ConfigEditorComponent : IRenderComponent
         _themeManager.ApplyTheme();
 
         // Initialize all registered section editors
-        foreach ( var section in _sectionRegistry.GetSections() )
+        foreach (var section in _sectionRegistry.GetSections())
         {
             section.Initialize();
         }
@@ -111,7 +112,7 @@ public class ConfigEditorComponent : IRenderComponent
     public void Update(float deltaTime)
     {
         // Update all registered section editors
-        foreach ( var section in _sectionRegistry.GetSections() )
+        foreach (var section in _sectionRegistry.GetSections())
         {
             section.Update(deltaTime);
         }
@@ -131,10 +132,10 @@ public class ConfigEditorComponent : IRenderComponent
 
     private void RenderMenuBar()
     {
-        if ( ImGui.BeginMenuBar() )
+        if (ImGui.BeginMenuBar())
         {
             // Render section-specific menu items
-            foreach ( var section in _sectionRegistry.GetSections() )
+            foreach (var section in _sectionRegistry.GetSections())
             {
                 section.RenderMenuItems();
             }
@@ -149,7 +150,7 @@ public class ConfigEditorComponent : IRenderComponent
     private void RenderStatusIndicators()
     {
         var activeOperation = _stateManager.GetActiveOperation();
-        if ( activeOperation != null )
+        if (activeOperation != null)
         {
             var menuWidth = ImGui.GetWindowWidth();
             ImGui.SameLine(menuWidth - 160);
@@ -160,7 +161,7 @@ public class ConfigEditorComponent : IRenderComponent
 
             // Animated dots
             var time = (int)(ImGui.GetTime() * 2) % 4;
-            for ( var i = 0; i < time; i++ )
+            for (var i = 0; i < time; i++)
             {
                 ImGui.SameLine(0, 2);
                 ImGui.Text(".");
@@ -175,71 +176,97 @@ public class ConfigEditorComponent : IRenderComponent
 
     private void RenderUnsavedChangesBanner()
     {
-        UiStyler.WithStyleColor(ImGuiCol.ChildBg, new Vector4(0.92f, 0.73f, 0.0f, 0.2f), () =>
-                                                                                         {
-                                                                                             UiStyler.WithStyleVar(ImGuiStyleVar.FramePadding, new Vector2(10, 5), () =>
-                                                                                                                                                                   {
-                                                                                                                                                                       ImGui.BeginChild("UnsavedChangesBar", new Vector2(ImGui.GetContentRegionAvail().X, 40), ImGuiChildFlags.Borders, ImGuiWindowFlags.NoScrollbar);
+        UiStyler.WithStyleColor(
+            ImGuiCol.ChildBg,
+            new Vector4(0.92f, 0.73f, 0.0f, 0.2f),
+            () =>
+            {
+                UiStyler.WithStyleVar(
+                    ImGuiStyleVar.FramePadding,
+                    new Vector2(10, 5),
+                    () =>
+                    {
+                        ImGui.BeginChild(
+                            "UnsavedChangesBar",
+                            new Vector2(ImGui.GetContentRegionAvail().X, 40),
+                            ImGuiChildFlags.Borders,
+                            ImGuiWindowFlags.NoScrollbar
+                        );
 
-                                                                                                                                                                       ImGui.AlignTextToFramePadding();
-                                                                                                                                                                       ImGui.TextColored(new Vector4(1, 0.7f, 0, 1), "You have unsaved changes!");
+                        ImGui.AlignTextToFramePadding();
+                        ImGui.TextColored(new Vector4(1, 0.7f, 0, 1), "You have unsaved changes!");
 
-                                                                                                                                                                       ImGui.SameLine(ImGui.GetContentRegionAvail().X - 200);
+                        ImGui.SameLine(ImGui.GetContentRegionAvail().X - 200);
 
-                                                                                                                                                                       if ( ImGui.Button("Save Changes", new Vector2(100, 30)) )
-                                                                                                                                                                       {
-                                                                                                                                                                           SaveConfiguration();
-                                                                                                                                                                       }
+                        if (ImGui.Button("Save Changes", new Vector2(100, 30)))
+                        {
+                            SaveConfiguration();
+                        }
 
-                                                                                                                                                                       ImGui.SameLine();
+                        ImGui.SameLine();
 
-                                                                                                                                                                       if ( ImGui.Button("Discard", new Vector2(80, 30)) )
-                                                                                                                                                                       {
-                                                                                                                                                                           ReloadConfiguration();
-                                                                                                                                                                       }
+                        if (ImGui.Button("Discard", new Vector2(80, 30)))
+                        {
+                            ReloadConfiguration();
+                        }
 
-                                                                                                                                                                       ImGui.EndChild();
-                                                                                                                                                                   });
-                                                                                         });
+                        ImGui.EndChild();
+                    }
+                );
+            }
+        );
     }
 
     private void RenderNotifications()
     {
-        foreach ( var notification in _notificationService.GetActiveNotifications() )
+        foreach (var notification in _notificationService.GetActiveNotifications())
         {
-            UiStyler.WithStyleColor(ImGuiCol.ChildBg, notification.GetBackgroundColor(), () =>
-                                                                                         {
-                                                                                             UiStyler.WithStyleVar(ImGuiStyleVar.FramePadding, new Vector2(10, 5), () =>
-                                                                                                                                                                   {
-                                                                                                                                                                       ImGui.BeginChild($"Notification_{notification.Id}", new Vector2(ImGui.GetContentRegionAvail().X, 40), ImGuiChildFlags.Borders, ImGuiWindowFlags.NoScrollbar);
+            UiStyler.WithStyleColor(
+                ImGuiCol.ChildBg,
+                notification.GetBackgroundColor(),
+                () =>
+                {
+                    UiStyler.WithStyleVar(
+                        ImGuiStyleVar.FramePadding,
+                        new Vector2(10, 5),
+                        () =>
+                        {
+                            ImGui.BeginChild(
+                                $"Notification_{notification.Id}",
+                                new Vector2(ImGui.GetContentRegionAvail().X, 40),
+                                ImGuiChildFlags.Borders,
+                                ImGuiWindowFlags.NoScrollbar
+                            );
 
-                                                                                                                                                                       ImGui.AlignTextToFramePadding();
-                                                                                                                                                                       ImGui.TextColored(notification.GetTextColor(), notification.Message);
+                            ImGui.AlignTextToFramePadding();
+                            ImGui.TextColored(notification.GetTextColor(), notification.Message);
 
-                                                                                                                                                                       if ( notification.HasAction )
-                                                                                                                                                                       {
-                                                                                                                                                                           ImGui.SameLine(ImGui.GetContentRegionAvail().X - 100);
+                            if (notification.HasAction)
+                            {
+                                ImGui.SameLine(ImGui.GetContentRegionAvail().X - 100);
 
-                                                                                                                                                                           if ( ImGui.Button(notification.ActionLabel, new Vector2(90, 30)) )
-                                                                                                                                                                           {
-                                                                                                                                                                               notification.InvokeAction();
-                                                                                                                                                                           }
-                                                                                                                                                                       }
+                                if (ImGui.Button(notification.ActionLabel, new Vector2(90, 30)))
+                                {
+                                    notification.InvokeAction();
+                                }
+                            }
 
-                                                                                                                                                                       ImGui.EndChild();
-                                                                                                                                                                   });
-                                                                                         });
+                            ImGui.EndChild();
+                        }
+                    );
+                }
+            );
         }
     }
 
     private unsafe void RenderSectionTabs()
     {
-        var        sections   = _sectionRegistry.GetSections();
-        const int  bufferSize = 256;
-        var        buffer     = stackalloc byte[bufferSize];
-        StrBuilder sb         = new(buffer, bufferSize);
+        var sections = _sectionRegistry.GetSections();
+        const int bufferSize = 256;
+        var buffer = stackalloc byte[bufferSize];
+        StrBuilder sb = new(buffer, bufferSize);
 
-        foreach ( var section in sections )
+        foreach (var section in sections)
         {
             sb.Append("ScrollRegion");
             sb.Append("##");
@@ -247,12 +274,22 @@ public class ConfigEditorComponent : IRenderComponent
             sb.End();
 
             ImGui.SetNextWindowSize(new Vector2(600, 0));
-            if ( ImGui.Begin(section.DisplayName, ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoResize) )
+            if (
+                ImGui.Begin(
+                    section.DisplayName,
+                    ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoResize
+                )
+            )
             {
-                if ( ImGui.CollapsingHeader(section.DisplayName, ImGuiTreeNodeFlags.None) )
+                if (ImGui.CollapsingHeader(section.DisplayName, ImGuiTreeNodeFlags.None))
                 {
                     var availWidth = ImGui.GetContentRegionAvail().X;
-                    ImGui.BeginChild(sb, new Vector2(availWidth, 0), ImGuiChildFlags.AutoResizeY, ImGuiWindowFlags.HorizontalScrollbar);
+                    ImGui.BeginChild(
+                        sb,
+                        new Vector2(availWidth, 0),
+                        ImGuiChildFlags.AutoResizeY,
+                        ImGuiWindowFlags.HorizontalScrollbar
+                    );
                     section.Render();
                     ImGui.EndChild();
                 }
@@ -271,9 +308,9 @@ public class ConfigEditorComponent : IRenderComponent
     private void OnConfigurationChanged(object sender, ConfigurationChangedEventArgs e)
     {
         // Notify relevant sections about configuration changes
-        foreach ( var section in _sectionRegistry.GetSections() )
+        foreach (var section in _sectionRegistry.GetSections())
         {
-            if ( section.SectionKey == e.SectionKey || e.SectionKey == null )
+            if (section.SectionKey == e.SectionKey || e.SectionKey == null)
             {
                 section.OnConfigurationChanged(e);
             }

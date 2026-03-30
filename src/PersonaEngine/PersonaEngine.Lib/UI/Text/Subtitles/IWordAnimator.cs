@@ -1,5 +1,4 @@
 ﻿using System.Numerics;
-
 using FontStashSharp;
 
 namespace PersonaEngine.Lib.UI.Text.Subtitles;

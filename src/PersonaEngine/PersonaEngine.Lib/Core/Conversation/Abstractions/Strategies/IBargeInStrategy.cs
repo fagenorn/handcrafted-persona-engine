@@ -7,9 +7,9 @@ namespace PersonaEngine.Lib.Core.Conversation.Abstractions.Strategies;
 public record struct BargeInContext(
     ConversationOptions ConversationOptions,
     ConversationState CurrentState,
-    IInputEvent       InputEvent,
-    Guid              SessionId,
-    Guid?             TurnId
+    IInputEvent InputEvent,
+    Guid SessionId,
+    Guid? TurnId
 );
 
 public interface IBargeInStrategy

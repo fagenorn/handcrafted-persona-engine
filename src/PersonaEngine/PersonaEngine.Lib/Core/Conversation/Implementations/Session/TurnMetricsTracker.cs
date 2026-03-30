@@ -1,5 +1,4 @@
 using System.Diagnostics;
-
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Common;
 
 namespace PersonaEngine.Lib.Core.Conversation.Implementations.Session;

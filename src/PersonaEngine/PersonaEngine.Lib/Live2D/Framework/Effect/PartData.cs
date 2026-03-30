@@ -34,7 +34,7 @@ public record PartData
     public void Initialize(CubismModel model)
     {
         ParameterIndex = model.GetParameterIndex(PartId);
-        PartIndex      = model.GetPartIndex(PartId);
+        PartIndex = model.GetPartIndex(PartId);
 
         model.SetParameterValue(ParameterIndex, 1);
     }

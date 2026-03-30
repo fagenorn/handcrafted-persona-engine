@@ -1,5 +1,4 @@
 ﻿using PersonaEngine.Lib.UI.Common;
-
 using Silk.NET.OpenGL;
 
 namespace PersonaEngine.Lib.UI.GUI;
@@ -16,12 +15,18 @@ public class ConfigSectionRegistrationTask : IStartupTask
 
     private readonly MicrophoneConfigEditor _microphoneConfigEditor;
 
-    public ConfigSectionRegistrationTask(IConfigSectionRegistry registry, TtsConfigEditor ttsEditor, RouletteWheelEditor rouletteWheelEditor, ChatEditor chatEditor, MicrophoneConfigEditor microphoneConfigEditor)
+    public ConfigSectionRegistrationTask(
+        IConfigSectionRegistry registry,
+        TtsConfigEditor ttsEditor,
+        RouletteWheelEditor rouletteWheelEditor,
+        ChatEditor chatEditor,
+        MicrophoneConfigEditor microphoneConfigEditor
+    )
     {
-        _registry                    = registry;
-        _ttsEditor                   = ttsEditor;
-        _rouletteWheelEditor         = rouletteWheelEditor;
-        _chatEditor                  = chatEditor;
+        _registry = registry;
+        _ttsEditor = ttsEditor;
+        _rouletteWheelEditor = rouletteWheelEditor;
+        _chatEditor = chatEditor;
         _microphoneConfigEditor = microphoneConfigEditor;
     }
 

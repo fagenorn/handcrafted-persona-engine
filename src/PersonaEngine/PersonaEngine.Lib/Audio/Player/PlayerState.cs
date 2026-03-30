@@ -14,5 +14,5 @@ public enum PlayerState
 
     Stopped,
 
-    Error
+    Error,
 }

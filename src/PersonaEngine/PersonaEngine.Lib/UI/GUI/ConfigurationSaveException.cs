@@ -5,7 +5,9 @@
 /// </summary>
 public class ConfigurationSaveException : Exception
 {
-    public ConfigurationSaveException(string message) : base(message) { }
+    public ConfigurationSaveException(string message)
+        : base(message) { }
 
-    public ConfigurationSaveException(string message, Exception innerException) : base(message, innerException) { }
+    public ConfigurationSaveException(string message, Exception innerException)
+        : base(message, innerException) { }
 }

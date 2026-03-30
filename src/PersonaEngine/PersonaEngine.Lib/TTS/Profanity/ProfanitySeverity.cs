@@ -11,5 +11,5 @@ public enum ProfanitySeverity
 
     Moderate, // Moderate profanity detected.
 
-    Severe // High level of profanity detected.
+    Severe, // High level of profanity detected.
 }

@@ -1,5 +1,4 @@
 ﻿using System.Runtime.InteropServices;
-
 using PersonaEngine.Lib.Live2D.Framework.Core;
 
 namespace PersonaEngine.Lib.Live2D.Framework.Model;
@@ -25,11 +24,11 @@ public class CubismMoc : IDisposable
         var alignedBuffer = CubismFramework.AllocateAligned(mocBytes.Length, CsmEnum.csmAlignofMoc);
         Marshal.Copy(mocBytes, 0, alignedBuffer, mocBytes.Length);
 
-        if ( shouldCheckMocConsistency )
+        if (shouldCheckMocConsistency)
         {
             // .moc3の整合性を確認
             var consistency = HasMocConsistency(alignedBuffer, mocBytes.Length);
-            if ( !consistency )
+            if (!consistency)
             {
                 CubismFramework.DeallocateAligned(alignedBuffer);
 
@@ -40,7 +39,7 @@ public class CubismMoc : IDisposable
 
         var moc = CubismCore.ReviveMocInPlace(alignedBuffer, mocBytes.Length);
 
-        if ( moc == IntPtr.Zero )
+        if (moc == IntPtr.Zero)
         {
             throw new Exception("MOC3 is null");
         }
@@ -49,12 +48,12 @@ public class CubismMoc : IDisposable
 
         MocVersion = CubismCore.GetMocVersion(alignedBuffer, mocBytes.Length);
 
-        var modelSize   = CubismCore.GetSizeofModel(_moc);
+        var modelSize = CubismCore.GetSizeofModel(_moc);
         var modelMemory = CubismFramework.AllocateAligned(modelSize, CsmEnum.CsmAlignofModel);
 
         var model = CubismCore.InitializeModelInPlace(_moc, modelMemory, modelSize);
 
-        if ( model == IntPtr.Zero )
+        if (model == IntPtr.Zero)
         {
             throw new Exception("MODEL is null");
         }
@@ -83,7 +82,10 @@ public class CubismMoc : IDisposable
     ///     最新の.moc3 Versionを取得する。
     /// </summary>
     /// <returns></returns>
-    public static uint GetLatestMocVersion() { return CubismCore.GetLatestMocVersion(); }
+    public static uint GetLatestMocVersion()
+    {
+        return CubismCore.GetLatestMocVersion();
+    }
 
     /// <summary>
     ///     Checks consistency of a moc.
@@ -91,7 +93,10 @@ public class CubismMoc : IDisposable
     /// <param name="address">Address of unrevived moc. The address must be aligned to 'csmAlignofMoc'.</param>
     /// <param name="size">Size of moc (in bytes).</param>
     /// <returns>'1' if Moc is valid; '0' otherwise.</returns>
-    public static bool HasMocConsistency(IntPtr address, int size) { return CubismCore.HasMocConsistency(address, size); }
+    public static bool HasMocConsistency(IntPtr address, int size)
+    {
+        return CubismCore.HasMocConsistency(address, size);
+    }
 
     /// <summary>
     ///     Checks consistency of a moc.

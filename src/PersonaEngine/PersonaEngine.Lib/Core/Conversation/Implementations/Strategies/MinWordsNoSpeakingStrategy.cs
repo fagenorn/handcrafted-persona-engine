@@ -9,12 +9,12 @@ public class MinWordsNoSpeakingStrategy : IBargeInStrategy
 {
     public bool ShouldAllowBargeIn(BargeInContext context)
     {
-        if ( context.CurrentState == ConversationState.Speaking )
+        if (context.CurrentState == ConversationState.Speaking)
         {
             return false;
         }
 
-        switch ( context.InputEvent )
+        switch (context.InputEvent)
         {
             case SttSegmentRecognizing segmentRecognizing:
             {

@@ -4,10 +4,10 @@ public record AudioSegment
 {
     public AudioSegment(Memory<float> audioData, int sampleRate, IReadOnlyList<Token> tokens)
     {
-        AudioData  = audioData;
+        AudioData = audioData;
         SampleRate = sampleRate;
-        Channels   = 1;
-        Tokens     = tokens ?? Array.Empty<Token>();
+        Channels = 1;
+        Tokens = tokens ?? Array.Empty<Token>();
     }
 
     public Guid Id { get; init; } = Guid.NewGuid();

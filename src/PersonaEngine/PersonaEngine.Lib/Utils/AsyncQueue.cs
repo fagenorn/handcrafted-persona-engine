@@ -10,7 +10,7 @@ public sealed class AsyncQueue<T> : IDisposable
 
     public void Dispose()
     {
-        if ( _isDisposed )
+        if (_isDisposed)
         {
             return;
         }

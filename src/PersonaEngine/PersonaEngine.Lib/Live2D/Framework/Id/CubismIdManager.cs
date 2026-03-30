@@ -14,7 +14,13 @@ public class CubismIdManager
     ///     ID名をリストから登録する。
     /// </summary>
     /// <param name="list">ID名リスト</param>
-    public void RegisterIds(List<string> list) { list.ForEach(item => { GetId(item); }); }
+    public void RegisterIds(List<string> list)
+    {
+        list.ForEach(item =>
+        {
+            GetId(item);
+        });
+    }
 
     /// <summary>
     ///     ID名からIDを取得する。
@@ -23,7 +29,7 @@ public class CubismIdManager
     /// <param name="item">ID名</param>
     public string GetId(string item)
     {
-        if ( _ids.Contains(item) )
+        if (_ids.Contains(item))
         {
             return item;
         }

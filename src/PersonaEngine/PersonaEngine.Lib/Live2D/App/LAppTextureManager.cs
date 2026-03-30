@@ -1,5 +1,4 @@
 ﻿using System.Runtime.InteropServices;
-
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -21,14 +20,14 @@ public class LAppTextureManager(LAppDelegate lapp)
     {
         //search loaded texture already.
         var item = _textures.FirstOrDefault(a => a.FileName == fileName);
-        if ( item != null )
+        if (item != null)
         {
             return item;
         }
 
         // Using SixLabors.ImageSharp to load the image
         using var image = Image.Load<Rgba32>(fileName);
-        var       GL    = lapp.GL;
+        var GL = lapp.GL;
 
         // OpenGL用のテクスチャを生成する
         var textureId = GL.GenTexture();
@@ -39,27 +38,27 @@ public class LAppTextureManager(LAppDelegate lapp)
 
         // Access the pixel data
         image.ProcessPixelRows(accessor =>
-                               {
-                                   // For each row
-                                   for ( var y = 0; y < accessor.Height; y++ )
-                                   {
-                                       // Get the pixel row span
-                                       var row = accessor.GetRowSpan(y);
+        {
+            // For each row
+            for (var y = 0; y < accessor.Height; y++)
+            {
+                // Get the pixel row span
+                var row = accessor.GetRowSpan(y);
 
-                                       // For each pixel in the row
-                                       for ( var x = 0; x < row.Length; x++ )
-                                       {
-                                           // Calculate the position in our byte array
-                                           var arrayPos = (y * accessor.Width + x) * 4;
+                // For each pixel in the row
+                for (var x = 0; x < row.Length; x++)
+                {
+                    // Calculate the position in our byte array
+                    var arrayPos = (y * accessor.Width + x) * 4;
 
-                                           // Copy RGBA components
-                                           pixelData[arrayPos + 0] = row[x].R;
-                                           pixelData[arrayPos + 1] = row[x].G;
-                                           pixelData[arrayPos + 2] = row[x].B;
-                                           pixelData[arrayPos + 3] = row[x].A;
-                                       }
-                                   }
-                               });
+                    // Copy RGBA components
+                    pixelData[arrayPos + 0] = row[x].R;
+                    pixelData[arrayPos + 1] = row[x].G;
+                    pixelData[arrayPos + 2] = row[x].B;
+                    pixelData[arrayPos + 3] = row[x].A;
+                }
+            }
+        });
 
         // Pin the byte array in memory so we can pass a pointer to OpenGL
         var pinnedArray = GCHandle.Alloc(pixelData, GCHandleType.Pinned);
@@ -69,9 +68,23 @@ public class LAppTextureManager(LAppDelegate lapp)
             var pointer = pinnedArray.AddrOfPinnedObject();
 
             // Pass the pointer to OpenGL
-            GL.TexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA, image.Width, image.Height, 0, GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, pointer);
+            GL.TexImage2D(
+                GL.GL_TEXTURE_2D,
+                0,
+                GL.GL_RGBA,
+                image.Width,
+                image.Height,
+                0,
+                GL.GL_RGBA,
+                GL.GL_UNSIGNED_BYTE,
+                pointer
+            );
             GL.GenerateMipmap(GL.GL_TEXTURE_2D);
-            GL.TexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR_MIPMAP_LINEAR);
+            GL.TexParameteri(
+                GL.GL_TEXTURE_2D,
+                GL.GL_TEXTURE_MIN_FILTER,
+                GL.GL_LINEAR_MIPMAP_LINEAR
+            );
             GL.TexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR);
         }
         finally
@@ -82,7 +95,13 @@ public class LAppTextureManager(LAppDelegate lapp)
 
         GL.BindTexture(GL.GL_TEXTURE_2D, 0);
 
-        var info = new TextureInfo { FileName = fileName, Width = image.Width, Height = image.Height, ID = textureId };
+        var info = new TextureInfo
+        {
+            FileName = fileName,
+            Width = image.Width,
+            Height = image.Height,
+            ID = textureId,
+        };
 
         _textures.Add(info);
 
@@ -95,9 +114,9 @@ public class LAppTextureManager(LAppDelegate lapp)
     /// <param name="textureId">解放するテクスチャID</param>
     public void ReleaseTexture(int textureId)
     {
-        foreach ( var item in _textures )
+        foreach (var item in _textures)
         {
-            if ( item.ID == textureId )
+            if (item.ID == textureId)
             {
                 _textures.Remove(item);
 
@@ -111,5 +130,8 @@ public class LAppTextureManager(LAppDelegate lapp)
     /// </summary>
     /// <param name="textureId">取得したいテクスチャID</param>
     /// <returns>テクスチャが存在していればTextureInfoが返る</returns>
-    public TextureInfo? GetTextureInfoById(int textureId) { return _textures.FirstOrDefault(a => a.ID == textureId); }
+    public TextureInfo? GetTextureInfoById(int textureId)
+    {
+        return _textures.FirstOrDefault(a => a.ID == textureId);
+    }
 }

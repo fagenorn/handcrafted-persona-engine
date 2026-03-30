@@ -63,19 +63,19 @@ public class CubismEyeBlink
     /// <param name="modelSetting">モデルの設定情報</param>
     public CubismEyeBlink(ModelSettingObj modelSetting)
     {
-        _blinkingState           = EyeState.First;
+        _blinkingState = EyeState.First;
         _blinkingIntervalSeconds = 4.0f;
-        _closingSeconds          = 0.1f;
-        _closedSeconds           = 0.05f;
-        _openingSeconds          = 0.15f;
+        _closingSeconds = 0.1f;
+        _closedSeconds = 0.05f;
+        _openingSeconds = 0.15f;
 
-        foreach ( var item in modelSetting.Groups )
+        foreach (var item in modelSetting.Groups)
         {
-            if ( item.Name == CubismModelSettingJson.EyeBlink )
+            if (item.Name == CubismModelSettingJson.EyeBlink)
             {
-                foreach ( var item1 in item.Ids )
+                foreach (var item1 in item.Ids)
                 {
-                    if ( item1 == null )
+                    if (item1 == null)
                     {
                         continue;
                     }
@@ -93,7 +93,10 @@ public class CubismEyeBlink
     ///     まばたきの間隔を設定する。
     /// </summary>
     /// <param name="blinkingInterval">まばたきの間隔の時間[秒]</param>
-    public void SetBlinkingInterval(float blinkingInterval) { _blinkingIntervalSeconds = blinkingInterval; }
+    public void SetBlinkingInterval(float blinkingInterval)
+    {
+        _blinkingIntervalSeconds = blinkingInterval;
+    }
 
     /// <summary>
     ///     まばたきのモーションの詳細設定を行う。
@@ -104,7 +107,7 @@ public class CubismEyeBlink
     public void SetBlinkingSettings(float closing, float closed, float opening)
     {
         _closingSeconds = closing;
-        _closedSeconds  = closed;
+        _closedSeconds = closed;
         _openingSeconds = opening;
     }
 
@@ -118,15 +121,15 @@ public class CubismEyeBlink
         _userTimeSeconds += deltaTimeSeconds;
         float parameterValue;
         float t;
-        switch ( _blinkingState )
+        switch (_blinkingState)
         {
             case EyeState.Closing:
                 t = (_userTimeSeconds - _stateStartTimeSeconds) / _closingSeconds;
 
-                if ( t >= 1.0f )
+                if (t >= 1.0f)
                 {
-                    t                      = 1.0f;
-                    _blinkingState         = EyeState.Closed;
+                    t = 1.0f;
+                    _blinkingState = EyeState.Closed;
                     _stateStartTimeSeconds = _userTimeSeconds;
                 }
 
@@ -136,9 +139,9 @@ public class CubismEyeBlink
             case EyeState.Closed:
                 t = (_userTimeSeconds - _stateStartTimeSeconds) / _closedSeconds;
 
-                if ( t >= 1.0f )
+                if (t >= 1.0f)
                 {
-                    _blinkingState         = EyeState.Opening;
+                    _blinkingState = EyeState.Opening;
                     _stateStartTimeSeconds = _userTimeSeconds;
                 }
 
@@ -148,10 +151,10 @@ public class CubismEyeBlink
             case EyeState.Opening:
                 t = (_userTimeSeconds - _stateStartTimeSeconds) / _openingSeconds;
 
-                if ( t >= 1.0f )
+                if (t >= 1.0f)
                 {
-                    t                 = 1.0f;
-                    _blinkingState    = EyeState.Interval;
+                    t = 1.0f;
+                    _blinkingState = EyeState.Interval;
                     _nextBlinkingTime = DetermineNextBlinkingTiming();
                 }
 
@@ -159,9 +162,9 @@ public class CubismEyeBlink
 
                 break;
             case EyeState.Interval:
-                if ( _nextBlinkingTime < _userTimeSeconds )
+                if (_nextBlinkingTime < _userTimeSeconds)
                 {
-                    _blinkingState         = EyeState.Closing;
+                    _blinkingState = EyeState.Closing;
                     _stateStartTimeSeconds = _userTimeSeconds;
                 }
 
@@ -170,7 +173,7 @@ public class CubismEyeBlink
                 break;
             case EyeState.First:
             default:
-                _blinkingState    = EyeState.Interval;
+                _blinkingState = EyeState.Interval;
                 _nextBlinkingTime = DetermineNextBlinkingTiming();
 
                 parameterValue = 1.0f;
@@ -181,7 +184,7 @@ public class CubismEyeBlink
         parameterValue = -parameterValue;
 #endif
 
-        foreach ( var item in ParameterIds )
+        foreach (var item in ParameterIds)
         {
             model.SetParameterValue(item, parameterValue);
         }

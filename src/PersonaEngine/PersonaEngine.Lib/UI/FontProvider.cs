@@ -1,16 +1,10 @@
 ﻿using System.Drawing;
-
 using FontStashSharp;
-
 using Microsoft.Extensions.Logging;
-
 using PersonaEngine.Lib.UI.Common;
 using PersonaEngine.Lib.UI.Text.Rendering;
-
 using Silk.NET.OpenGL;
-
 using StbImageSharp;
-
 using Texture = PersonaEngine.Lib.UI.Common.Texture;
 
 namespace PersonaEngine.Lib.UI;
@@ -37,15 +31,23 @@ public class FontProvider : IStartupTask
     //     FontSystemDefaults.FontLoader = new SixLaborsFontLoader();
     // }
 
-    public FontProvider(ILogger<FontProvider> logger) { _logger = logger; }
+    public FontProvider(ILogger<FontProvider> logger)
+    {
+        _logger = logger;
+    }
 
-    public void Execute(GL gl) { _texture2DManager = new Texture2DManager(gl); }
+    public void Execute(GL gl)
+    {
+        _texture2DManager = new Texture2DManager(gl);
+    }
 
-    public Task<IReadOnlyList<string>> GetAvailableFontsAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlyList<string>> GetAvailableFontsAsync(
+        CancellationToken cancellationToken = default
+    )
     {
         try
         {
-            if ( !Directory.Exists(FONTS_DIR) )
+            if (!Directory.Exists(FONTS_DIR))
             {
                 _logger.LogWarning("Fonts directory not found: {Path}", FONTS_DIR);
 
@@ -54,7 +56,7 @@ public class FontProvider : IStartupTask
 
             var fontFiles = Directory.GetFiles(FONTS_DIR, "*.ttf");
             var fontNames = new List<string>(fontFiles.Length);
-            foreach ( var file in fontFiles )
+            foreach (var file in fontFiles)
             {
                 var voiceId = Path.GetFileName(file);
                 fontNames.Add(voiceId);
@@ -74,7 +76,7 @@ public class FontProvider : IStartupTask
 
     public FontSystem GetFontSystem(string fontName)
     {
-        if ( !_fontCache.TryGetValue(fontName, out var fontSystem) )
+        if (!_fontCache.TryGetValue(fontName, out var fontSystem))
         {
             fontSystem = new FontSystem();
             var fontData = File.ReadAllBytes(Path.Combine(FONTS_DIR, fontName));
@@ -87,10 +89,10 @@ public class FontProvider : IStartupTask
 
     public Texture GetTexture(string imageName)
     {
-        if ( !_textureCache.TryGetValue(imageName, out var texture) )
+        if (!_textureCache.TryGetValue(imageName, out var texture))
         {
-            using var stream      = File.OpenRead(Path.Combine(IMAGES_PATH, imageName));
-            var       imageResult = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
+            using var stream = File.OpenRead(Path.Combine(IMAGES_PATH, imageName));
+            var imageResult = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
 
             // Premultiply alpha
             unsafe
@@ -98,7 +100,7 @@ public class FontProvider : IStartupTask
                 fixed (byte* b = imageResult.Data)
                 {
                     var ptr = b;
-                    for ( var i = 0; i < imageResult.Data.Length; i += 4, ptr += 4 )
+                    for (var i = 0; i < imageResult.Data.Length; i += 4, ptr += 4)
                     {
                         var falpha = ptr[3] / 255.0f;
                         ptr[0] = (byte)(ptr[0] * falpha);
@@ -108,8 +110,13 @@ public class FontProvider : IStartupTask
                 }
             }
 
-            texture = (Texture)_texture2DManager.CreateTexture(imageResult.Width, imageResult.Height);
-            _texture2DManager.SetTextureData(texture, new Rectangle(0, 0, (int)texture.Width, (int)texture.Height), imageResult.Data);
+            texture = (Texture)
+                _texture2DManager.CreateTexture(imageResult.Width, imageResult.Height);
+            _texture2DManager.SetTextureData(
+                texture,
+                new Rectangle(0, 0, (int)texture.Width, (int)texture.Height),
+                imageResult.Data
+            );
             _textureCache[imageName] = texture;
         }
 

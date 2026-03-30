@@ -35,7 +35,7 @@ public enum LogLevel
     /// <summary>
     ///     ログ出力無効
     /// </summary>
-    Off
+    Off,
 }
 
 /// <summary>

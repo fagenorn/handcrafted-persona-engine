@@ -1,5 +1,4 @@
 ﻿using System.Numerics;
-
 using FontStashSharp;
 
 namespace PersonaEngine.Lib.UI.Text.Subtitles;
@@ -27,9 +26,18 @@ public struct SubtitleWordInfo
 
     public Vector2 CurrentScale;
 
-    public bool IsActive(float currentTime) { return currentTime >= AbsoluteStartTime && currentTime < AbsoluteStartTime + Duration; }
+    public bool IsActive(float currentTime)
+    {
+        return currentTime >= AbsoluteStartTime && currentTime < AbsoluteStartTime + Duration;
+    }
 
-    public bool IsComplete(float currentTime) { return currentTime >= AbsoluteStartTime + Duration; }
+    public bool IsComplete(float currentTime)
+    {
+        return currentTime >= AbsoluteStartTime + Duration;
+    }
 
-    public bool HasStarted(float currentTime) { return currentTime >= AbsoluteStartTime; }
+    public bool HasStarted(float currentTime)
+    {
+        return currentTime >= AbsoluteStartTime;
+    }
 }

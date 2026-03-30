@@ -1,12 +1,10 @@
 ﻿using Microsoft.Extensions.Options;
-
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
 using PersonaEngine.Lib.UI;
 using PersonaEngine.Lib.UI.Common;
 using PersonaEngine.Lib.UI.GUI;
 using PersonaEngine.Lib.UI.Spout;
-
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
@@ -37,12 +35,17 @@ public class AvatarApp : IDisposable
     private ImGuiController _imGui;
 
     private IInputContext _inputContext;
-    
+
     private SpoutRegistry _spoutRegistry;
 
-    public AvatarApp(IOptions<AvatarAppConfig> config, IEnumerable<IRenderComponent> renderComponents, IEnumerable<IStartupTask> startupTasks, IConversationOrchestrator conversationOrchestrator)
+    public AvatarApp(
+        IOptions<AvatarAppConfig> config,
+        IEnumerable<IRenderComponent> renderComponents,
+        IEnumerable<IStartupTask> startupTasks,
+        IConversationOrchestrator conversationOrchestrator
+    )
     {
-        _config                   = config;
+        _config = config;
         _conversationOrchestrator = conversationOrchestrator;
 
         var allComponents = renderComponents.OrderByDescending(x => x.Priority).ToList();
@@ -51,26 +54,29 @@ public class AvatarApp : IDisposable
         _regularComponents = allComponents.Where(x => !x.UseSpout).ToList();
 
         // Group spout components by their target
-        foreach ( var component in allComponents.Where(x => x.UseSpout) )
+        foreach (var component in allComponents.Where(x => x.UseSpout))
         {
-            if ( !_spoutComponents.TryGetValue(component.SpoutTarget, out var componentList) )
+            if (!_spoutComponents.TryGetValue(component.SpoutTarget, out var componentList))
             {
-                componentList                           = new List<IRenderComponent>();
+                componentList = new List<IRenderComponent>();
                 _spoutComponents[component.SpoutTarget] = componentList;
             }
 
             componentList.Add(component);
         }
 
-        _windowConfig  = _config.Value.Window;
-        _windowManager = new WindowManager(new Vector2D<int>(_windowConfig.Width, _windowConfig.Height), _windowConfig.Title);
-        _window        = _windowManager.MainWindow;
+        _windowConfig = _config.Value.Window;
+        _windowManager = new WindowManager(
+            new Vector2D<int>(_windowConfig.Width, _windowConfig.Height),
+            _windowConfig.Title
+        );
+        _window = _windowManager.MainWindow;
 
-        _windowManager.Load        += OnLoad;
-        _windowManager.Update      += OnUpdate;
+        _windowManager.Load += OnLoad;
+        _windowManager.Update += OnUpdate;
         _windowManager.RenderFrame += OnRender;
-        _windowManager.Resize      += OnResize;
-        _windowManager.Close       += OnClose;
+        _windowManager.Resize += OnResize;
+        _windowManager.Close += OnClose;
 
         _startupTasks = startupTasks.ToList();
     }
@@ -89,25 +95,31 @@ public class AvatarApp : IDisposable
     {
         // Set up keyboard input.
         _inputContext = _window.CreateInput();
-        foreach ( var keyboard in _inputContext.Keyboards )
+        foreach (var keyboard in _inputContext.Keyboards)
         {
             keyboard.KeyDown += OnKeyDown;
         }
 
         _gl = _windowManager.GL;
 
-        foreach ( var task in _startupTasks )
+        foreach (var task in _startupTasks)
         {
             task.Execute(_gl);
         }
 
         _spoutRegistry = new SpoutRegistry(_gl, _config.Value.SpoutConfigs);
 
-        _imGui = new ImGuiController(_gl, _window, _inputContext, Path.Combine(@"Resources\Fonts", @"Montserrat-Medium.ttf"), Path.Combine(@"Resources\Fonts", @"seguiemj.ttf"));
+        _imGui = new ImGuiController(
+            _gl,
+            _window,
+            _inputContext,
+            Path.Combine(@"Resources\Fonts", @"Montserrat-Medium.ttf"),
+            Path.Combine(@"Resources\Fonts", @"seguiemj.ttf")
+        );
 
         InitializeComponents(_regularComponents);
 
-        foreach ( var componentGroup in _spoutComponents.Values )
+        foreach (var componentGroup in _spoutComponents.Values)
         {
             InitializeComponents(componentGroup);
         }
@@ -117,7 +129,7 @@ public class AvatarApp : IDisposable
 
     private void InitializeComponents(IEnumerable<IRenderComponent> components)
     {
-        foreach ( var component in components )
+        foreach (var component in components)
         {
             component.Initialize(_gl, _window, _inputContext);
         }
@@ -128,7 +140,7 @@ public class AvatarApp : IDisposable
         // Update all components
         UpdateComponents(_regularComponents, (float)deltaTime);
 
-        foreach ( var componentGroup in _spoutComponents.Values )
+        foreach (var componentGroup in _spoutComponents.Values)
         {
             UpdateComponents(componentGroup, (float)deltaTime);
         }
@@ -136,7 +148,7 @@ public class AvatarApp : IDisposable
 
     private void UpdateComponents(IEnumerable<IRenderComponent> components, float deltaTime)
     {
-        foreach ( var component in components )
+        foreach (var component in components)
         {
             component.Update(deltaTime);
         }
@@ -149,7 +161,7 @@ public class AvatarApp : IDisposable
         _gl.Clear((uint)ClearBufferMask.ColorBufferBit);
 
         // Render regular components to the screen
-        foreach ( var component in _regularComponents )
+        foreach (var component in _regularComponents)
         {
             component.Render((float)deltaTime);
         }
@@ -157,16 +169,16 @@ public class AvatarApp : IDisposable
         _imGui.Render();
 
         // Render components to their respective Spout outputs
-        foreach ( var spoutGroup in _spoutComponents )
+        foreach (var spoutGroup in _spoutComponents)
         {
             var spoutTarget = spoutGroup.Key;
-            var components  = spoutGroup.Value;
+            var components = spoutGroup.Value;
 
             // Begin frame for this spout target
             _spoutRegistry.BeginFrame(spoutTarget);
 
             // Render all components for this spout target
-            foreach ( var component in components )
+            foreach (var component in components)
             {
                 component.Render((float)deltaTime);
             }
@@ -183,7 +195,7 @@ public class AvatarApp : IDisposable
 
     private void ResizeComponents(IEnumerable<IRenderComponent> components)
     {
-        foreach ( var component in components )
+        foreach (var component in components)
         {
             component.Resize();
         }
@@ -193,7 +205,7 @@ public class AvatarApp : IDisposable
 
     private void OnKeyDown(IKeyboard keyboard, Key key, int scancode)
     {
-        switch ( key )
+        switch (key)
         {
             case Key.Escape:
                 _window.Close();
@@ -202,5 +214,8 @@ public class AvatarApp : IDisposable
         }
     }
 
-    public void Run() { _windowManager.Run(); }
+    public void Run()
+    {
+        _windowManager.Run();
+    }
 }

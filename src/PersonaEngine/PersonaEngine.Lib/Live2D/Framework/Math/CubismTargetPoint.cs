@@ -60,10 +60,10 @@ public class CubismTargetPoint
 
         // 首を中央から左右に振るときの平均的な早さは  秒程度。加速・減速を考慮して、その2倍を最高速度とする
         // 顔のふり具合を、中央(0.0)から、左右は(+-1.0)とする
-        var FaceParamMaxV = 40.0f / 10.0f;                    // 7.5秒間に40分移動（5.3/sc)
-        var MaxV          = FaceParamMaxV * 1.0f / FrameRate; // 1frameあたりに変化できる速度の上限
+        var FaceParamMaxV = 40.0f / 10.0f; // 7.5秒間に40分移動（5.3/sc)
+        var MaxV = FaceParamMaxV * 1.0f / FrameRate; // 1frameあたりに変化できる速度の上限
 
-        if ( _lastTimeSeconds == 0.0f )
+        if (_lastTimeSeconds == 0.0f)
         {
             _lastTimeSeconds = _userTimeSeconds;
 
@@ -74,15 +74,15 @@ public class CubismTargetPoint
         _lastTimeSeconds = _userTimeSeconds;
 
         // 最高速度になるまでの時間を
-        var TimeToMaxSpeed  = 0.15f;
-        var FrameToMaxSpeed = TimeToMaxSpeed * FrameRate;               // sec * frame/sec
-        var MaxA            = deltaTimeWeight * MaxV / FrameToMaxSpeed; // 1frameあたりの加速度
+        var TimeToMaxSpeed = 0.15f;
+        var FrameToMaxSpeed = TimeToMaxSpeed * FrameRate; // sec * frame/sec
+        var MaxA = deltaTimeWeight * MaxV / FrameToMaxSpeed; // 1frameあたりの加速度
 
         // 目指す向きは、(dx, dy)方向のベクトルとなる
         var dx = _faceTargetX - FaceX;
         var dy = _faceTargetY - FaceY;
 
-        if ( MathF.Abs(dx) <= Epsilon && MathF.Abs(dy) <= Epsilon )
+        if (MathF.Abs(dx) <= Epsilon && MathF.Abs(dy) <= Epsilon)
         {
             return; // 変化なし
         }
@@ -101,7 +101,7 @@ public class CubismTargetPoint
         var a = MathF.Sqrt(ax * ax + ay * ay);
 
         // 加速のとき
-        if ( a < -MaxA || a > MaxA )
+        if (a < -MaxA || a > MaxA)
         {
             ax *= MaxA / a;
             ay *= MaxA / a;
@@ -129,7 +129,7 @@ public class CubismTargetPoint
             var maxV = 0.5f * (MathF.Sqrt(MaxA * MaxA + 16.0f * MaxA * d - 8.0f * MaxA * d) - MaxA);
             var curV = MathF.Sqrt(_faceVX * _faceVX + _faceVY * _faceVY);
 
-            if ( curV > maxV )
+            if (curV > maxV)
             {
                 // 現在の速度 > 最高速度のとき、最高速度まで減速
                 _faceVX *= maxV / curV;

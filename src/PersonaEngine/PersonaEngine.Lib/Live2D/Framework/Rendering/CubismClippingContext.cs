@@ -3,7 +3,11 @@ using PersonaEngine.Lib.Live2D.Framework.Type;
 
 namespace PersonaEngine.Lib.Live2D.Framework.Rendering;
 
-public unsafe class CubismClippingContext(CubismClippingManager manager, int* clippingDrawableIndices, int clipCount)
+public unsafe class CubismClippingContext(
+    CubismClippingManager manager,
+    int* clippingDrawableIndices,
+    int clipCount
+)
 {
     /// <summary>
     ///     このクリッピングで、クリッピングされる全ての描画オブジェクトの囲み矩形（毎回更新）
@@ -61,5 +65,8 @@ public unsafe class CubismClippingContext(CubismClippingManager manager, int* cl
     ///     このマスクにクリップされる描画オブジェクトを追加する
     /// </summary>
     /// <param name="drawableIndex">クリッピング対象に追加する描画オブジェクトのインデックス</param>
-    public void AddClippedDrawable(int drawableIndex) { ClippedDrawableIndexList.Add(drawableIndex); }
+    public void AddClippedDrawable(int drawableIndex)
+    {
+        ClippedDrawableIndexList.Add(drawableIndex);
+    }
 }

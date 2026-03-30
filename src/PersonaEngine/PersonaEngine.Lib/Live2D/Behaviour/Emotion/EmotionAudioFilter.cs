@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Logging;
-
 using PersonaEngine.Lib.TTS.Synthesis;
 
 namespace PersonaEngine.Lib.Live2D.Behaviour.Emotion;
@@ -16,8 +15,9 @@ public class EmotionAudioFilter : IAudioFilter
     public EmotionAudioFilter(IEmotionService emotionService, ILoggerFactory loggerFactory)
     {
         _emotionService = emotionService ?? throw new ArgumentNullException(nameof(emotionService));
-        _logger = loggerFactory?.CreateLogger<EmotionAudioFilter>() ??
-                  throw new ArgumentNullException(nameof(loggerFactory));
+        _logger =
+            loggerFactory?.CreateLogger<EmotionAudioFilter>()
+            ?? throw new ArgumentNullException(nameof(loggerFactory));
     }
 
     /// <summary>
@@ -35,9 +35,13 @@ public class EmotionAudioFilter : IAudioFilter
         // and could be used to perform any additional emotion-related processing if needed
 
         var emotions = _emotionService.GetEmotions(segment.Id);
-        if ( emotions.Any() )
+        if (emotions.Any())
         {
-            _logger.LogDebug("Audio segment {SegmentId} has {Count} emotions", segment.Id, emotions.Count);
+            _logger.LogDebug(
+                "Audio segment {SegmentId} has {Count} emotions",
+                segment.Id,
+                emotions.Count
+            );
 
             // The emotions are already registered with the emotion service
             // We could attach them directly to the segment if needed via a custom extension method

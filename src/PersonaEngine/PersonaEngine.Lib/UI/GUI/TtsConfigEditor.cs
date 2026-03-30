@@ -1,10 +1,8 @@
 ﻿using System.Diagnostics;
 using System.Numerics;
 using System.Threading.Channels;
-
 using Hexa.NET.ImGui;
 using Hexa.NET.ImGui.Widgets.Dialogs;
-
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Adapters;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
@@ -75,18 +73,20 @@ public class TtsConfigEditor : ConfigSectionEditorBase
 
     public TtsConfigEditor(
         IUiConfigurationManager configManager,
-        IEditorStateManager     stateManager,
-        ITtsEngine              ttsEngine,
-        IOutputAdapter          audioPlayer,
-        IKokoroVoiceProvider    voiceProvider,
-        IUiThemeManager         themeManager, IRVCVoiceProvider rvcProvider)
+        IEditorStateManager stateManager,
+        ITtsEngine ttsEngine,
+        IOutputAdapter audioPlayer,
+        IKokoroVoiceProvider voiceProvider,
+        IUiThemeManager themeManager,
+        IRVCVoiceProvider rvcProvider
+    )
         : base(configManager, stateManager)
     {
-        _ttsEngine     = ttsEngine;
-        _audioPlayer   = (IAudioOutputAdapter)audioPlayer;
+        _ttsEngine = ttsEngine;
+        _audioPlayer = (IAudioOutputAdapter)audioPlayer;
         _voiceProvider = voiceProvider;
-        _themeManager  = themeManager;
-        _rvcProvider   = rvcProvider;
+        _themeManager = themeManager;
+        _rvcProvider = rvcProvider;
 
         LoadConfiguration();
 
@@ -110,10 +110,10 @@ public class TtsConfigEditor : ConfigSectionEditorBase
         var availWidth = ImGui.GetContentRegionAvail().X;
 
         // Main layout with tabs for different sections
-        if ( ImGui.BeginTabBar("TtsConfigTabs") )
+        if (ImGui.BeginTabBar("TtsConfigTabs"))
         {
             // Basic settings tab
-            if ( ImGui.BeginTabItem("Basic Settings") )
+            if (ImGui.BeginTabItem("Basic Settings"))
             {
                 RenderTestingSection();
                 RenderBasicSettings();
@@ -122,7 +122,7 @@ public class TtsConfigEditor : ConfigSectionEditorBase
             }
 
             // Advanced settings tab
-            if ( ImGui.BeginTabItem("Advanced Settings") )
+            if (ImGui.BeginTabItem("Advanced Settings"))
             {
                 RenderAdvancedSettings();
                 ImGui.EndTabItem();
@@ -137,25 +137,25 @@ public class TtsConfigEditor : ConfigSectionEditorBase
 
         // Reset button at bottom
         ImGui.SetCursorPosX(availWidth * .5f * .5f);
-        if ( ImGui.Button("Reset", new Vector2(150, 0)) )
+        if (ImGui.Button("Reset", new Vector2(150, 0)))
         {
             ResetToDefaults();
         }
 
         ImGui.SameLine(0, 10);
 
-        if ( ImGui.IsItemHovered() )
+        if (ImGui.IsItemHovered())
         {
             ImGui.SetTooltip("Reset all TTS settings to default values");
         }
 
-        if ( !StateManager.HasUnsavedChanges )
+        if (!StateManager.HasUnsavedChanges)
         {
             ImGui.BeginDisabled();
             ImGui.Button("Save", new Vector2(150, 0));
             ImGui.EndDisabled();
         }
-        else if ( ImGui.Button("Save", new Vector2(150, 0)) )
+        else if (ImGui.Button("Save", new Vector2(150, 0)))
         {
             SaveConfiguration();
         }
@@ -164,10 +164,10 @@ public class TtsConfigEditor : ConfigSectionEditorBase
     public override void Update(float deltaTime)
     {
         // Simplified update just for playback operation
-        if ( _playbackOperation != null && _isPlaying )
+        if (_playbackOperation != null && _isPlaying)
         {
             _playbackOperation.Progress += deltaTime * 0.1f;
-            if ( _playbackOperation.Progress > 0.99f )
+            if (_playbackOperation.Progress > 0.99f)
             {
                 _playbackOperation.Progress = 0.99f;
             }
@@ -178,7 +178,7 @@ public class TtsConfigEditor : ConfigSectionEditorBase
     {
         base.OnConfigurationChanged(args);
 
-        if ( args.Type == ConfigurationChangedEventArgs.ChangeType.Reloaded )
+        if (args.Type == ConfigurationChangedEventArgs.ChangeType.Reloaded)
         {
             LoadConfiguration();
         }
@@ -200,19 +200,19 @@ public class TtsConfigEditor : ConfigSectionEditorBase
 
     private void LoadConfiguration()
     {
-        _currentConfig           = ConfigManager.GetConfiguration<TtsConfiguration>("TTS");
-        _currentVoiceOptions     = _currentConfig.Voice;
+        _currentConfig = ConfigManager.GetConfiguration<TtsConfiguration>("TTS");
+        _currentVoiceOptions = _currentConfig.Voice;
         _currentRvcFilterOptions = _currentConfig.Rvc;
 
         // Update local fields from configuration
-        _modelDir          = _currentConfig.ModelDirectory;
-        _espeakPath        = _currentConfig.EspeakPath;
-        _speechRate        = _currentVoiceOptions.DefaultSpeed;
-        _sampleRate        = _currentVoiceOptions.SampleRate;
-        _trimSilence       = _currentVoiceOptions.TrimSilence;
+        _modelDir = _currentConfig.ModelDirectory;
+        _espeakPath = _currentConfig.EspeakPath;
+        _speechRate = _currentVoiceOptions.DefaultSpeed;
+        _sampleRate = _currentVoiceOptions.SampleRate;
+        _trimSilence = _currentVoiceOptions.TrimSilence;
         _useBritishEnglish = _currentVoiceOptions.UseBritishEnglish;
-        _defaultVoice      = _currentVoiceOptions.DefaultVoice;
-        _maxPhonemeLength  = _currentVoiceOptions.MaxPhonemeLength;
+        _defaultVoice = _currentVoiceOptions.DefaultVoice;
+        _maxPhonemeLength = _currentVoiceOptions.MaxPhonemeLength;
 
         // RVC
         _defaultRVC = _currentRvcFilterOptions.DefaultVoice;
@@ -279,22 +279,35 @@ public class TtsConfigEditor : ConfigSectionEditorBase
 
     private void UpdateConfiguration()
     {
-        var updatedVoiceOptions = new KokoroVoiceOptions {
-                                                             DefaultVoice      = _defaultVoice,
-                                                             DefaultSpeed      = _speechRate,
-                                                             SampleRate        = _sampleRate,
-                                                             TrimSilence       = _trimSilence,
-                                                             UseBritishEnglish = _useBritishEnglish,
-                                                             MaxPhonemeLength  = _maxPhonemeLength
-                                                         };
+        var updatedVoiceOptions = new KokoroVoiceOptions
+        {
+            DefaultVoice = _defaultVoice,
+            DefaultSpeed = _speechRate,
+            SampleRate = _sampleRate,
+            TrimSilence = _trimSilence,
+            UseBritishEnglish = _useBritishEnglish,
+            MaxPhonemeLength = _maxPhonemeLength,
+        };
 
-        var updatedRVCOptions = new RVCFilterOptions { DefaultVoice = _defaultRVC, Enabled = _rvcEnabled, HopSize = _rvcHopSize, F0UpKey = _rvcF0UpKey };
+        var updatedRVCOptions = new RVCFilterOptions
+        {
+            DefaultVoice = _defaultRVC,
+            Enabled = _rvcEnabled,
+            HopSize = _rvcHopSize,
+            F0UpKey = _rvcF0UpKey,
+        };
 
-        var updatedConfig = new TtsConfiguration { ModelDirectory = _modelDir, EspeakPath = _espeakPath, Voice = updatedVoiceOptions, Rvc = updatedRVCOptions };
+        var updatedConfig = new TtsConfiguration
+        {
+            ModelDirectory = _modelDir,
+            EspeakPath = _espeakPath,
+            Voice = updatedVoiceOptions,
+            Rvc = updatedRVCOptions,
+        };
 
         _currentRvcFilterOptions = updatedRVCOptions;
-        _currentVoiceOptions     = updatedVoiceOptions;
-        _currentConfig           = updatedConfig;
+        _currentVoiceOptions = updatedVoiceOptions;
+        _currentConfig = updatedConfig;
         ConfigManager.UpdateConfiguration(updatedConfig, SectionKey);
 
         MarkAsChanged();
@@ -310,21 +323,21 @@ public class TtsConfigEditor : ConfigSectionEditorBase
     {
         // Create default configuration
         var defaultVoiceOptions = new KokoroVoiceOptions();
-        var defaultConfig       = new TtsConfiguration();
+        var defaultConfig = new TtsConfiguration();
 
         // Update local state
         _currentVoiceOptions = defaultVoiceOptions;
-        _currentConfig       = defaultConfig;
+        _currentConfig = defaultConfig;
 
         // Update UI fields
-        _modelDir          = defaultConfig.ModelDirectory;
-        _espeakPath        = defaultConfig.EspeakPath;
-        _speechRate        = defaultVoiceOptions.DefaultSpeed;
-        _sampleRate        = defaultVoiceOptions.SampleRate;
-        _trimSilence       = defaultVoiceOptions.TrimSilence;
+        _modelDir = defaultConfig.ModelDirectory;
+        _espeakPath = defaultConfig.EspeakPath;
+        _speechRate = defaultVoiceOptions.DefaultSpeed;
+        _sampleRate = defaultVoiceOptions.SampleRate;
+        _trimSilence = defaultVoiceOptions.TrimSilence;
         _useBritishEnglish = defaultVoiceOptions.UseBritishEnglish;
-        _defaultVoice      = defaultVoiceOptions.DefaultVoice;
-        _maxPhonemeLength  = defaultVoiceOptions.MaxPhonemeLength;
+        _defaultVoice = defaultVoiceOptions.DefaultVoice;
+        _maxPhonemeLength = defaultVoiceOptions.MaxPhonemeLength;
 
         // Update configuration
         ConfigManager.UpdateConfiguration(defaultConfig, "TTS");
@@ -337,7 +350,7 @@ public class TtsConfigEditor : ConfigSectionEditorBase
 
     private async void StartPlayback()
     {
-        if ( _isPlaying || string.IsNullOrWhiteSpace(_testText) )
+        if (_isPlaying || string.IsNullOrWhiteSpace(_testText))
         {
             return;
         }
@@ -352,35 +365,58 @@ public class TtsConfigEditor : ConfigSectionEditorBase
 
             var options = _currentVoiceOptions;
 
-            var llmInput    = Channel.CreateUnbounded<LlmChunkEvent>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
-            var ttsOutput   = Channel.CreateUnbounded<IOutputEvent>(new UnboundedChannelOptions { SingleReader  = true, SingleWriter = true });
-            var audioInput  = Channel.CreateUnbounded<TtsChunkEvent>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
-            var audioEvents = Channel.CreateUnbounded<IOutputEvent>(new UnboundedChannelOptions { SingleReader  = true, SingleWriter = true }); // Tts Started/Tts Ended - Audio Started/Audio Ended
+            var llmInput = Channel.CreateUnbounded<LlmChunkEvent>(
+                new UnboundedChannelOptions { SingleReader = true, SingleWriter = true }
+            );
+            var ttsOutput = Channel.CreateUnbounded<IOutputEvent>(
+                new UnboundedChannelOptions { SingleReader = true, SingleWriter = true }
+            );
+            var audioInput = Channel.CreateUnbounded<TtsChunkEvent>(
+                new UnboundedChannelOptions { SingleReader = true, SingleWriter = true }
+            );
+            var audioEvents = Channel.CreateUnbounded<IOutputEvent>(
+                new UnboundedChannelOptions { SingleReader = true, SingleWriter = true }
+            ); // Tts Started/Tts Ended - Audio Started/Audio Ended
 
-            await llmInput.Writer.WriteAsync(new LlmChunkEvent(Guid.Empty, Guid.Empty, DateTimeOffset.UtcNow, _testText), _playbackOperation.CancellationSource.Token);
+            await llmInput.Writer.WriteAsync(
+                new LlmChunkEvent(Guid.Empty, Guid.Empty, DateTimeOffset.UtcNow, _testText),
+                _playbackOperation.CancellationSource.Token
+            );
             llmInput.Writer.Complete();
 
             _ = Task.Run(async () =>
-                         {
-                             await foreach(var ttsOut in ttsOutput.Reader.ReadAllAsync(_playbackOperation.CancellationSource.Token))
-                             {
-                                 if ( ttsOut is TtsChunkEvent ttsChunk )
-                                 {
-                                     await audioInput.Writer.WriteAsync(ttsChunk, _playbackOperation.CancellationSource.Token);
-                                 }
-                             }
-                         });
+            {
+                await foreach (
+                    var ttsOut in ttsOutput.Reader.ReadAllAsync(
+                        _playbackOperation.CancellationSource.Token
+                    )
+                )
+                {
+                    if (ttsOut is TtsChunkEvent ttsChunk)
+                    {
+                        await audioInput.Writer.WriteAsync(
+                            ttsChunk,
+                            _playbackOperation.CancellationSource.Token
+                        );
+                    }
+                }
+            });
 
             _ = _ttsEngine.SynthesizeStreamingAsync(
-                                                    llmInput,
-                                                    ttsOutput,
-                                                    Guid.Empty,
-                                                    Guid.Empty,
-                                                    options,
-                                                    _playbackOperation.CancellationSource.Token
-                                                   );
+                llmInput,
+                ttsOutput,
+                Guid.Empty,
+                Guid.Empty,
+                options,
+                _playbackOperation.CancellationSource.Token
+            );
 
-            await _audioPlayer.SendAsync(audioInput, audioEvents, Guid.Empty, _playbackOperation.CancellationSource.Token);
+            await _audioPlayer.SendAsync(
+                audioInput,
+                audioEvents,
+                Guid.Empty,
+                _playbackOperation.CancellationSource.Token
+            );
         }
         catch (OperationCanceledException)
         {
@@ -391,7 +427,7 @@ public class TtsConfigEditor : ConfigSectionEditorBase
             Debug.WriteLine($"Error during TTS playback: {ex.Message}");
             _isPlaying = false;
 
-            if ( _playbackOperation != null )
+            if (_playbackOperation != null)
             {
                 StateManager.ClearActiveOperation(_playbackOperation.Id);
                 _playbackOperation = null;
@@ -401,7 +437,7 @@ public class TtsConfigEditor : ConfigSectionEditorBase
 
     private void StopPlayback()
     {
-        if ( _playbackOperation != null )
+        if (_playbackOperation != null)
         {
             _playbackOperation.CancellationSource.Cancel();
             StateManager.ClearActiveOperation(_playbackOperation.Id);
@@ -415,7 +451,7 @@ public class TtsConfigEditor : ConfigSectionEditorBase
     {
         _isPlaying = true;
 
-        if ( _playbackOperation != null )
+        if (_playbackOperation != null)
         {
             _playbackOperation.Progress = 0.0f;
         }
@@ -425,7 +461,7 @@ public class TtsConfigEditor : ConfigSectionEditorBase
     {
         _isPlaying = false;
 
-        if ( _playbackOperation != null )
+        if (_playbackOperation != null)
         {
             _playbackOperation.Progress = 1.0f;
             StateManager.ClearActiveOperation(_playbackOperation.Id);
@@ -460,14 +496,21 @@ public class TtsConfigEditor : ConfigSectionEditorBase
             var controlWidth = Math.Min(180, availWidth * 0.4f);
             ImGui.SetNextItemWidth(controlWidth);
 
-            if ( ImGui.BeginCombo("##exampleLbl", "Select Example") )
+            if (ImGui.BeginCombo("##exampleLbl", "Select Example"))
             {
-                string[] examples = { "Hello, world!", "The quick brown fox jumps over the lazy dog.", "Welcome to the text-to-speech system.", "How are you doing today?", "Today's date is March 3rd, 2025." };
+                string[] examples =
+                {
+                    "Hello, world!",
+                    "The quick brown fox jumps over the lazy dog.",
+                    "Welcome to the text-to-speech system.",
+                    "How are you doing today?",
+                    "Today's date is March 3rd, 2025.",
+                };
 
-                foreach ( var example in examples )
+                foreach (var example in examples)
                 {
                     var isSelected = _testText == example;
-                    if ( ImGui.Selectable(example, ref isSelected) )
+                    if (ImGui.Selectable(example, ref isSelected))
                     {
                         _testText = example;
                     }
@@ -479,17 +522,17 @@ public class TtsConfigEditor : ConfigSectionEditorBase
             ImGui.SameLine(0, 15);
 
             var clearDisabled = string.IsNullOrEmpty(_testText);
-            if ( clearDisabled )
+            if (clearDisabled)
             {
                 ImGui.BeginDisabled();
             }
 
-            if ( ImGui.Button("Clear", new Vector2(80, 0)) && !string.IsNullOrEmpty(_testText) )
+            if (ImGui.Button("Clear", new Vector2(80, 0)) && !string.IsNullOrEmpty(_testText))
             {
                 _testText = "";
             }
 
-            if ( clearDisabled )
+            if (clearDisabled)
             {
                 ImGui.EndDisabled();
             }
@@ -502,9 +545,9 @@ public class TtsConfigEditor : ConfigSectionEditorBase
         // Playback controls in a styled frame
         {
             // Play/Stop button with color styling
-            if ( _isPlaying )
+            if (_isPlaying)
             {
-                if ( UiStyler.AnimatedButton("Stop", new Vector2(80, 0), _isPlaying) )
+                if (UiStyler.AnimatedButton("Stop", new Vector2(80, 0), _isPlaying))
                 {
                     StopPlayback();
                 }
@@ -515,20 +558,20 @@ public class TtsConfigEditor : ConfigSectionEditorBase
             else
             {
                 var disabled = string.IsNullOrWhiteSpace(_testText);
-                if ( disabled )
+                if (disabled)
                 {
                     ImGui.BeginDisabled();
                 }
 
-                if ( UiStyler.AnimatedButton("Play", new Vector2(80, 0), _isPlaying) )
+                if (UiStyler.AnimatedButton("Play", new Vector2(80, 0), _isPlaying))
                 {
                     StartPlayback();
                 }
 
-                if ( disabled )
+                if (disabled)
                 {
                     ImGui.EndDisabled();
-                    if ( ImGui.IsItemHovered() )
+                    if (ImGui.IsItemHovered())
                     {
                         ImGui.SetTooltip("Enter some text to play");
                     }
@@ -550,33 +593,46 @@ public class TtsConfigEditor : ConfigSectionEditorBase
         {
             ImGui.SetNextItemWidth(availWidth - 120);
 
-            if ( _loadingVoices )
+            if (_loadingVoices)
             {
                 ImGui.BeginDisabled();
                 var loadingText = "Loading voices...";
-                ImGui.InputText("##VoiceLoading", ref loadingText, 100, ImGuiInputTextFlags.ReadOnly);
+                ImGui.InputText(
+                    "##VoiceLoading",
+                    ref loadingText,
+                    100,
+                    ImGuiInputTextFlags.ReadOnly
+                );
                 ImGui.EndDisabled();
             }
             else
             {
-                if ( ImGui.BeginCombo("##VoiceSelector", string.IsNullOrEmpty(_defaultVoice) ? "<Select voice>" : _defaultVoice) )
+                if (
+                    ImGui.BeginCombo(
+                        "##VoiceSelector",
+                        string.IsNullOrEmpty(_defaultVoice) ? "<Select voice>" : _defaultVoice
+                    )
+                )
                 {
-                    if ( _availableVoices.Count == 0 )
+                    if (_availableVoices.Count == 0)
                     {
-                        ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "No voices available");
+                        ImGui.TextColored(
+                            new Vector4(0.7f, 0.7f, 0.7f, 1.0f),
+                            "No voices available"
+                        );
                     }
                     else
                     {
-                        foreach ( var voice in _availableVoices )
+                        foreach (var voice in _availableVoices)
                         {
                             var isSelected = voice == _defaultVoice;
-                            if ( ImGui.Selectable(voice, isSelected) )
+                            if (ImGui.Selectable(voice, isSelected))
                             {
                                 _defaultVoice = voice;
                                 UpdateConfiguration();
                             }
 
-                            if ( isSelected )
+                            if (isSelected)
                             {
                                 ImGui.SetItemDefaultFocus();
                             }
@@ -589,12 +645,12 @@ public class TtsConfigEditor : ConfigSectionEditorBase
 
             ImGui.SameLine(0, 10);
 
-            if ( ImGui.Button("Refresh##VoiceRefresh", new Vector2(-1, 0)) )
+            if (ImGui.Button("Refresh##VoiceRefresh", new Vector2(-1, 0)))
             {
                 LoadAvailableVoicesAsync();
             }
 
-            if ( ImGui.IsItemHovered() )
+            if (ImGui.IsItemHovered())
             {
                 ImGui.SetTooltip("Refresh available voices list");
             }
@@ -605,11 +661,17 @@ public class TtsConfigEditor : ConfigSectionEditorBase
             ImGui.SameLine(120);
 
             ImGui.SetNextItemWidth(availWidth - 120 - 120);
-            var rateChanged = ImGui.SliderFloat("##SpeechRate", ref _speechRate, 0.5f, 2.0f, "%.2f");
+            var rateChanged = ImGui.SliderFloat(
+                "##SpeechRate",
+                ref _speechRate,
+                0.5f,
+                2.0f,
+                "%.2f"
+            );
 
             ImGui.SameLine(0, 10);
 
-            if ( ImGui.Button("Reset##Rate", new Vector2(-1, 0)) )
+            if (ImGui.Button("Reset##Rate", new Vector2(-1, 0)))
             {
                 _speechRate = 1.0f;
                 rateChanged = true;
@@ -622,7 +684,7 @@ public class TtsConfigEditor : ConfigSectionEditorBase
 
             // Trim silence
             var trimChanged = ImGui.Checkbox("Trim Silence", ref _trimSilence);
-            if ( ImGui.IsItemHovered() )
+            if (ImGui.IsItemHovered())
             {
                 ImGui.SetTooltip("Remove silence from beginning and end of speech");
             }
@@ -631,13 +693,13 @@ public class TtsConfigEditor : ConfigSectionEditorBase
 
             // British English
             var britishChanged = ImGui.Checkbox("Use British English", ref _useBritishEnglish);
-            if ( ImGui.IsItemHovered() )
+            if (ImGui.IsItemHovered())
             {
                 ImGui.SetTooltip("Use British English pronunciation instead of American English");
             }
 
             // Apply changes if needed
-            if ( rateChanged || trimChanged || britishChanged )
+            if (rateChanged || trimChanged || britishChanged)
             {
                 UpdateConfiguration();
             }
@@ -656,12 +718,12 @@ public class TtsConfigEditor : ConfigSectionEditorBase
 
             ImGui.SetNextItemWidth(availWidth - 120);
 
-            if ( !_rvcEnabled )
+            if (!_rvcEnabled)
             {
                 ImGui.BeginDisabled();
             }
 
-            if ( _loadingVoices )
+            if (_loadingVoices)
             {
                 ImGui.BeginDisabled();
                 var loadingText = "Loading voices...";
@@ -670,24 +732,32 @@ public class TtsConfigEditor : ConfigSectionEditorBase
             }
             else
             {
-                if ( ImGui.BeginCombo("##RVCSelector", string.IsNullOrEmpty(_defaultRVC) ? "<Select voice>" : _defaultRVC) )
+                if (
+                    ImGui.BeginCombo(
+                        "##RVCSelector",
+                        string.IsNullOrEmpty(_defaultRVC) ? "<Select voice>" : _defaultRVC
+                    )
+                )
                 {
-                    if ( _availableRVCs.Count == 0 )
+                    if (_availableRVCs.Count == 0)
                     {
-                        ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "No voices available");
+                        ImGui.TextColored(
+                            new Vector4(0.7f, 0.7f, 0.7f, 1.0f),
+                            "No voices available"
+                        );
                     }
                     else
                     {
-                        foreach ( var voice in _availableRVCs )
+                        foreach (var voice in _availableRVCs)
                         {
                             var isSelected = voice == _defaultRVC;
-                            if ( ImGui.Selectable(voice, isSelected) )
+                            if (ImGui.Selectable(voice, isSelected))
                             {
                                 _defaultRVC = voice;
                                 UpdateConfiguration();
                             }
 
-                            if ( isSelected )
+                            if (isSelected)
                             {
                                 ImGui.SetItemDefaultFocus();
                             }
@@ -700,17 +770,17 @@ public class TtsConfigEditor : ConfigSectionEditorBase
 
             ImGui.SameLine(0, 10);
 
-            if ( ImGui.Button("Refresh##RefreshRVC", new Vector2(-1, 0)) )
+            if (ImGui.Button("Refresh##RefreshRVC", new Vector2(-1, 0)))
             {
                 LoadAvailableRVCAsync();
             }
 
-            if ( ImGui.IsItemHovered() )
+            if (ImGui.IsItemHovered())
             {
                 ImGui.SetTooltip("Refresh available voices list");
             }
 
-            if ( ImGui.BeginTable("RVCProps", 4, ImGuiTableFlags.SizingFixedFit) )
+            if (ImGui.BeginTable("RVCProps", 4, ImGuiTableFlags.SizingFixedFit))
             {
                 ImGui.TableSetupColumn("1", 100f);
                 ImGui.TableSetupColumn("2", 200f);
@@ -724,9 +794,9 @@ public class TtsConfigEditor : ConfigSectionEditorBase
                 ImGui.Text("Hop Size");
                 ImGui.TableNextColumn();
                 var fontSizeChanged = ImGui.InputInt("##HopSize", ref _rvcHopSize, 8);
-                if ( fontSizeChanged )
+                if (fontSizeChanged)
                 {
-                    _rvcHopSize      = Math.Clamp(_rvcHopSize, 8, 256);
+                    _rvcHopSize = Math.Clamp(_rvcHopSize, 8, 256);
                     rvcConfigChanged = true;
                 }
 
@@ -736,21 +806,21 @@ public class TtsConfigEditor : ConfigSectionEditorBase
                 ImGui.Text("Pitch");
                 ImGui.TableNextColumn();
                 var pitchChanged = ImGui.InputInt("##Pitch", ref _rvcF0UpKey, 1);
-                if ( pitchChanged )
+                if (pitchChanged)
                 {
-                    _rvcF0UpKey      = Math.Clamp(_rvcF0UpKey, -20, 20);
+                    _rvcF0UpKey = Math.Clamp(_rvcF0UpKey, -20, 20);
                     rvcConfigChanged = true;
                 }
 
                 ImGui.EndTable();
             }
 
-            if ( !_rvcEnabled )
+            if (!_rvcEnabled)
             {
                 ImGui.EndDisabled();
             }
 
-            if ( rvcConfigChanged )
+            if (rvcConfigChanged)
             {
                 UpdateConfiguration();
             }
@@ -769,7 +839,7 @@ public class TtsConfigEditor : ConfigSectionEditorBase
         ImGui.Spacing();
 
         var sampleRateChanged = false;
-        var phonemeChanged    = false;
+        var phonemeChanged = false;
 
         // ImGui.BeginDisabled();
         ImGui.BeginGroup();
@@ -779,44 +849,52 @@ public class TtsConfigEditor : ConfigSectionEditorBase
             ImGui.Text("Sample Rate:");
             ImGui.SameLine(200);
 
-            string[] sampleRates = ["16000 Hz (Low quality)", "24000 Hz (Standard quality)", "32000 Hz (Good quality)", "44100 Hz (High quality)", "48000 Hz (Studio quality)"];
-            int[]    rateValues  = [16000, 24000, 32000, 44100, 48000];
+            string[] sampleRates =
+            [
+                "16000 Hz (Low quality)",
+                "24000 Hz (Standard quality)",
+                "32000 Hz (Good quality)",
+                "44100 Hz (High quality)",
+                "48000 Hz (Studio quality)",
+            ];
+            int[] rateValues = [16000, 24000, 32000, 44100, 48000];
 
             var currentIdx = Array.IndexOf(rateValues, _sampleRate);
-            if ( currentIdx < 0 )
+            if (currentIdx < 0)
             {
                 currentIdx = 1; // Default to 24000 Hz
             }
 
             ImGui.SetNextItemWidth(availWidth - 200);
 
-            if ( ImGui.BeginCombo("##SampleRate", sampleRates[currentIdx]) )
+            if (ImGui.BeginCombo("##SampleRate", sampleRates[currentIdx]))
             {
-                for ( var i = 0; i < sampleRates.Length; i++ )
+                for (var i = 0; i < sampleRates.Length; i++)
                 {
                     var isSelected = i == currentIdx;
-                    if ( ImGui.Selectable(sampleRates[i], isSelected) )
+                    if (ImGui.Selectable(sampleRates[i], isSelected))
                     {
-                        _sampleRate       = rateValues[i];
+                        _sampleRate = rateValues[i];
                         sampleRateChanged = true;
                     }
 
                     // Show additional info on hover
-                    if ( ImGui.IsItemHovered() )
+                    if (ImGui.IsItemHovered())
                     {
-                        var tooltipText = i switch {
+                        var tooltipText = i switch
+                        {
                             0 => "Low quality, minimal resource usage",
                             1 => "Standard quality, recommended for most uses",
                             2 => "Good quality, balanced resource usage",
                             3 => "High quality, CD audio standard",
                             4 => "Studio quality, higher resource usage",
-                            _ => ""
+                            _ => "",
                         };
 
                         ImGui.SetTooltip(tooltipText);
                     }
 
-                    if ( isSelected )
+                    if (isSelected)
                     {
                         ImGui.SetItemDefaultFocus();
                     }
@@ -842,21 +920,25 @@ public class TtsConfigEditor : ConfigSectionEditorBase
             ImGui.EndDisabled();
 
             // Clamp value to valid range
-            if ( phonemeChanged )
+            if (phonemeChanged)
             {
                 var oldValue = _maxPhonemeLength;
                 _maxPhonemeLength = Math.Clamp(_maxPhonemeLength, 1, 2048);
 
-                if ( oldValue != _maxPhonemeLength )
+                if (oldValue != _maxPhonemeLength)
                 {
-                    ImGui.TextColored(new Vector4(1.0f, 0.7f, 0.3f, 1.0f),
-                                      "Value clamped to valid range (1-2048)");
+                    ImGui.TextColored(
+                        new Vector4(1.0f, 0.7f, 0.3f, 1.0f),
+                        "Value clamped to valid range (1-2048)"
+                    );
                 }
             }
 
             // Helper text
             ImGui.Spacing();
-            ImGui.TextWrapped("This is already setup correctly to work with Kokoro. Shouldn't have to change!");
+            ImGui.TextWrapped(
+                "This is already setup correctly to work with Kokoro. Shouldn't have to change!"
+            );
 
             // === Paths & Resources Section ===
             ImGui.Spacing();
@@ -871,16 +953,21 @@ public class TtsConfigEditor : ConfigSectionEditorBase
                 ImGui.SameLine(150);
 
                 ImGui.SetNextItemWidth(availWidth - 240);
-                var modelDirChanged = ImGui.InputText("##ModelDir", ref _modelDir, 512, ImGuiInputTextFlags.ElideLeft);
+                var modelDirChanged = ImGui.InputText(
+                    "##ModelDir",
+                    ref _modelDir,
+                    512,
+                    ImGuiInputTextFlags.ElideLeft
+                );
 
                 ImGui.SameLine(0, 10);
-                if ( ImGui.Button("Browse##ModelDir", new Vector2(-1, 0)) )
+                if (ImGui.Button("Browse##ModelDir", new Vector2(-1, 0)))
                 {
                     var fileDialog = new OpenFolderDialog(_modelDir);
                     fileDialog.Show();
-                    if ( fileDialog.SelectedFolder != null )
+                    if (fileDialog.SelectedFolder != null)
                     {
-                        _modelDir       = fileDialog.SelectedFolder;
+                        _modelDir = fileDialog.SelectedFolder;
                         modelDirChanged = true;
                     }
                 }
@@ -891,17 +978,22 @@ public class TtsConfigEditor : ConfigSectionEditorBase
                 ImGui.SameLine(150);
 
                 ImGui.SetNextItemWidth(availWidth - 240);
-                var espeakPathChanged = ImGui.InputText("##EspeakPath", ref _espeakPath, 512, ImGuiInputTextFlags.ElideLeft);
+                var espeakPathChanged = ImGui.InputText(
+                    "##EspeakPath",
+                    ref _espeakPath,
+                    512,
+                    ImGuiInputTextFlags.ElideLeft
+                );
 
                 ImGui.SameLine(0, 10);
-                if ( ImGui.Button("Browse##EspeakPath", new Vector2(-1, 0)) )
+                if (ImGui.Button("Browse##EspeakPath", new Vector2(-1, 0)))
                 {
                     // In a real app, this would open a file browser dialog
                     Console.WriteLine("Open file browser for Espeak Path");
                 }
 
                 // Apply changes if needed
-                if ( modelDirChanged || espeakPathChanged )
+                if (modelDirChanged || espeakPathChanged)
                 {
                     UpdateConfiguration();
                 }
@@ -912,7 +1004,7 @@ public class TtsConfigEditor : ConfigSectionEditorBase
 
         ImGui.EndGroup();
 
-        if ( sampleRateChanged || phonemeChanged )
+        if (sampleRateChanged || phonemeChanged)
         {
             UpdateConfiguration();
         }

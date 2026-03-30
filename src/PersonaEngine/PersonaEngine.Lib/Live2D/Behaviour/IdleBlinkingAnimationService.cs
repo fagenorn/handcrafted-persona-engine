@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Logging;
-
 using PersonaEngine.Lib.Live2D.App;
 using PersonaEngine.Lib.Live2D.Framework.Motion;
 
@@ -77,7 +76,7 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
     /// </summary>
     private void ValidateModelAssets()
     {
-        if ( _model == null )
+        if (_model == null)
         {
             return;
         }
@@ -85,22 +84,28 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
         _logger.LogDebug("Validating configured idle/blinking mappings against model assets...");
 
         _isIdleAnimationAvailable = false;
-        foreach ( var motionKey in _model.Motions )
+        foreach (var motionKey in _model.Motions)
         {
             var groupName = LAppModel.GetMotionGroupName(motionKey);
-            if ( groupName == IDLE_MOTION_GROUP )
+            if (groupName == IDLE_MOTION_GROUP)
             {
                 _isIdleAnimationAvailable = true;
             }
         }
 
-        if ( _isIdleAnimationAvailable )
+        if (_isIdleAnimationAvailable)
         {
-            _logger.LogDebug("Idle motion group '{IdleGroup}' is configured and available in the model.", IDLE_MOTION_GROUP);
+            _logger.LogDebug(
+                "Idle motion group '{IdleGroup}' is configured and available in the model.",
+                IDLE_MOTION_GROUP
+            );
         }
         else
         {
-            _logger.LogWarning("Configured IDLE_MOTION_GROUP ('{IdleGroup}') not found in model! Idle animations disabled.", IDLE_MOTION_GROUP);
+            _logger.LogWarning(
+                "Configured IDLE_MOTION_GROUP ('{IdleGroup}') not found in model! Idle animations disabled.",
+                IDLE_MOTION_GROUP
+            );
         }
 
         _eyeParamsValid = false;
@@ -108,33 +113,49 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
         try
         {
             // An invalid index (usually -1) means the parameter doesn't exist.
-            var leftEyeIndex  = _model.Model.GetParameterIndex(PARAM_EYE_L_OPEN);
+            var leftEyeIndex = _model.Model.GetParameterIndex(PARAM_EYE_L_OPEN);
             var rightEyeIndex = _model.Model.GetParameterIndex(PARAM_EYE_R_OPEN);
 
-            if ( leftEyeIndex >= 0 && rightEyeIndex >= 0 )
+            if (leftEyeIndex >= 0 && rightEyeIndex >= 0)
             {
                 _eyeParamsValid = true;
-                _logger.LogDebug("Required eye parameters found: '{ParamL}' (Index: {IndexL}), '{ParamR}' (Index: {IndexR}).",
-                                 PARAM_EYE_L_OPEN, leftEyeIndex, PARAM_EYE_R_OPEN, rightEyeIndex);
+                _logger.LogDebug(
+                    "Required eye parameters found: '{ParamL}' (Index: {IndexL}), '{ParamR}' (Index: {IndexR}).",
+                    PARAM_EYE_L_OPEN,
+                    leftEyeIndex,
+                    PARAM_EYE_R_OPEN,
+                    rightEyeIndex
+                );
             }
             else
             {
-                if ( leftEyeIndex < 0 )
+                if (leftEyeIndex < 0)
                 {
-                    _logger.LogWarning("Eye parameter '{ParamL}' not found in the model.", PARAM_EYE_L_OPEN);
+                    _logger.LogWarning(
+                        "Eye parameter '{ParamL}' not found in the model.",
+                        PARAM_EYE_L_OPEN
+                    );
                 }
 
-                if ( rightEyeIndex < 0 )
+                if (rightEyeIndex < 0)
                 {
-                    _logger.LogWarning("Eye parameter '{ParamR}' not found in the model.", PARAM_EYE_R_OPEN);
+                    _logger.LogWarning(
+                        "Eye parameter '{ParamR}' not found in the model.",
+                        PARAM_EYE_R_OPEN
+                    );
                 }
 
-                _logger.LogWarning("Automatic blinking disabled because one or both eye parameters are missing.");
+                _logger.LogWarning(
+                    "Automatic blinking disabled because one or both eye parameters are missing."
+                );
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error occurred while validating eye parameters. Blinking disabled.");
+            _logger.LogError(
+                ex,
+                "Error occurred while validating eye parameters. Blinking disabled."
+            );
             _eyeParamsValid = false;
         }
     }
@@ -149,7 +170,7 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
 
         Closed,
 
-        Opening
+        Opening,
     }
 
     #region ILive2DAnimationService Implementation
@@ -165,9 +186,11 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
     {
         ObjectDisposedException.ThrowIf(_disposed, typeof(IdleBlinkingAnimationService));
 
-        if ( _isStarted )
+        if (_isStarted)
         {
-            _logger.LogWarning("Service already started. Call Stop() first if reconfiguration is needed.");
+            _logger.LogWarning(
+                "Service already started. Call Stop() first if reconfiguration is needed."
+            );
 
             return;
         }
@@ -178,18 +201,20 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
 
         SetNextBlinkInterval();
         _currentBlinkState = BlinkState.Idle;
-        _isBlinking        = false;
-        _blinkPhaseTimer   = 0f;
+        _isBlinking = false;
+        _blinkPhaseTimer = 0f;
         ResetEyesToOpenState();
 
         _currentIdleMotionEntry = null;
 
         _isStarted = true;
-        _logger.LogInformation("IdleBlinkingAnimationService started. Idle animations: {IdleStatus}, Blinking: {BlinkStatus}.",
-                               _isIdleAnimationAvailable ? "Enabled" : "Disabled",
-                               _eyeParamsValid ? "Enabled" : "Disabled");
+        _logger.LogInformation(
+            "IdleBlinkingAnimationService started. Idle animations: {IdleStatus}, Blinking: {BlinkStatus}.",
+            _isIdleAnimationAvailable ? "Enabled" : "Disabled",
+            _eyeParamsValid ? "Enabled" : "Disabled"
+        );
 
-        if ( _isIdleAnimationAvailable && _currentIdleMotionEntry == null )
+        if (_isIdleAnimationAvailable && _currentIdleMotionEntry == null)
         {
             TryStartIdleMotion();
         }
@@ -201,7 +226,7 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
     /// </summary>
     public void Stop()
     {
-        if ( !_isStarted || _disposed )
+        if (!_isStarted || _disposed)
         {
             return;
         }
@@ -210,9 +235,9 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
 
         ResetEyesToOpenState();
 
-        _isBlinking        = false;
+        _isBlinking = false;
         _currentBlinkState = BlinkState.Idle;
-        _blinkPhaseTimer   = 0f;
+        _blinkPhaseTimer = 0f;
 
         _currentIdleMotionEntry = null;
         // Note: The motion itself isn't forcibly stopped here; Instead we
@@ -228,14 +253,14 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
     /// <param name="deltaTime">The time elapsed since the last update call, in seconds.</param>
     public void Update(float deltaTime)
     {
-        if ( !_isStarted || _model?.Model == null || _disposed || deltaTime <= 0.0f )
+        if (!_isStarted || _model?.Model == null || _disposed || deltaTime <= 0.0f)
         {
             return;
         }
 
         UpdateIdleMotion();
 
-        if ( _eyeParamsValid )
+        if (_eyeParamsValid)
         {
             UpdateBlinking(deltaTime);
         }
@@ -247,13 +272,13 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
 
     private void UpdateIdleMotion()
     {
-        if ( _currentIdleMotionEntry is { Finished: true } )
+        if (_currentIdleMotionEntry is { Finished: true })
         {
             _logger.LogTrace("Tracked idle motion finished.");
             _currentIdleMotionEntry = null;
         }
 
-        if ( _isIdleAnimationAvailable && _currentIdleMotionEntry == null )
+        if (_isIdleAnimationAvailable && _currentIdleMotionEntry == null)
         {
             TryStartIdleMotion();
         }
@@ -261,12 +286,15 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
 
     private void TryStartIdleMotion()
     {
-        if ( _model == null )
+        if (_model == null)
         {
             return;
         }
 
-        _logger.LogTrace("Attempting to start a new idle motion for group '{IdleGroup}'.", IDLE_MOTION_GROUP);
+        _logger.LogTrace(
+            "Attempting to start a new idle motion for group '{IdleGroup}'.",
+            IDLE_MOTION_GROUP
+        );
 
         try
         {
@@ -274,7 +302,7 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
 
             _currentIdleMotionEntry = newEntry;
 
-            if ( _currentIdleMotionEntry != null )
+            if (_currentIdleMotionEntry != null)
             {
                 _logger.LogDebug("Successfully started idle motion.");
             }
@@ -285,9 +313,13 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Exception occurred while trying to start idle motion for group '{IdleGroup}'. Disabling idle animations.", IDLE_MOTION_GROUP);
+            _logger.LogError(
+                ex,
+                "Exception occurred while trying to start idle motion for group '{IdleGroup}'. Disabling idle animations.",
+                IDLE_MOTION_GROUP
+            );
             _isIdleAnimationAvailable = false;
-            _currentIdleMotionEntry   = null;
+            _currentIdleMotionEntry = null;
         }
     }
 
@@ -299,21 +331,24 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
     {
         try
         {
-            if ( _isBlinking )
+            if (_isBlinking)
             {
                 _blinkPhaseTimer += deltaTime;
                 float eyeValue;
 
-                switch ( _currentBlinkState )
+                switch (_currentBlinkState)
                 {
                     case BlinkState.Closing:
                         // Calculate progress towards closed state (1.0 -> 0.0)
-                        eyeValue = Math.Max(EYE_CLOSED_VALUE, EYE_OPEN_VALUE - _blinkPhaseTimer / BLINK_CLOSING_DURATION);
-                        if ( _blinkPhaseTimer >= BLINK_CLOSING_DURATION )
+                        eyeValue = Math.Max(
+                            EYE_CLOSED_VALUE,
+                            EYE_OPEN_VALUE - _blinkPhaseTimer / BLINK_CLOSING_DURATION
+                        );
+                        if (_blinkPhaseTimer >= BLINK_CLOSING_DURATION)
                         {
                             _currentBlinkState = BlinkState.Closed;
-                            _blinkPhaseTimer   = 0f;
-                            eyeValue           = EYE_CLOSED_VALUE;
+                            _blinkPhaseTimer = 0f;
+                            eyeValue = EYE_CLOSED_VALUE;
                             _logger.LogTrace("Blink phase: Closed");
                         }
 
@@ -321,10 +356,10 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
 
                     case BlinkState.Closed:
                         eyeValue = EYE_CLOSED_VALUE;
-                        if ( _blinkPhaseTimer >= BLINK_CLOSED_DURATION )
+                        if (_blinkPhaseTimer >= BLINK_CLOSED_DURATION)
                         {
                             _currentBlinkState = BlinkState.Opening;
-                            _blinkPhaseTimer   = 0f;
+                            _blinkPhaseTimer = 0f;
                             _logger.LogTrace("Blink phase: Opening");
                         }
 
@@ -332,14 +367,20 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
 
                     case BlinkState.Opening:
                         // Calculate progress towards open state (0.0 -> 1.0)
-                        eyeValue = Math.Min(EYE_OPEN_VALUE, EYE_CLOSED_VALUE + _blinkPhaseTimer / BLINK_OPENING_DURATION);
-                        if ( _blinkPhaseTimer >= BLINK_OPENING_DURATION )
+                        eyeValue = Math.Min(
+                            EYE_OPEN_VALUE,
+                            EYE_CLOSED_VALUE + _blinkPhaseTimer / BLINK_OPENING_DURATION
+                        );
+                        if (_blinkPhaseTimer >= BLINK_OPENING_DURATION)
                         {
-                            _isBlinking        = false;
+                            _isBlinking = false;
                             _currentBlinkState = BlinkState.Idle;
                             SetNextBlinkInterval();
                             eyeValue = EYE_OPEN_VALUE;
-                            _logger.LogTrace("Blink finished. Next blink in {Interval:F2}s", _timeUntilNextBlink);
+                            _logger.LogTrace(
+                                "Blink finished. Next blink in {Interval:F2}s",
+                                _timeUntilNextBlink
+                            );
                             SetEyeParameters(eyeValue);
 
                             return; // Exit early as state is reset
@@ -349,8 +390,10 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
 
                     case BlinkState.Idle:
                     default:
-                        _logger.LogWarning("Invalid blink state detected while _isBlinking was true. Resetting blink state.");
-                        _isBlinking        = false;
+                        _logger.LogWarning(
+                            "Invalid blink state detected while _isBlinking was true. Resetting blink state."
+                        );
+                        _isBlinking = false;
                         _currentBlinkState = BlinkState.Idle;
                         SetNextBlinkInterval();
                         ResetEyesToOpenState();
@@ -363,12 +406,12 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
             else
             {
                 _timeUntilNextBlink -= deltaTime;
-                if ( _timeUntilNextBlink <= 0f )
+                if (_timeUntilNextBlink <= 0f)
                 {
                     // Start a new blink cycle
-                    _isBlinking        = true;
+                    _isBlinking = true;
                     _currentBlinkState = BlinkState.Closing;
-                    _blinkPhaseTimer   = 0f;
+                    _blinkPhaseTimer = 0f;
                     _logger.LogTrace("Starting blink.");
                     // Set initial closing value immediately? Or wait for next frame?
                     // Current logic waits for the next frame's update. This is usually fine.
@@ -381,8 +424,8 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during blinking update. Disabling blinking for safety.");
-            _eyeParamsValid    = false; // Prevent further blinking attempts
-            _isBlinking        = false;
+            _eyeParamsValid = false; // Prevent further blinking attempts
+            _isBlinking = false;
             _currentBlinkState = BlinkState.Idle;
             ResetEyesToOpenState();
         }
@@ -396,7 +439,7 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
     private void SetEyeParameters(float value)
     {
         // Redundant checks, but safe:
-        if ( _model?.Model == null || !_eyeParamsValid )
+        if (_model?.Model == null || !_eyeParamsValid)
         {
             return;
         }
@@ -408,11 +451,16 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to set eye parameters (L:'{ParamL}', R:'{ParamR}') to value {Value}. Disabling blinking.",
-                             PARAM_EYE_L_OPEN, PARAM_EYE_R_OPEN, value);
+            _logger.LogError(
+                ex,
+                "Failed to set eye parameters (L:'{ParamL}', R:'{ParamR}') to value {Value}. Disabling blinking.",
+                PARAM_EYE_L_OPEN,
+                PARAM_EYE_R_OPEN,
+                value
+            );
 
-            _eyeParamsValid    = false;
-            _isBlinking        = false;
+            _eyeParamsValid = false;
+            _isBlinking = false;
             _currentBlinkState = BlinkState.Idle;
             // Don't try to reset eyes here, as the SetParameterValue call itself failed.
         }
@@ -420,14 +468,16 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
 
     private void ResetEyesToOpenState()
     {
-        if ( _model?.Model != null && _eyeParamsValid )
+        if (_model?.Model != null && _eyeParamsValid)
         {
             _logger.LogTrace("Attempting to reset eyes to open state.");
             SetEyeParameters(EYE_OPEN_VALUE);
         }
         else
         {
-            _logger.LogTrace("Skipping reset eyes to open state (Model null or eye params invalid).");
+            _logger.LogTrace(
+                "Skipping reset eyes to open state (Model null or eye params invalid)."
+            );
         }
     }
 
@@ -436,22 +486,26 @@ public sealed class IdleBlinkingAnimationService : ILive2DAnimationService
     /// </summary>
     private void SetNextBlinkInterval()
     {
-        _timeUntilNextBlink = (float)(_random.NextDouble() *
-                                      (BLINK_INTERVAL_MAX_SECONDS - BLINK_INTERVAL_MIN_SECONDS) +
-                                      BLINK_INTERVAL_MIN_SECONDS);
+        _timeUntilNextBlink = (float)(
+            _random.NextDouble() * (BLINK_INTERVAL_MAX_SECONDS - BLINK_INTERVAL_MIN_SECONDS)
+            + BLINK_INTERVAL_MIN_SECONDS
+        );
     }
 
     #endregion
 
     #region IDisposable Implementation
 
-    public void Dispose() { Dispose(true); }
+    public void Dispose()
+    {
+        Dispose(true);
+    }
 
     private void Dispose(bool disposing)
     {
-        if ( !_disposed )
+        if (!_disposed)
         {
-            if ( disposing )
+            if (disposing)
             {
                 _logger.LogDebug("Disposing IdleBlinkingAnimationService...");
                 Stop();

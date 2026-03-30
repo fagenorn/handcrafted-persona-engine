@@ -41,13 +41,13 @@ public class CubismOffscreenSurface_OpenGLES2(OpenGLApi gl)
     /// <param name="restoreFBO">0以上の場合、EndDrawでこの値をglBindFramebufferする</param>
     public void BeginDraw(int restoreFBO = -1)
     {
-        if ( RenderTexture == 0 )
+        if (RenderTexture == 0)
         {
             return;
         }
 
         // バックバッファのサーフェイスを記憶しておく
-        if ( restoreFBO < 0 )
+        if (restoreFBO < 0)
         {
             gl.GetIntegerv(gl.GL_FRAMEBUFFER_BINDING, out _oldFBO);
         }
@@ -65,7 +65,7 @@ public class CubismOffscreenSurface_OpenGLES2(OpenGLApi gl)
     /// </summary>
     public void EndDraw()
     {
-        if ( RenderTexture == 0 )
+        if (RenderTexture == 0)
         {
             return;
         }
@@ -95,18 +95,32 @@ public class CubismOffscreenSurface_OpenGLES2(OpenGLApi gl)
     /// <param name="displayBufferWidth">作成するバッファ幅</param>
     /// <param name="displayBufferHeight">作成するバッファ高さ</param>
     /// <param name="colorBuffer">0以外の場合、ピクセル格納領域としてcolorBufferを使用する</param>
-    public bool CreateOffscreenSurface(int displayBufferWidth, int displayBufferHeight, int colorBuffer = 0)
+    public bool CreateOffscreenSurface(
+        int displayBufferWidth,
+        int displayBufferHeight,
+        int colorBuffer = 0
+    )
     {
         // 一旦削除
         DestroyOffscreenSurface();
 
         // 新しく生成する
-        if ( colorBuffer == 0 )
+        if (colorBuffer == 0)
         {
             ColorBuffer = gl.GenTexture();
 
             gl.BindTexture(gl.GL_TEXTURE_2D, ColorBuffer);
-            gl.TexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, displayBufferWidth, displayBufferHeight, 0, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, 0);
+            gl.TexImage2D(
+                gl.GL_TEXTURE_2D,
+                0,
+                gl.GL_RGBA,
+                displayBufferWidth,
+                displayBufferHeight,
+                0,
+                gl.GL_RGBA,
+                gl.GL_UNSIGNED_BYTE,
+                0
+            );
             gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE);
             gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE);
             gl.TexParameteri(gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR);
@@ -127,12 +141,18 @@ public class CubismOffscreenSurface_OpenGLES2(OpenGLApi gl)
 
         var ret = gl.GenFramebuffer();
         gl.BindFramebuffer(gl.GL_FRAMEBUFFER, ret);
-        gl.FramebufferTexture2D(gl.GL_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, ColorBuffer, 0);
+        gl.FramebufferTexture2D(
+            gl.GL_FRAMEBUFFER,
+            gl.GL_COLOR_ATTACHMENT0,
+            gl.GL_TEXTURE_2D,
+            ColorBuffer,
+            0
+        );
         gl.BindFramebuffer(gl.GL_FRAMEBUFFER, tmpFramebufferObject);
 
         RenderTexture = ret;
 
-        BufferWidth  = displayBufferWidth;
+        BufferWidth = displayBufferWidth;
         BufferHeight = displayBufferHeight;
 
         // 成功
@@ -144,13 +164,13 @@ public class CubismOffscreenSurface_OpenGLES2(OpenGLApi gl)
     /// </summary>
     public void DestroyOffscreenSurface()
     {
-        if ( !_isColorBufferInherited && ColorBuffer != 0 )
+        if (!_isColorBufferInherited && ColorBuffer != 0)
         {
             gl.DeleteTexture(ColorBuffer);
             ColorBuffer = 0;
         }
 
-        if ( RenderTexture != 0 )
+        if (RenderTexture != 0)
         {
             gl.DeleteFramebuffer(RenderTexture);
             RenderTexture = 0;
@@ -160,5 +180,8 @@ public class CubismOffscreenSurface_OpenGLES2(OpenGLApi gl)
     /// <summary>
     ///     現在有効かどうか
     /// </summary>
-    public bool IsValid() { return RenderTexture != 0; }
+    public bool IsValid()
+    {
+        return RenderTexture != 0;
+    }
 }

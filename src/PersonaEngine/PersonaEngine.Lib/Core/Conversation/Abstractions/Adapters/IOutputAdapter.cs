@@ -1,5 +1,4 @@
 ﻿using System.Threading.Channels;
-
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
 
@@ -20,9 +19,10 @@ public interface IAudioOutputAdapter : IOutputAdapter
 {
     Task SendAsync(
         ChannelReader<TtsChunkEvent> inputReader,
-        ChannelWriter<IOutputEvent>  outputWriter,
-        Guid                         turnId,
-        CancellationToken            cancellationToken = default);
+        ChannelWriter<IOutputEvent> outputWriter,
+        Guid turnId,
+        CancellationToken cancellationToken = default
+    );
 }
 
 public interface ITextOutputAdapter : IOutputAdapter
@@ -30,6 +30,7 @@ public interface ITextOutputAdapter : IOutputAdapter
     Task SendAsync(
         ChannelReader<IOutputEvent> inputReader,
         ChannelWriter<IOutputEvent> outputWriter,
-        Guid                        turnId,
-        CancellationToken           cancellationToken = default);
+        Guid turnId,
+        CancellationToken cancellationToken = default
+    );
 }

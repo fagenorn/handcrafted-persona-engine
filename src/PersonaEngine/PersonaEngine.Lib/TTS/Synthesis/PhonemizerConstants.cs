@@ -18,19 +18,40 @@ public static class PhonemizerConstants
 
     public static readonly HashSet<char> UsTaus = new("AIOWYiuæɑəɛɪɹʊʌ");
 
-    public static readonly HashSet<char> UsVocab = new("AIOWYbdfhijklmnpstuvwzæðŋɑɔəɛɜɡɪɹɾʃʊʌʒʤʧˈˌθᵊᵻ");
+    public static readonly HashSet<char> UsVocab = new(
+        "AIOWYbdfhijklmnpstuvwzæðŋɑɔəɛɜɡɪɹɾʃʊʌʒʤʧˈˌθᵊᵻ"
+    );
 
-    public static readonly HashSet<char> GbVocab = new("AIQWYabdfhijklmnpstuvwzðŋɑɒɔəɛɜɡɪɹʃʊʌʒʤʧˈˌːθᵊ");
+    public static readonly HashSet<char> GbVocab = new(
+        "AIQWYabdfhijklmnpstuvwzðŋɑɒɔəɛɜɡɪɹʃʊʌʒʤʧˈˌːθᵊ"
+    );
 
-    public static readonly IReadOnlyDictionary<string, (string Dollar, string Cent)> Currencies = new Dictionary<string, (string, string)> { ["$"] = ("dollar", "cent"), ["£"] = ("pound", "pence"), ["€"] = ("euro", "cent") }.ToFrozenDictionary();
+    public static readonly IReadOnlyDictionary<string, (string Dollar, string Cent)> Currencies =
+        new Dictionary<string, (string, string)>
+        {
+            ["$"] = ("dollar", "cent"),
+            ["£"] = ("pound", "pence"),
+            ["€"] = ("euro", "cent"),
+        }.ToFrozenDictionary();
 
-    public static readonly Dictionary<string, string> AddSymbols = new() { ["."] = "dot", ["/"] = "slash" };
+    public static readonly Dictionary<string, string> AddSymbols = new()
+    {
+        ["."] = "dot",
+        ["/"] = "slash",
+    };
 
-    public static readonly Dictionary<string, string> Symbols = new() { ["%"] = "percent", ["&"] = "and", ["+"] = "plus", ["@"] = "at" };
+    public static readonly Dictionary<string, string> Symbols = new()
+    {
+        ["%"] = "percent",
+        ["&"] = "and",
+        ["+"] = "plus",
+        ["@"] = "at",
+    };
 
     public static readonly HashSet<string> Ordinals = ["st", "nd", "rd", "th"];
 
-    public static readonly HashSet<string> PunctTags = [
+    public static readonly HashSet<string> PunctTags =
+    [
         ".",
         ",",
         "-LRB-",
@@ -41,16 +62,17 @@ public static class PhonemizerConstants
         ":",
         "$",
         "#",
-        "NFP"
+        "NFP",
     ];
 
-    public static readonly Dictionary<string, string> PunctTagPhonemes = new() {
-                                                                                   ["-LRB-"] = "(",
-                                                                                   ["-RRB-"] = ")",
-                                                                                   ["``"]    = "\u2014", // em dash
-                                                                                   ["\"\""]  = "\u201D", // right double quote
-                                                                                   ["''"]    = "\u201D"  // right double quote
-                                                                               };
+    public static readonly Dictionary<string, string> PunctTagPhonemes = new()
+    {
+        ["-LRB-"] = "(",
+        ["-RRB-"] = ")",
+        ["``"] = "\u2014", // em dash
+        ["\"\""] = "\u201D", // right double quote
+        ["''"] = "\u201D", // right double quote
+    };
 
     public static readonly HashSet<char> SubtokenJunks = new("',-._''/");
 
@@ -61,9 +83,9 @@ public static class PhonemizerConstants
     static PhonemizerConstants()
     {
         // Initialize NonQuotePuncts
-        foreach ( var c in Puncts )
+        foreach (var c in Puncts)
         {
-            if ( c != '"' && c != '"' && c != '"' )
+            if (c != '"' && c != '"' && c != '"')
             {
                 NonQuotePuncts.Add(c);
             }

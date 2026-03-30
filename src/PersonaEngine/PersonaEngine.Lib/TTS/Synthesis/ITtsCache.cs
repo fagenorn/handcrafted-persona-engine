@@ -14,9 +14,11 @@ public interface ITtsCache : IAsyncDisposable
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The cached or newly created value</returns>
     Task<T> GetOrAddAsync<T>(
-        string                           key,
+        string key,
         Func<CancellationToken, Task<T>> valueFactory,
-        CancellationToken                cancellationToken = default) where T : class;
+        CancellationToken cancellationToken = default
+    )
+        where T : class;
 
     /// <summary>
     ///     Removes an item from the cache

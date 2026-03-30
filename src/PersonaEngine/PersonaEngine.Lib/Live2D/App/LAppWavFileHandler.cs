@@ -31,21 +31,21 @@ public class LAppWavFileHandler
 
     public LAppWavFileHandler()
     {
-        _pcmData         = Array.Empty<float>();
+        _pcmData = Array.Empty<float>();
         _userTimeSeconds = 0.0;
-        _lastRms         = 0.0;
-        _sampleOffset    = 0.0;
-        _wavFileInfo     = new WavFileInfo();
-        _byteReader      = new ByteReader();
+        _lastRms = 0.0;
+        _sampleOffset = 0.0;
+        _wavFileInfo = new WavFileInfo();
+        _byteReader = new ByteReader();
     }
 
     public bool Update(float deltaTimeSeconds)
     {
         double goalOffset;
-        float  rms;
+        float rms;
 
         // データロード前/ファイル末尾に達した場合は更新しない
-        if ( _pcmData == null || _sampleOffset >= _wavFileInfo._samplePerChannel )
+        if (_pcmData == null || _sampleOffset >= _wavFileInfo._samplePerChannel)
         {
             _lastRms = 0.0f;
 
@@ -54,20 +54,20 @@ public class LAppWavFileHandler
 
         // 経過時間後の状態を保持
         _userTimeSeconds += deltaTimeSeconds;
-        goalOffset       =  Math.Floor(_userTimeSeconds * _wavFileInfo._samplingRate);
-        if ( goalOffset > _wavFileInfo._samplePerChannel )
+        goalOffset = Math.Floor(_userTimeSeconds * _wavFileInfo._samplingRate);
+        if (goalOffset > _wavFileInfo._samplePerChannel)
         {
             goalOffset = _wavFileInfo._samplePerChannel;
         }
 
         // RMS計測
         rms = 0.0f;
-        for ( var channelCount = 0; channelCount < _wavFileInfo._numberOfChannels; channelCount++ )
+        for (var channelCount = 0; channelCount < _wavFileInfo._numberOfChannels; channelCount++)
         {
-            for ( var sampleCount = (int)_sampleOffset; sampleCount < goalOffset; sampleCount++ )
+            for (var sampleCount = (int)_sampleOffset; sampleCount < goalOffset; sampleCount++)
             {
                 var index = sampleCount * _wavFileInfo._numberOfChannels + channelCount;
-                if ( index >= _pcmData.Length )
+                if (index >= _pcmData.Length)
                 {
                     // Ensure we do not go out of bounds
                     break;
@@ -78,9 +78,10 @@ public class LAppWavFileHandler
             }
         }
 
-        rms = (float)Math.Sqrt(rms / (_wavFileInfo._numberOfChannels * (goalOffset - _sampleOffset)));
+        rms = (float)
+            Math.Sqrt(rms / (_wavFileInfo._numberOfChannels * (goalOffset - _sampleOffset)));
 
-        _lastRms      = rms;
+        _lastRms = rms;
         _sampleOffset = goalOffset;
 
         return true;
@@ -89,25 +90,28 @@ public class LAppWavFileHandler
     public void Start(string filePath)
     {
         // サンプル位参照位置を初期化
-        _sampleOffset    = 0;
+        _sampleOffset = 0;
         _userTimeSeconds = 0.0f;
 
         // RMS値をリセット
         _lastRms = 0.0f;
     }
 
-    public double GetRms() { return _lastRms; }
+    public double GetRms()
+    {
+        return _lastRms;
+    }
 
     public async Task<bool> LoadWavFile(string filePath)
     {
-        if ( _pcmData != null )
+        if (_pcmData != null)
         {
             ReleasePcmData();
         }
 
         // ファイルロード
         var response = await FetchAsync(filePath);
-        if ( response != null )
+        if (response != null)
         {
             // Process the response to load PCM data
             return await AsyncWavFileManager(filePath);
@@ -116,18 +120,21 @@ public class LAppWavFileHandler
         return false;
     }
 
-    private async Task<byte[]> FetchAsync(string filePath) { return await Task.Run(() => File.ReadAllBytes(filePath)); }
+    private async Task<byte[]> FetchAsync(string filePath)
+    {
+        return await Task.Run(() => File.ReadAllBytes(filePath));
+    }
 
     public async Task<bool> AsyncWavFileManager(string filePath)
     {
         var ret = false;
-        _byteReader._fileByte     = await FetchAsync(filePath);
+        _byteReader._fileByte = await FetchAsync(filePath);
         _byteReader._fileDataView = new MemoryStream(_byteReader._fileByte);
-        _byteReader._fileSize     = _byteReader._fileByte.Length;
-        _byteReader._readOffset   = 0;
+        _byteReader._fileSize = _byteReader._fileByte.Length;
+        _byteReader._readOffset = 0;
 
         // Check if file load failed or if there is not enough size for the signature "RIFF"
-        if ( _byteReader._fileByte == null || _byteReader._fileSize < 4 )
+        if (_byteReader._fileByte == null || _byteReader._fileSize < 4)
         {
             return false;
         }
@@ -138,7 +145,7 @@ public class LAppWavFileHandler
         try
         {
             // Signature "RIFF"
-            if ( !_byteReader.GetCheckSignature("RIFF") )
+            if (!_byteReader.GetCheckSignature("RIFF"))
             {
                 ret = false;
 
@@ -148,7 +155,7 @@ public class LAppWavFileHandler
             // File size - 8 (skip)
             _byteReader.Get32LittleEndian();
             // Signature "WAVE"
-            if ( !_byteReader.GetCheckSignature("WAVE") )
+            if (!_byteReader.GetCheckSignature("WAVE"))
             {
                 ret = false;
 
@@ -156,7 +163,7 @@ public class LAppWavFileHandler
             }
 
             // Signature "fmt "
-            if ( !_byteReader.GetCheckSignature("fmt ") )
+            if (!_byteReader.GetCheckSignature("fmt "))
             {
                 ret = false;
 
@@ -166,7 +173,7 @@ public class LAppWavFileHandler
             // fmt chunk size
             var fmtChunkSize = (int)_byteReader.Get32LittleEndian();
             // Format ID must be 1 (linear PCM)
-            if ( _byteReader.Get16LittleEndian() != 1 )
+            if (_byteReader.Get16LittleEndian() != 1)
             {
                 ret = false;
 
@@ -184,19 +191,22 @@ public class LAppWavFileHandler
             // Bits per sample
             _wavFileInfo._bitsPerSample = (int)_byteReader.Get16LittleEndian();
             // Skip the extended part of the fmt chunk
-            if ( fmtChunkSize > 16 )
+            if (fmtChunkSize > 16)
             {
                 _byteReader._readOffset += fmtChunkSize - 16;
             }
 
             // Skip until "data" chunk appears
-            while ( !_byteReader.GetCheckSignature("data") && _byteReader._readOffset < _byteReader._fileSize )
+            while (
+                !_byteReader.GetCheckSignature("data")
+                && _byteReader._readOffset < _byteReader._fileSize
+            )
             {
                 _byteReader._readOffset += (int)_byteReader.Get32LittleEndian() + 4;
             }
 
             // "data" chunk not found in the file
-            if ( _byteReader._readOffset >= _byteReader._fileSize )
+            if (_byteReader._readOffset >= _byteReader._fileSize)
             {
                 ret = false;
 
@@ -206,17 +216,25 @@ public class LAppWavFileHandler
             // Number of samples
             {
                 var dataChunkSize = (int)_byteReader.Get32LittleEndian();
-                _wavFileInfo._samplePerChannel = dataChunkSize * 8 / (_wavFileInfo._bitsPerSample * _wavFileInfo._numberOfChannels);
+                _wavFileInfo._samplePerChannel =
+                    dataChunkSize
+                    * 8
+                    / (_wavFileInfo._bitsPerSample * _wavFileInfo._numberOfChannels);
             }
 
             // Allocate memory
             _pcmData = new float[_wavFileInfo._numberOfChannels * _wavFileInfo._samplePerChannel];
             // Retrieve waveform data
-            for ( var sampleCount = 0; sampleCount < _wavFileInfo._samplePerChannel; sampleCount++ )
+            for (var sampleCount = 0; sampleCount < _wavFileInfo._samplePerChannel; sampleCount++)
             {
-                for ( var channelCount = 0; channelCount < _wavFileInfo._numberOfChannels; channelCount++ )
+                for (
+                    var channelCount = 0;
+                    channelCount < _wavFileInfo._numberOfChannels;
+                    channelCount++
+                )
                 {
-                    _pcmData[sampleCount * _wavFileInfo._numberOfChannels + channelCount] = GetPcmSample();
+                    _pcmData[sampleCount * _wavFileInfo._numberOfChannels + channelCount] =
+                        GetPcmSample();
                 }
             }
 
@@ -235,10 +253,10 @@ public class LAppWavFileHandler
         int pcm32;
 
         // Expand to 32-bit width and round to the range -1 to 1
-        switch ( _wavFileInfo._bitsPerSample )
+        switch (_wavFileInfo._bitsPerSample)
         {
             case 8:
-                pcm32 =   _byteReader.Get8() - 128;
+                pcm32 = _byteReader.Get8() - 128;
                 pcm32 <<= 24;
 
                 break;
@@ -262,9 +280,9 @@ public class LAppWavFileHandler
 
     private void ReleasePcmData()
     {
-        for ( var channelCount = 0; channelCount < _wavFileInfo._numberOfChannels; channelCount++ )
+        for (var channelCount = 0; channelCount < _wavFileInfo._numberOfChannels; channelCount++)
         {
-            for ( var sampleCount = 0; sampleCount < _wavFileInfo._samplePerChannel; sampleCount++ )
+            for (var sampleCount = 0; sampleCount < _wavFileInfo._samplePerChannel; sampleCount++)
             {
                 _pcmData[sampleCount * _wavFileInfo._numberOfChannels + channelCount] = 0.0f;
             }
@@ -298,9 +316,7 @@ public class ByteReader
      */
     public uint Get16LittleEndian()
     {
-        var ret =
-            (uint)(Get8() << 0) |
-            (uint)(Get8() << 8);
+        var ret = (uint)(Get8() << 0) | (uint)(Get8() << 8);
 
         return ret;
     }
@@ -311,10 +327,7 @@ public class ByteReader
     /// <returns>読み取った24ビット値（下位24ビットに設定）</returns>
     public uint Get24LittleEndian()
     {
-        var ret =
-            (uint)(Get8() << 0) |
-            (uint)(Get8() << 8) |
-            (uint)(Get8() << 16);
+        var ret = (uint)(Get8() << 0) | (uint)(Get8() << 8) | (uint)(Get8() << 16);
 
         return ret;
     }
@@ -326,10 +339,7 @@ public class ByteReader
     public uint Get32LittleEndian()
     {
         var ret =
-            (uint)(Get8() << 0) |
-            (uint)(Get8() << 8) |
-            (uint)(Get8() << 16) |
-            (uint)(Get8() << 24);
+            (uint)(Get8() << 0) | (uint)(Get8() << 8) | (uint)(Get8() << 16) | (uint)(Get8() << 24);
 
         return ret;
     }
@@ -341,22 +351,22 @@ public class ByteReader
     /// <returns>true 一致している, false 一致していない</returns>
     public bool GetCheckSignature(string reference)
     {
-        if ( reference.Length != 4 )
+        if (reference.Length != 4)
         {
             return false;
         }
 
-        var getSignature    = new byte[4];
+        var getSignature = new byte[4];
         var referenceString = Encoding.UTF8.GetBytes(reference);
 
-        for ( var signatureOffset = 0; signatureOffset < 4; signatureOffset++ )
+        for (var signatureOffset = 0; signatureOffset < 4; signatureOffset++)
         {
             getSignature[signatureOffset] = (byte)Get8();
         }
 
-        return getSignature[0] == referenceString[0] &&
-               getSignature[1] == referenceString[1] &&
-               getSignature[2] == referenceString[2] &&
-               getSignature[3] == referenceString[3];
+        return getSignature[0] == referenceString[0]
+            && getSignature[1] == referenceString[1]
+            && getSignature[2] == referenceString[2]
+            && getSignature[3] == referenceString[3];
     }
 }

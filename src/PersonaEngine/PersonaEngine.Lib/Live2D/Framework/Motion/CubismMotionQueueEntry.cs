@@ -6,7 +6,7 @@ public class CubismMotionQueueEntry
     {
         Available = true;
         StartTime = -1.0f;
-        EndTime   = -1.0f;
+        EndTime = -1.0f;
     }
 
     /// <summary>
@@ -69,7 +69,7 @@ public class CubismMotionQueueEntry
     /// <param name="fadeOutSeconds">Time required for fade-out [seconds]</param>
     public void SetFadeout(float fadeOutSeconds)
     {
-        FadeOutSeconds     = fadeOutSeconds;
+        FadeOutSeconds = fadeOutSeconds;
         IsTriggeredFadeOut = true;
     }
 
@@ -83,7 +83,7 @@ public class CubismMotionQueueEntry
         var newEndTimeSeconds = userTimeSeconds + fadeOutSeconds;
         IsTriggeredFadeOut = true;
 
-        if ( EndTime < 0.0f || newEndTimeSeconds < EndTime )
+        if (EndTime < 0.0f || newEndTimeSeconds < EndTime)
         {
             EndTime = newEndTimeSeconds;
         }
@@ -96,7 +96,7 @@ public class CubismMotionQueueEntry
     /// <param name="weight">Motion weight</param>
     public void SetState(float timeSeconds, float weight)
     {
-        StateTime   = timeSeconds;
+        StateTime = timeSeconds;
         StateWeight = weight;
     }
 }

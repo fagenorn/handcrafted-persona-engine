@@ -19,12 +19,20 @@ namespace PersonaEngine.Lib.Audio;
 /// </remarks>
 public class AwaitableWaveFileSource(
     IReadOnlyDictionary<string, string> metadata,
-    bool                                storeSamples        = true,
-    bool                                storeBytes          = false,
-    int                                 initialSizeFloats   = BufferedMemoryAudioSource.DefaultInitialSize,
-    int                                 initialSizeBytes    = BufferedMemoryAudioSource.DefaultInitialSize,
-    IChannelAggregationStrategy?        aggregationStrategy = null)
-    : AwaitableAudioSource(metadata, storeSamples, storeBytes, initialSizeFloats, initialSizeBytes, aggregationStrategy)
+    bool storeSamples = true,
+    bool storeBytes = false,
+    int initialSizeFloats = BufferedMemoryAudioSource.DefaultInitialSize,
+    int initialSizeBytes = BufferedMemoryAudioSource.DefaultInitialSize,
+    IChannelAggregationStrategy? aggregationStrategy = null
+)
+    : AwaitableAudioSource(
+        metadata,
+        storeSamples,
+        storeBytes,
+        initialSizeFloats,
+        initialSizeBytes,
+        aggregationStrategy
+    )
 {
     private MergedMemoryChunks? headerChunks;
 
@@ -32,16 +40,16 @@ public class AwaitableWaveFileSource(
 
     public void WriteData(ReadOnlyMemory<byte> data)
     {
-        if ( IsFlushed )
+        if (IsFlushed)
         {
             throw new InvalidOperationException("Cannot write to flushed stream.");
         }
 
         // We need the dataOffset in case the data contains both header and samples
         var dataOffset = 0;
-        if ( !IsInitialized )
+        if (!IsInitialized)
         {
-            if ( headerChunks == null )
+            if (headerChunks == null)
             {
                 headerChunks = new MergedMemoryChunks(data);
             }
@@ -51,7 +59,7 @@ public class AwaitableWaveFileSource(
             }
 
             var headerParseResult = WaveFileUtils.ParseHeader(headerChunks);
-            if ( headerParseResult.IsIncomplete )
+            if (headerParseResult.IsIncomplete)
             {
                 // Need more data for header
                 // We need to copy the last chunk as we'll keep it for the next iteration
@@ -60,12 +68,12 @@ public class AwaitableWaveFileSource(
                 return;
             }
 
-            if ( headerParseResult.IsCorrupt )
+            if (headerParseResult.IsCorrupt)
             {
                 throw new InvalidOperationException(headerParseResult.ErrorMessage);
             }
 
-            if ( !headerParseResult.IsSuccess || headerParseResult.Header == null )
+            if (!headerParseResult.IsSuccess || headerParseResult.Header == null)
             {
                 throw new NotSupportedException(headerParseResult.ErrorMessage);
             }
@@ -86,7 +94,7 @@ public class AwaitableWaveFileSource(
 
     private void ProcessSamples(ReadOnlyMemory<byte> sampleData)
     {
-        if ( sampleDataChunks != null )
+        if (sampleDataChunks != null)
         {
             sampleDataChunks.AddChunk(sampleData);
         }
@@ -98,13 +106,13 @@ public class AwaitableWaveFileSource(
         // Calculate how many complete frames we can process
         var framesToProcess = sampleDataChunks.Length / FrameSize;
 
-        if ( framesToProcess == 0 )
+        if (framesToProcess == 0)
         {
             // Not enough data to process even a single frame, wait for more data
             return;
         }
 
-        for ( var frameIndex = 0; frameIndex < framesToProcess; frameIndex++ )
+        for (var frameIndex = 0; frameIndex < framesToProcess; frameIndex++)
         {
             var frame = sampleDataChunks.GetChunk(FrameSize);
             AddFrame(frame);
@@ -112,14 +120,20 @@ public class AwaitableWaveFileSource(
 
         // After processing, check if there are remaining bytes and store them for the next iteration
         // We need to copy the memory (with ToArray()) as otherwise, it might be overriden by the new chunk.
-        sampleDataChunks = sampleDataChunks.Length > sampleDataChunks.Position
-                               ? new MergedMemoryChunks(sampleDataChunks.GetChunk((int)(sampleDataChunks.Length - sampleDataChunks.Position)).ToArray().AsMemory())
-                               : null;
+        sampleDataChunks =
+            sampleDataChunks.Length > sampleDataChunks.Position
+                ? new MergedMemoryChunks(
+                    sampleDataChunks
+                        .GetChunk((int)(sampleDataChunks.Length - sampleDataChunks.Position))
+                        .ToArray()
+                        .AsMemory()
+                )
+                : null;
     }
 
     protected override void Dispose(bool disposing)
     {
-        headerChunks     = null;
+        headerChunks = null;
         sampleDataChunks = null;
         base.Dispose(disposing);
     }

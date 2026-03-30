@@ -62,31 +62,44 @@ public record CubismViewMatrix : CubismMatrix44
     /// <param name="y">Y軸の移動量</param>
     public void AdjustTranslate(float x, float y)
     {
-        if ( _tr[0] * MaxLeft + (_tr[12] + x) > ScreenLeft )
+        if (_tr[0] * MaxLeft + (_tr[12] + x) > ScreenLeft)
         {
             x = ScreenLeft - _tr[0] * MaxLeft - _tr[12];
         }
 
-        if ( _tr[0] * MaxRight + (_tr[12] + x) < ScreenRight )
+        if (_tr[0] * MaxRight + (_tr[12] + x) < ScreenRight)
         {
             x = ScreenRight - _tr[0] * MaxRight - _tr[12];
         }
 
-        if ( _tr[5] * MaxTop + (_tr[13] + y) < ScreenTop )
+        if (_tr[5] * MaxTop + (_tr[13] + y) < ScreenTop)
         {
             y = ScreenTop - _tr[5] * MaxTop - _tr[13];
         }
 
-        if ( _tr[5] * MaxBottom + (_tr[13] + y) > ScreenBottom )
+        if (_tr[5] * MaxBottom + (_tr[13] + y) > ScreenBottom)
         {
             y = ScreenBottom - _tr[5] * MaxBottom - _tr[13];
         }
 
-        float[] tr1 = [
-            1.0f, 0.0f, 0.0f, 0.0f,
-            0.0f, 1.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 1.0f, 0.0f,
-            x, y, 0.0f, 1.0f
+        float[] tr1 =
+        [
+            1.0f,
+            0.0f,
+            0.0f,
+            0.0f,
+            0.0f,
+            1.0f,
+            0.0f,
+            0.0f,
+            0.0f,
+            0.0f,
+            1.0f,
+            0.0f,
+            x,
+            y,
+            0.0f,
+            1.0f,
         ];
 
         MultiplyByMatrix(tr1);
@@ -105,41 +118,83 @@ public record CubismViewMatrix : CubismMatrix44
 
         var targetScale = scale * _tr[0]; //
 
-        if ( targetScale < minScale )
+        if (targetScale < minScale)
         {
-            if ( _tr[0] > 0.0f )
+            if (_tr[0] > 0.0f)
             {
                 scale = minScale / _tr[0];
             }
         }
-        else if ( targetScale > maxScale )
+        else if (targetScale > maxScale)
         {
-            if ( _tr[0] > 0.0f )
+            if (_tr[0] > 0.0f)
             {
                 scale = maxScale / _tr[0];
             }
         }
 
-        MultiplyByMatrix([
-            1.0f, 0.0f, 0.0f, 0.0f,
-            0.0f, 1.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 1.0f, 0.0f,
-            -cx, -cy, 0.0f, 1.0f
-        ]);
+        MultiplyByMatrix(
+            [
+                1.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                1.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                1.0f,
+                0.0f,
+                -cx,
+                -cy,
+                0.0f,
+                1.0f,
+            ]
+        );
 
-        MultiplyByMatrix([
-            scale, 0.0f, 0.0f, 0.0f,
-            0.0f, scale, 0.0f, 0.0f,
-            0.0f, 0.0f, 1.0f, 0.0f,
-            0.0f, 0.0f, 0.0f, 1.0f
-        ]);
+        MultiplyByMatrix(
+            [
+                scale,
+                0.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                scale,
+                0.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                1.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                1.0f,
+            ]
+        );
 
-        MultiplyByMatrix([
-            1.0f, 0.0f, 0.0f, 0.0f,
-            0.0f, 1.0f, 0.0f, 0.0f,
-            0.0f, 0.0f, 1.0f, 0.0f,
-            cx, cy, 0.0f, 1.0f
-        ]);
+        MultiplyByMatrix(
+            [
+                1.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                1.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                1.0f,
+                0.0f,
+                cx,
+                cy,
+                0.0f,
+                1.0f,
+            ]
+        );
     }
 
     /// <summary>
@@ -151,9 +206,9 @@ public record CubismViewMatrix : CubismMatrix44
     /// <param name="top">上辺のY軸の位置</param>
     public void SetScreenRect(float left, float right, float bottom, float top)
     {
-        ScreenLeft   = left;
-        ScreenRight  = right;
-        ScreenTop    = top;
+        ScreenLeft = left;
+        ScreenRight = right;
+        ScreenTop = top;
         ScreenBottom = bottom;
     }
 
@@ -166,9 +221,9 @@ public record CubismViewMatrix : CubismMatrix44
     /// <param name="top">上辺のY軸の位置</param>
     public void SetMaxScreenRect(float left, float right, float bottom, float top)
     {
-        MaxLeft   = left;
-        MaxRight  = right;
-        MaxTop    = top;
+        MaxLeft = left;
+        MaxRight = right;
+        MaxTop = top;
         MaxBottom = bottom;
     }
 
@@ -179,7 +234,10 @@ public record CubismViewMatrix : CubismMatrix44
     ///     true    拡大率は最大になっている
     ///     false   拡大率は最大になっていない
     /// </returns>
-    public bool IsMaxScale() { return GetScaleX() >= MaxScale; }
+    public bool IsMaxScale()
+    {
+        return GetScaleX() >= MaxScale;
+    }
 
     /// <summary>
     ///     拡大率が最小になっているかどうかを確認する。
@@ -188,5 +246,8 @@ public record CubismViewMatrix : CubismMatrix44
     ///     true    拡大率は最小になっている
     ///     false   拡大率は最小になっていない
     /// </returns>
-    public bool IsMinScale() { return GetScaleX() <= MinScale; }
+    public bool IsMinScale()
+    {
+        return GetScaleX() <= MinScale;
+    }
 }

@@ -83,18 +83,21 @@ public static class CubismModelSettingJson
 
     public const string Val = "val";
 
-    public static bool GetLayoutMap(this ModelSettingObj obj, Dictionary<string, float> outLayoutMap)
+    public static bool GetLayoutMap(
+        this ModelSettingObj obj,
+        Dictionary<string, float> outLayoutMap
+    )
     {
         var node = obj.Layout;
-        if ( node == null )
+        if (node == null)
         {
             return false;
         }
 
         var ret = false;
-        foreach ( var item in node )
+        foreach (var item in node)
         {
-            if ( outLayoutMap.ContainsKey(item.Key) )
+            if (outLayoutMap.ContainsKey(item.Key))
             {
                 outLayoutMap[item.Key] = item.Value;
             }
@@ -112,14 +115,14 @@ public static class CubismModelSettingJson
     public static bool IsExistEyeBlinkParameters(this ModelSettingObj obj)
     {
         var node = obj.Groups;
-        if ( node == null )
+        if (node == null)
         {
             return false;
         }
 
-        foreach ( var item in node )
+        foreach (var item in node)
         {
-            if ( item.Name == EyeBlink )
+            if (item.Name == EyeBlink)
             {
                 return true;
             }
@@ -131,14 +134,14 @@ public static class CubismModelSettingJson
     public static bool IsExistLipSyncParameters(this ModelSettingObj obj)
     {
         var node = obj.Groups;
-        if ( node == null )
+        if (node == null)
         {
             return false;
         }
 
-        foreach ( var item in node )
+        foreach (var item in node)
         {
-            if ( item.Name == LipSync )
+            if (item.Name == LipSync)
             {
                 return true;
             }

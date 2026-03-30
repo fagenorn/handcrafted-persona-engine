@@ -10,12 +10,12 @@ internal class AsyncAutoResetEvent
 
     public Task WaitAsync()
     {
-        if ( Interlocked.CompareExchange(ref isSignaled, 0, 1) == 1 )
+        if (Interlocked.CompareExchange(ref isSignaled, 0, 1) == 1)
         {
             return Completed;
         }
 
-        var tcs    = new TaskCompletionSource<bool>();
+        var tcs = new TaskCompletionSource<bool>();
         var oldTcs = Interlocked.Exchange(ref waitTcs, tcs);
         oldTcs?.TrySetCanceled();
 
@@ -25,7 +25,7 @@ internal class AsyncAutoResetEvent
     public void Set()
     {
         var toRelease = Interlocked.Exchange(ref waitTcs, null);
-        if ( toRelease != null )
+        if (toRelease != null)
         {
             toRelease.SetResult(true);
         }

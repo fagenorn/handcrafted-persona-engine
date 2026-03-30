@@ -4,5 +4,9 @@ namespace PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
 
 public interface IConversationCleanupStrategy
 {
-    bool Cleanup(List<InteractionTurn> history, ConversationContextOptions options, IReadOnlyDictionary<string, ParticipantInfo> participants);
+    bool Cleanup(
+        List<InteractionTurn> history,
+        ConversationContextOptions options,
+        IReadOnlyDictionary<string, ParticipantInfo> participants
+    );
 }

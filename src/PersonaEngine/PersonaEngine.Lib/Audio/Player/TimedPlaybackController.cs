@@ -1,5 +1,4 @@
 ﻿using System.Diagnostics;
-
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -41,15 +40,16 @@ public class TimedPlaybackController : IPlaybackController
     /// <param name="timeUpdateIntervalMs">Interval in milliseconds for time updates.</param>
     /// <param name="logger">Logger instance.</param>
     public TimedPlaybackController(
-        int                               initialBufferMs      = 20,
-        double                            latencyThresholdMs   = 20.0,
-        int                               timeUpdateIntervalMs = 20,
-        ILogger<TimedPlaybackController>? logger               = null)
+        int initialBufferMs = 20,
+        double latencyThresholdMs = 20.0,
+        int timeUpdateIntervalMs = 20,
+        ILogger<TimedPlaybackController>? logger = null
+    )
     {
-        _initialBufferMs      = initialBufferMs;
-        _latencyThresholdMs   = latencyThresholdMs;
+        _initialBufferMs = initialBufferMs;
+        _latencyThresholdMs = latencyThresholdMs;
         _timeUpdateIntervalMs = timeUpdateIntervalMs;
-        _logger               = logger ?? NullLogger<TimedPlaybackController>.Instance;
+        _logger = logger ?? NullLogger<TimedPlaybackController>.Instance;
 
         // Start a timer to update the playback time periodically
         _timeUpdateTimer = new Timer(UpdateTime, null, Timeout.Infinite, Timeout.Infinite);
@@ -96,8 +96,8 @@ public class TimedPlaybackController : IPlaybackController
     {
         _playbackTimer.Reset();
         TotalSamplesPlayed = 0;
-        CurrentTime        = 0;
-        _startTimeMs       = 0;
+        CurrentTime = 0;
+        _startTimeMs = 0;
 
         // Stop the time update timer
         _timeUpdateTimer.Change(Timeout.Infinite, Timeout.Infinite);
@@ -107,14 +107,17 @@ public class TimedPlaybackController : IPlaybackController
     public void UpdateLatency(double latencyMs)
     {
         var oldLatency = CurrentLatencyMs;
-        CurrentLatencyMs      = latencyMs;
+        CurrentLatencyMs = latencyMs;
         HasLatencyInformation = true;
 
         // Only notify if the change is significant
-        if ( Math.Abs(latencyMs - _lastReportedLatencyMs) >= _latencyThresholdMs )
+        if (Math.Abs(latencyMs - _lastReportedLatencyMs) >= _latencyThresholdMs)
         {
-            _logger.LogInformation("Playback latency updated: {OldLatency:F1}ms -> {NewLatency:F1}ms",
-                                   oldLatency, latencyMs);
+            _logger.LogInformation(
+                "Playback latency updated: {OldLatency:F1}ms -> {NewLatency:F1}ms",
+                oldLatency,
+                latencyMs
+            );
 
             _lastReportedLatencyMs = latencyMs;
             LatencyChanged?.Invoke(this, latencyMs);
@@ -122,7 +125,11 @@ public class TimedPlaybackController : IPlaybackController
     }
 
     /// <inheritdoc />
-    public Task<bool> SchedulePlaybackAsync(int samplesPerChannel, int sampleRate, CancellationToken cancellationToken)
+    public Task<bool> SchedulePlaybackAsync(
+        int samplesPerChannel,
+        int sampleRate,
+        CancellationToken cancellationToken
+    )
     {
         // Store the sample rate for time calculations
         _currentSampleRate = sampleRate;
@@ -131,14 +138,14 @@ public class TimedPlaybackController : IPlaybackController
         TotalSamplesPlayed += samplesPerChannel;
 
         // Start the playback timer if this is the first call
-        if ( !_playbackTimer.IsRunning )
+        if (!_playbackTimer.IsRunning)
         {
             _logger.LogDebug("Starting playback timer");
 
             // Account for initial buffering
             var initialBufferMs = HasLatencyInformation
-                                      ? Math.Max(50, _initialBufferMs + CurrentLatencyMs)
-                                      : _initialBufferMs;
+                ? Math.Max(50, _initialBufferMs + CurrentLatencyMs)
+                : _initialBufferMs;
 
             // Record when playback will actually start (now + buffer)
             _startTimeMs = Environment.TickCount64 + (long)initialBufferMs;
@@ -157,7 +164,10 @@ public class TimedPlaybackController : IPlaybackController
     /// <summary>
     ///     Disposes resources used by the controller.
     /// </summary>
-    public void Dispose() { _timeUpdateTimer.Dispose(); }
+    public void Dispose()
+    {
+        _timeUpdateTimer.Dispose();
+    }
 
     private event EventHandler<float>? TimeChangedInternal;
 
@@ -165,7 +175,7 @@ public class TimedPlaybackController : IPlaybackController
 
     private void UpdateTime(object? state)
     {
-        if ( !_playbackTimer.IsRunning || _currentSampleRate <= 0 )
+        if (!_playbackTimer.IsRunning || _currentSampleRate <= 0)
         {
             return;
         }
@@ -174,14 +184,12 @@ public class TimedPlaybackController : IPlaybackController
         var currentTimeMs = Environment.TickCount64;
 
         // Calculate how much time has passed since playback started
-        var elapsedSinceStartMs = currentTimeMs > _startTimeMs
-                                      ? currentTimeMs - _startTimeMs
-                                      : 0;
+        var elapsedSinceStartMs = currentTimeMs > _startTimeMs ? currentTimeMs - _startTimeMs : 0;
 
         // Apply latency adjustment if available
         var adjustedElapsedMs = HasLatencyInformation
-                                    ? elapsedSinceStartMs - CurrentLatencyMs
-                                    : elapsedSinceStartMs;
+            ? elapsedSinceStartMs - CurrentLatencyMs
+            : elapsedSinceStartMs;
 
         // Don't allow negative time
         adjustedElapsedMs = Math.Max(0, adjustedElapsedMs);
@@ -190,7 +198,7 @@ public class TimedPlaybackController : IPlaybackController
         var newPlaybackTime = (float)(adjustedElapsedMs / 1000.0);
 
         // Only update and notify if the time changed significantly
-        if ( Math.Abs(newPlaybackTime - CurrentTime) >= 0.01f ) // 10ms threshold
+        if (Math.Abs(newPlaybackTime - CurrentTime) >= 0.01f) // 10ms threshold
         {
             CurrentTime = newPlaybackTime;
 

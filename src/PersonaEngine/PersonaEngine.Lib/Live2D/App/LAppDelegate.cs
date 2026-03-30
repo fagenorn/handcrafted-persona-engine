@@ -50,8 +50,8 @@ public class LAppDelegate : IDisposable
     {
         GL = gl;
 
-        View             = new LAppView(this);
-        TextureManager   = new LAppTextureManager(this);
+        View = new LAppView(this);
+        TextureManager = new LAppTextureManager(this);
         _cubismAllocator = new LAppAllocator();
 
         //テクスチャサンプリング設定
@@ -69,7 +69,11 @@ public class LAppDelegate : IDisposable
         View.Initialize();
 
         // Cubism SDK の初期化
-        _cubismOption = new Option { LogFunction = log, LoggingLevel = LAppDefine.CubismLoggingLevel };
+        _cubismOption = new Option
+        {
+            LogFunction = log,
+            LoggingLevel = LAppDefine.CubismLoggingLevel,
+        };
         CubismFramework.StartUp(_cubismAllocator, _cubismOption);
 
         //Initialize cubism
@@ -114,12 +118,12 @@ public class LAppDelegate : IDisposable
     public void Resize()
     {
         GL.GetWindowSize(out var width, out var height);
-        if ( (_windowWidth != width || _windowHeight != height) && width > 0 && height > 0 )
+        if ((_windowWidth != width || _windowHeight != height) && width > 0 && height > 0)
         {
             //AppViewの初期化
             View.Initialize();
             // サイズを保存しておく
-            _windowWidth  = width;
+            _windowWidth = width;
             _windowHeight = height;
         }
     }
@@ -151,14 +155,14 @@ public class LAppDelegate : IDisposable
     /// <param name="action">実行結果</param>
     public void OnMouseCallBack(bool press)
     {
-        if ( press )
+        if (press)
         {
             _captured = true;
             View.OnTouchesBegan(_mouseX, _mouseY);
         }
         else
         {
-            if ( _captured )
+            if (_captured)
             {
                 _captured = false;
                 View.OnTouchesEnded(_mouseX, _mouseY);
@@ -173,7 +177,7 @@ public class LAppDelegate : IDisposable
     /// <param name="y">x座標</param>
     public void OnMouseCallBack(float x, float y)
     {
-        if ( !_captured )
+        if (!_captured)
         {
             return;
         }
@@ -184,5 +188,8 @@ public class LAppDelegate : IDisposable
         View.OnTouchesMoved(_mouseX, _mouseY);
     }
 
-    public void StartSpeaking(string filePath) { Live2dManager.StartSpeaking(filePath); }
+    public void StartSpeaking(string filePath)
+    {
+        Live2dManager.StartSpeaking(filePath);
+    }
 }

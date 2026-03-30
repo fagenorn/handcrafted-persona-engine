@@ -87,9 +87,11 @@ public class UiTheme
 
     public Vector4 FrameBgColor { get; set; } = new(0.157f, 0.157f, 0.157f, 1.0f);
 
-    public Vector4 FrameBgHoveredColor { get; set; } = new(0.380f, 0.424f, 0.573f, 0.5490196347236633f);
+    public Vector4 FrameBgHoveredColor { get; set; } =
+        new(0.380f, 0.424f, 0.573f, 0.5490196347236633f);
 
-    public Vector4 FrameBgActiveColor { get; set; } = new(0.620f, 0.576f, 0.769f, 0.5490196347236633f);
+    public Vector4 FrameBgActiveColor { get; set; } =
+        new(0.620f, 0.576f, 0.769f, 0.5490196347236633f);
 
     public Vector4 TitleBgColor { get; set; } = new(0.098f, 0.098f, 0.098f, 1.0f);
 
@@ -111,31 +113,40 @@ public class UiTheme
 
     public Vector4 SliderGrabColor { get; set; } = new(0.620f, 0.576f, 0.769f, 0.5490196347236633f);
 
-    public Vector4 SliderGrabActiveColor { get; set; } = new(0.816f, 0.773f, 0.965f, 0.5490196347236633f);
+    public Vector4 SliderGrabActiveColor { get; set; } =
+        new(0.816f, 0.773f, 0.965f, 0.5490196347236633f);
 
     public Vector4 ButtonColor { get; set; } = new(0.620f, 0.576f, 0.769f, 0.5490196347236633f);
 
-    public Vector4 ButtonHoveredColor { get; set; } = new(0.737f, 0.694f, 0.886f, 0.5490196347236633f);
+    public Vector4 ButtonHoveredColor { get; set; } =
+        new(0.737f, 0.694f, 0.886f, 0.5490196347236633f);
 
-    public Vector4 ButtonActiveColor { get; set; } = new(0.816f, 0.773f, 0.965f, 0.5490196347236633f);
+    public Vector4 ButtonActiveColor { get; set; } =
+        new(0.816f, 0.773f, 0.965f, 0.5490196347236633f);
 
     public Vector4 HeaderColor { get; set; } = new(0.620f, 0.576f, 0.769f, 0.5490196347236633f);
 
-    public Vector4 HeaderHoveredColor { get; set; } = new(0.737f, 0.694f, 0.886f, 0.5490196347236633f);
+    public Vector4 HeaderHoveredColor { get; set; } =
+        new(0.737f, 0.694f, 0.886f, 0.5490196347236633f);
 
-    public Vector4 HeaderActiveColor { get; set; } = new(0.816f, 0.773f, 0.965f, 0.5490196347236633f);
+    public Vector4 HeaderActiveColor { get; set; } =
+        new(0.816f, 0.773f, 0.965f, 0.5490196347236633f);
 
     public Vector4 SeparatorColor { get; set; } = new(0.620f, 0.576f, 0.769f, 0.5490196347236633f);
 
-    public Vector4 SeparatorHoveredColor { get; set; } = new(0.737f, 0.694f, 0.886f, 0.5490196347236633f);
+    public Vector4 SeparatorHoveredColor { get; set; } =
+        new(0.737f, 0.694f, 0.886f, 0.5490196347236633f);
 
-    public Vector4 SeparatorActiveColor { get; set; } = new(0.816f, 0.773f, 0.965f, 0.5490196347236633f);
+    public Vector4 SeparatorActiveColor { get; set; } =
+        new(0.816f, 0.773f, 0.965f, 0.5490196347236633f);
 
     public Vector4 ResizeGripColor { get; set; } = new(0.620f, 0.576f, 0.769f, 0.5490196347236633f);
 
-    public Vector4 ResizeGripHoveredColor { get; set; } = new(0.737f, 0.694f, 0.886f, 0.5490196347236633f);
+    public Vector4 ResizeGripHoveredColor { get; set; } =
+        new(0.737f, 0.694f, 0.886f, 0.5490196347236633f);
 
-    public Vector4 ResizeGripActiveColor { get; set; } = new(0.816f, 0.773f, 0.965f, 0.5490196347236633f);
+    public Vector4 ResizeGripActiveColor { get; set; } =
+        new(0.816f, 0.773f, 0.965f, 0.5490196347236633f);
 
     public Vector4 TabColor { get; set; } = new(0.620f, 0.576f, 0.769f, 0.5490196347236633f);
 
@@ -149,29 +160,37 @@ public class UiTheme
 
     public Vector4 PlotLinesColor { get; set; } = new(0.294f, 0.294f, 0.294f, 1.0f);
 
-    public Vector4 PlotLinesHoveredColor { get; set; } = new(0.737f, 0.694f, 0.886f, 0.5490196347236633f);
+    public Vector4 PlotLinesHoveredColor { get; set; } =
+        new(0.737f, 0.694f, 0.886f, 0.5490196347236633f);
 
-    public Vector4 PlotHistogramColor { get; set; } = new(0.620f, 0.576f, 0.769f, 0.5490196347236633f);
+    public Vector4 PlotHistogramColor { get; set; } =
+        new(0.620f, 0.576f, 0.769f, 0.5490196347236633f);
 
-    public Vector4 PlotHistogramHoveredColor { get; set; } = new(0.737f, 0.694f, 0.886f, 0.5490196347236633f);
+    public Vector4 PlotHistogramHoveredColor { get; set; } =
+        new(0.737f, 0.694f, 0.886f, 0.5490196347236633f);
 
     public Vector4 TableHeaderBgColor { get; set; } = new(0.188f, 0.188f, 0.200f, 1.0f);
 
-    public Vector4 TableBorderStrongColor { get; set; } = new(0.424f, 0.380f, 0.573f, 0.5490196347236633f);
+    public Vector4 TableBorderStrongColor { get; set; } =
+        new(0.424f, 0.380f, 0.573f, 0.5490196347236633f);
 
-    public Vector4 TableBorderLightColor { get; set; } = new(0.424f, 0.380f, 0.573f, 0.2918455004692078f);
+    public Vector4 TableBorderLightColor { get; set; } =
+        new(0.424f, 0.380f, 0.573f, 0.2918455004692078f);
 
     public Vector4 TableRowBgColor { get; set; } = new(0.0f, 0.0f, 0.0f, 0.0f);
 
     public Vector4 TableRowBgAltColor { get; set; } = new(1.0f, 1.0f, 1.0f, 0.03433477878570557f);
 
-    public Vector4 TextSelectedBgColor { get; set; } = new(0.737f, 0.694f, 0.886f, 0.5490196347236633f);
+    public Vector4 TextSelectedBgColor { get; set; } =
+        new(0.737f, 0.694f, 0.886f, 0.5490196347236633f);
 
     public Vector4 DragDropTargetColor { get; set; } = new(1.0f, 1.0f, 0.0f, 0.8999999761581421f);
 
-    public Vector4 NavWindowingHighlightColor { get; set; } = new(1.0f, 1.0f, 1.0f, 0.699999988079071f);
+    public Vector4 NavWindowingHighlightColor { get; set; } =
+        new(1.0f, 1.0f, 1.0f, 0.699999988079071f);
 
-    public Vector4 NavWindowingDimBgColor { get; set; } = new(0.8f, 0.8f, 0.8f, 0.2000000029802322f);
+    public Vector4 NavWindowingDimBgColor { get; set; } =
+        new(0.8f, 0.8f, 0.8f, 0.2000000029802322f);
 
     public Vector4 ModalWindowDimBgColor { get; set; } = new(0.8f, 0.8f, 0.8f, 0.3499999940395355f);
 }

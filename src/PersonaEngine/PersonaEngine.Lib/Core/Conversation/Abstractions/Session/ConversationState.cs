@@ -3,7 +3,7 @@
 public enum ConversationState
 {
     Initial,
-    
+
     Initializing,
 
     Idle,
@@ -11,13 +11,13 @@ public enum ConversationState
     Listening,
 
     ActiveTurn,
-    
+
     ProcessingInput,
 
     WaitingForLlm,
 
     StreamingResponse,
-    
+
     Speaking,
 
     Paused,
@@ -26,5 +26,5 @@ public enum ConversationState
 
     Error,
 
-    Ended
+    Ended,
 }

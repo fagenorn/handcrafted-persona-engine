@@ -2,7 +2,8 @@
 
 public record TtsConfiguration
 {
-    public string ModelDirectory { get; init; } = Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Models");
+    public string ModelDirectory { get; init; } =
+        Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Models");
 
     public string EspeakPath { get; init; } = "espeak-ng";
 

@@ -14,21 +14,25 @@ public class TextProcessor : ITextProcessor
     private readonly ISentenceSegmenter _segmenter;
 
     public TextProcessor(
-        ITextNormalizer        normalizer,
-        ISentenceSegmenter     segmenter,
-        ILogger<TextProcessor> logger)
+        ITextNormalizer normalizer,
+        ISentenceSegmenter segmenter,
+        ILogger<TextProcessor> logger
+    )
     {
         _normalizer = normalizer ?? throw new ArgumentNullException(nameof(normalizer));
-        _segmenter  = segmenter ?? throw new ArgumentNullException(nameof(segmenter));
-        _logger     = logger ?? throw new ArgumentNullException(nameof(logger));
+        _segmenter = segmenter ?? throw new ArgumentNullException(nameof(segmenter));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <summary>
     ///     Processes text for TTS by normalizing and segmenting into sentences
     /// </summary>
-    public Task<ProcessedText> ProcessAsync(string text, CancellationToken cancellationToken = default)
+    public Task<ProcessedText> ProcessAsync(
+        string text,
+        CancellationToken cancellationToken = default
+    )
     {
-        if ( string.IsNullOrEmpty(text) )
+        if (string.IsNullOrEmpty(text))
         {
             _logger.LogInformation("Empty text received for processing");
 
@@ -42,7 +46,7 @@ public class TextProcessor : ITextProcessor
             // Normalize the text
             var normalizedText = _normalizer.Normalize(text);
 
-            if ( string.IsNullOrEmpty(normalizedText) )
+            if (string.IsNullOrEmpty(normalizedText))
             {
                 _logger.LogWarning("Text normalization resulted in empty text");
 

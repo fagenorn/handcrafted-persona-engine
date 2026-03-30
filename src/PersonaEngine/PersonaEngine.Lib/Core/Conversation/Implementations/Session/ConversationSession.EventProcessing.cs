@@ -1,5 +1,4 @@
 using System.Threading.Channels;
-
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Common;
@@ -91,9 +90,7 @@ public partial class ConversationSession
                         SessionId,
                         inputEvent.GetType().Name
                     );
-                    if (
-                        _stateMachine.State is ConversationState.Error or ConversationState.Ended
-                    )
+                    if (_stateMachine.State is ConversationState.Error or ConversationState.Ended)
                     {
                         break;
                     }
@@ -247,10 +244,8 @@ public partial class ConversationSession
                                 {
                                     var overallReason = _metricsTracker.AudioFinishReason;
                                     if (
-                                        _metricsTracker.TtsFinishReason
-                                            == CompletionReason.Error
-                                        || _metricsTracker.LlmFinishReason
-                                            == CompletionReason.Error
+                                        _metricsTracker.TtsFinishReason == CompletionReason.Error
+                                        || _metricsTracker.LlmFinishReason == CompletionReason.Error
                                     )
                                     {
                                         overallReason = CompletionReason.Error;
@@ -315,9 +310,7 @@ public partial class ConversationSession
                         SessionId,
                         outputEvent.GetType().Name
                     );
-                    if (
-                        _stateMachine.State is ConversationState.Error or ConversationState.Ended
-                    )
+                    if (_stateMachine.State is ConversationState.Error or ConversationState.Ended)
                     {
                         break;
                     }

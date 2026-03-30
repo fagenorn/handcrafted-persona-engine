@@ -8,5 +8,10 @@ public interface IVBANPacketBuilder
     /// <summary>
     ///     Builds a VBAN packet from audio data.
     /// </summary>
-    byte[] BuildPacket(ReadOnlyMemory<float> audioData, int sampleRate, int samplesPerChannel, int channels);
+    byte[] BuildPacket(
+        ReadOnlyMemory<float> audioData,
+        int sampleRate,
+        int samplesPerChannel,
+        int channels
+    );
 }

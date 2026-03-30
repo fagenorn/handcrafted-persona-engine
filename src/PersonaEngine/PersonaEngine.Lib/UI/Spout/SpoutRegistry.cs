@@ -1,5 +1,4 @@
 ﻿using PersonaEngine.Lib.Configuration;
-
 using Silk.NET.OpenGL;
 
 namespace PersonaEngine.Lib.UI.Spout;
@@ -14,10 +13,10 @@ public class SpoutRegistry : IDisposable
 
     public SpoutRegistry(GL gl, SpoutConfiguration[] configs)
     {
-        _gl      = gl;
+        _gl = gl;
         _configs = configs;
 
-        foreach ( var config in _configs )
+        foreach (var config in _configs)
         {
             GetOrCreateManager(config);
         }
@@ -25,7 +24,7 @@ public class SpoutRegistry : IDisposable
 
     public void Dispose()
     {
-        foreach ( var manager in _spoutManagers.Values )
+        foreach (var manager in _spoutManagers.Values)
         {
             manager.Dispose();
         }
@@ -35,7 +34,7 @@ public class SpoutRegistry : IDisposable
 
     public SpoutManager GetOrCreateManager(SpoutConfiguration config)
     {
-        if ( !_spoutManagers.TryGetValue(config.OutputName, out var manager) )
+        if (!_spoutManagers.TryGetValue(config.OutputName, out var manager))
         {
             manager = new SpoutManager(_gl, config);
             _spoutManagers.Add(config.OutputName, manager);
@@ -46,7 +45,10 @@ public class SpoutRegistry : IDisposable
 
     public void BeginFrame(string spoutName)
     {
-        if ( string.IsNullOrEmpty(spoutName) || !_spoutManagers.TryGetValue(spoutName, out var manager) )
+        if (
+            string.IsNullOrEmpty(spoutName)
+            || !_spoutManagers.TryGetValue(spoutName, out var manager)
+        )
         {
             return;
         }
@@ -56,7 +58,10 @@ public class SpoutRegistry : IDisposable
 
     public void SendFrame(string spoutName)
     {
-        if ( string.IsNullOrEmpty(spoutName) || !_spoutManagers.TryGetValue(spoutName, out var manager) )
+        if (
+            string.IsNullOrEmpty(spoutName)
+            || !_spoutManagers.TryGetValue(spoutName, out var manager)
+        )
         {
             return;
         }
@@ -66,7 +71,7 @@ public class SpoutRegistry : IDisposable
 
     public void ResizeAll(int width, int height)
     {
-        foreach ( var manager in _spoutManagers.Values )
+        foreach (var manager in _spoutManagers.Values)
         {
             manager.ResizeFramebuffer(width, height);
         }

@@ -1,5 +1,4 @@
 ﻿using System.Text.Json.Nodes;
-
 using PersonaEngine.Lib.Live2D.Framework.Model;
 
 namespace PersonaEngine.Lib.Live2D.Framework.Motion;
@@ -46,49 +45,51 @@ public class CubismExpressionMotion : ACubismMotion
     public CubismExpressionMotion(string buf)
     {
         using var stream = File.Open(buf, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        var       obj    = JsonNode.Parse(stream) ?? throw new Exception("Load ExpressionMotion error");
-        var       json   = obj.AsObject();
+        var obj = JsonNode.Parse(stream) ?? throw new Exception("Load ExpressionMotion error");
+        var json = obj.AsObject();
 
         FadeInSeconds = json.ContainsKey(ExpressionKeyFadeIn)
-                            ? (float)json[ExpressionKeyFadeIn]!
-                            : DefaultFadeTime; // フェードイン
+            ? (float)json[ExpressionKeyFadeIn]!
+            : DefaultFadeTime; // フェードイン
 
         FadeOutSeconds = json.ContainsKey(ExpressionKeyFadeOut)
-                             ? (float)json[ExpressionKeyFadeOut]!
-                             : DefaultFadeTime; // フェードアウト
+            ? (float)json[ExpressionKeyFadeOut]!
+            : DefaultFadeTime; // フェードアウト
 
-        if ( FadeInSeconds < 0.0f )
+        if (FadeInSeconds < 0.0f)
         {
             FadeInSeconds = DefaultFadeTime;
         }
 
-        if ( FadeOutSeconds < 0.0f )
+        if (FadeOutSeconds < 0.0f)
         {
             FadeOutSeconds = DefaultFadeTime;
         }
 
         // 各パラメータについて
-        var list           = json[ExpressionKeyParameters]!;
+        var list = json[ExpressionKeyParameters]!;
         var parameterCount = list.AsArray().Count;
 
-        for ( var i = 0; i < parameterCount; ++i )
+        for (var i = 0; i < parameterCount; ++i)
         {
-            var param       = list[i]!;
-            var parameterId = CubismFramework.CubismIdManager.GetId(param[ExpressionKeyId]!.ToString()); // パラメータID
-            var value       = (float)param[ExpressionKeyValue]!;                                         // 値
+            var param = list[i]!;
+            var parameterId = CubismFramework.CubismIdManager.GetId(
+                param[ExpressionKeyId]!.ToString()
+            ); // パラメータID
+            var value = (float)param[ExpressionKeyValue]!; // 値
 
             // 計算方法の設定
             ExpressionBlendType blendType;
-            var                 type = param[ExpressionKeyBlend]?.ToString();
-            if ( type == null || type == BlendValueAdd )
+            var type = param[ExpressionKeyBlend]?.ToString();
+            if (type == null || type == BlendValueAdd)
             {
                 blendType = ExpressionBlendType.Add;
             }
-            else if ( type == BlendValueMultiply )
+            else if (type == BlendValueMultiply)
             {
                 blendType = ExpressionBlendType.Multiply;
             }
-            else if ( type == BlendValueOverwrite )
+            else if (type == BlendValueOverwrite)
             {
                 blendType = ExpressionBlendType.Overwrite;
             }
@@ -99,7 +100,14 @@ public class CubismExpressionMotion : ACubismMotion
             }
 
             // 設定オブジェクトを作成してリストに追加する
-            Parameters.Add(new ExpressionParameter { ParameterId = parameterId, BlendType = blendType, Value = value });
+            Parameters.Add(
+                new ExpressionParameter
+                {
+                    ParameterId = parameterId,
+                    BlendType = blendType,
+                    Value = value,
+                }
+            );
         }
     }
 
@@ -111,14 +119,21 @@ public class CubismExpressionMotion : ACubismMotion
     /// <summary>
     ///     表情のフェードのウェイト値
     /// </summary>
-    [Obsolete("CubismExpressionMotion._fadeWeightが削除予定のため非推奨\nCubismExpressionMotionManager.getFadeWeight(int index) を使用してください。")]
+    [Obsolete(
+        "CubismExpressionMotion._fadeWeightが削除予定のため非推奨\nCubismExpressionMotionManager.getFadeWeight(int index) を使用してください。"
+    )]
     public float FadeWeight { get; private set; }
 
-    public override void DoUpdateParameters(CubismModel model, float userTimeSeconds, float weight, CubismMotionQueueEntry motionQueueEntry)
+    public override void DoUpdateParameters(
+        CubismModel model,
+        float userTimeSeconds,
+        float weight,
+        CubismMotionQueueEntry motionQueueEntry
+    )
     {
-        foreach ( var item in Parameters )
+        foreach (var item in Parameters)
         {
-            switch ( item.BlendType )
+            switch (item.BlendType)
             {
                 case ExpressionBlendType.Add:
                 {
@@ -150,15 +165,21 @@ public class CubismExpressionMotion : ACubismMotion
     /// <param name="motionQueueEntry">CubismMotionQueueManagerで管理されているモーション</param>
     /// <param name="expressionParameterValues">モデルに適用する各パラメータの値</param>
     /// <param name="expressionIndex">表情のインデックス</param>
-    public void CalculateExpressionParameters(CubismModel                     model,                     float userTimeSeconds, CubismMotionQueueEntry? motionQueueEntry,
-                                              List<ExpressionParameterValue>? expressionParameterValues, int   expressionIndex, float                   fadeWeight)
+    public void CalculateExpressionParameters(
+        CubismModel model,
+        float userTimeSeconds,
+        CubismMotionQueueEntry? motionQueueEntry,
+        List<ExpressionParameterValue>? expressionParameterValues,
+        int expressionIndex,
+        float fadeWeight
+    )
     {
-        if ( motionQueueEntry == null || expressionParameterValues == null )
+        if (motionQueueEntry == null || expressionParameterValues == null)
         {
             return;
         }
 
-        if ( !motionQueueEntry.Available )
+        if (!motionQueueEntry.Available)
         {
             return;
         }
@@ -168,23 +189,23 @@ public class CubismExpressionMotion : ACubismMotion
         FadeWeight = UpdateFadeWeight(motionQueueEntry, userTimeSeconds);
 
         // モデルに適用する値を計算
-        for ( var i = 0; i < expressionParameterValues.Count; ++i )
+        for (var i = 0; i < expressionParameterValues.Count; ++i)
         {
             var expressionParameterValue = expressionParameterValues[i];
 
-            if ( expressionParameterValue.ParameterId == null )
+            if (expressionParameterValue.ParameterId == null)
             {
                 continue;
             }
 
             var currentParameterValue = expressionParameterValue.OverwriteValue =
-                                            model.GetParameterValue(expressionParameterValue.ParameterId);
+                model.GetParameterValue(expressionParameterValue.ParameterId);
 
             var expressionParameters = Parameters;
-            var parameterIndex       = -1;
-            for ( var j = 0; j < expressionParameters.Count; ++j )
+            var parameterIndex = -1;
+            for (var j = 0; j < expressionParameters.Count; ++j)
             {
-                if ( expressionParameterValue.ParameterId != expressionParameters[j].ParameterId )
+                if (expressionParameterValue.ParameterId != expressionParameters[j].ParameterId)
                 {
                     continue;
                 }
@@ -195,9 +216,9 @@ public class CubismExpressionMotion : ACubismMotion
             }
 
             // 再生中のExpressionが参照していないパラメータは初期値を適用
-            if ( parameterIndex < 0 )
+            if (parameterIndex < 0)
             {
-                if ( expressionIndex == 0 )
+                if (expressionIndex == 0)
                 {
                     expressionParameterValues[i].AdditiveValue = DefaultAdditiveValue;
 
@@ -207,14 +228,23 @@ public class CubismExpressionMotion : ACubismMotion
                 }
                 else
                 {
-                    expressionParameterValues[i].AdditiveValue =
-                        CalculateValue(expressionParameterValue.AdditiveValue, DefaultAdditiveValue, fadeWeight);
+                    expressionParameterValues[i].AdditiveValue = CalculateValue(
+                        expressionParameterValue.AdditiveValue,
+                        DefaultAdditiveValue,
+                        fadeWeight
+                    );
 
-                    expressionParameterValues[i].MultiplyValue =
-                        CalculateValue(expressionParameterValue.MultiplyValue, DefaultMultiplyValue, fadeWeight);
+                    expressionParameterValues[i].MultiplyValue = CalculateValue(
+                        expressionParameterValue.MultiplyValue,
+                        DefaultMultiplyValue,
+                        fadeWeight
+                    );
 
-                    expressionParameterValues[i].OverwriteValue =
-                        CalculateValue(expressionParameterValue.OverwriteValue, currentParameterValue, fadeWeight);
+                    expressionParameterValues[i].OverwriteValue = CalculateValue(
+                        expressionParameterValue.OverwriteValue,
+                        currentParameterValue,
+                        fadeWeight
+                    );
                 }
 
                 continue;
@@ -223,47 +253,56 @@ public class CubismExpressionMotion : ACubismMotion
             // 値を計算
             var value = expressionParameters[parameterIndex].Value;
             float newAdditiveValue,
-                  newMultiplyValue,
-                  newSetValue;
+                newMultiplyValue,
+                newSetValue;
 
-            switch ( expressionParameters[parameterIndex].BlendType )
+            switch (expressionParameters[parameterIndex].BlendType)
             {
                 case ExpressionBlendType.Add:
                     newAdditiveValue = value;
                     newMultiplyValue = DefaultMultiplyValue;
-                    newSetValue      = currentParameterValue;
+                    newSetValue = currentParameterValue;
 
                     break;
                 case ExpressionBlendType.Multiply:
                     newAdditiveValue = DefaultAdditiveValue;
                     newMultiplyValue = value;
-                    newSetValue      = currentParameterValue;
+                    newSetValue = currentParameterValue;
 
                     break;
                 case ExpressionBlendType.Overwrite:
                     newAdditiveValue = DefaultAdditiveValue;
                     newMultiplyValue = DefaultMultiplyValue;
-                    newSetValue      = value;
+                    newSetValue = value;
 
                     break;
                 default:
                     return;
             }
 
-            if ( expressionIndex == 0 )
+            if (expressionIndex == 0)
             {
-                expressionParameterValues[i].AdditiveValue  = newAdditiveValue;
-                expressionParameterValues[i].MultiplyValue  = newMultiplyValue;
+                expressionParameterValues[i].AdditiveValue = newAdditiveValue;
+                expressionParameterValues[i].MultiplyValue = newMultiplyValue;
                 expressionParameterValues[i].OverwriteValue = newSetValue;
             }
             else
             {
-                expressionParameterValues[i].AdditiveValue  = expressionParameterValue.AdditiveValue * (1.0f - FadeWeight) + newAdditiveValue * FadeWeight;
-                expressionParameterValues[i].MultiplyValue  = expressionParameterValue.MultiplyValue * (1.0f - FadeWeight) + newMultiplyValue * FadeWeight;
-                expressionParameterValues[i].OverwriteValue = expressionParameterValue.OverwriteValue * (1.0f - FadeWeight) + newSetValue * FadeWeight;
+                expressionParameterValues[i].AdditiveValue =
+                    expressionParameterValue.AdditiveValue * (1.0f - FadeWeight)
+                    + newAdditiveValue * FadeWeight;
+                expressionParameterValues[i].MultiplyValue =
+                    expressionParameterValue.MultiplyValue * (1.0f - FadeWeight)
+                    + newMultiplyValue * FadeWeight;
+                expressionParameterValues[i].OverwriteValue =
+                    expressionParameterValue.OverwriteValue * (1.0f - FadeWeight)
+                    + newSetValue * FadeWeight;
             }
         }
     }
 
-    private float CalculateValue(float source, float destination, float fadeWeight) { return source * (1.0f - fadeWeight) + destination * fadeWeight; }
+    private float CalculateValue(float source, float destination, float fadeWeight)
+    {
+        return source * (1.0f - fadeWeight) + destination * fadeWeight;
+    }
 }

@@ -43,7 +43,7 @@ public static class CubismFramework
     /// <returns>準備処理が完了したらtrueが返ります。</returns>
     public static bool StartUp(ICubismAllocator allocator, Option option)
     {
-        if ( IsStarted )
+        if (IsStarted)
         {
             CubismLog.Info("[Live2D SDK]CubismFramework.StartUp() is already done.");
 
@@ -51,33 +51,37 @@ public static class CubismFramework
         }
 
         s_option = option;
-        if ( s_option != null )
+        if (s_option != null)
         {
             CubismCore.SetLogFunction(s_option.LogFunction);
         }
 
-        if ( allocator == null )
+        if (allocator == null)
         {
-            CubismLog.Warning("[Live2D SDK]CubismFramework.StartUp() failed, need allocator instance.");
+            CubismLog.Warning(
+                "[Live2D SDK]CubismFramework.StartUp() failed, need allocator instance."
+            );
             IsStarted = false;
         }
         else
         {
             s_allocator = allocator;
-            IsStarted   = true;
+            IsStarted = true;
         }
 
         //Live2D Cubism Coreバージョン情報を表示
-        if ( IsStarted )
+        if (IsStarted)
         {
             var version = CubismCore.GetVersion();
 
-            var major         = (version & 0xFF000000) >> 24;
-            var minor         = (version & 0x00FF0000) >> 16;
-            var patch         = version & 0x0000FFFF;
+            var major = (version & 0xFF000000) >> 24;
+            var minor = (version & 0x00FF0000) >> 16;
+            var patch = version & 0x0000FFFF;
             var versionNumber = version;
 
-            CubismLog.Info($"[Live2D SDK]Cubism Core version: {major:#0}.{minor:0}.{patch:0000} ({versionNumber})");
+            CubismLog.Info(
+                $"[Live2D SDK]Cubism Core version: {major:#0}.{minor:0}.{patch:0000} ({versionNumber})"
+            );
         }
 
         CubismLog.Info("[Live2D SDK]CubismFramework.StartUp() is complete.");
@@ -91,7 +95,7 @@ public static class CubismFramework
     /// </summary>
     public static void CleanUp()
     {
-        IsStarted     = false;
+        IsStarted = false;
         IsInitialized = false;
     }
 
@@ -101,7 +105,7 @@ public static class CubismFramework
     /// </summary>
     public static void Initialize()
     {
-        if ( !IsStarted )
+        if (!IsStarted)
         {
             CubismLog.Warning("[Live2D SDK]CubismFramework is not started.");
 
@@ -111,9 +115,11 @@ public static class CubismFramework
         // --- s_isInitializedによる連続初期化ガード ---
         // 連続してリソース確保が行われないようにする。
         // 再度Initialize()するには先にDispose()を実行する必要がある。
-        if ( IsInitialized )
+        if (IsInitialized)
         {
-            CubismLog.Warning("[Live2D SDK]CubismFramework.Initialize() skipped, already initialized.");
+            CubismLog.Warning(
+                "[Live2D SDK]CubismFramework.Initialize() skipped, already initialized."
+            );
 
             return;
         }
@@ -130,7 +136,7 @@ public static class CubismFramework
     /// </summary>
     public static void Dispose()
     {
-        if ( !IsStarted )
+        if (!IsStarted)
         {
             CubismLog.Warning("[Live2D SDK]CubismFramework is not started.");
 
@@ -139,7 +145,7 @@ public static class CubismFramework
 
         // --- s_isInitializedによる未初期化解放ガード ---
         // Dispose()するには先にInitialize()を実行する必要がある。
-        if ( !IsInitialized ) // false...リソース未確保の場合
+        if (!IsInitialized) // false...リソース未確保の場合
         {
             CubismLog.Warning("[Live2D SDK]CubismFramework.Dispose() skipped, not initialized.");
 
@@ -155,7 +161,10 @@ public static class CubismFramework
     ///     Core APIにバインドしたログ関数を実行する
     /// </summary>
     /// <param name="data">ログメッセージ</param>
-    public static void CoreLogFunction(string data) { CubismCore.GetLogFunction()?.Invoke(data); }
+    public static void CoreLogFunction(string data)
+    {
+        CubismCore.GetLogFunction()?.Invoke(data);
+    }
 
     /// <summary>
     ///     現在のログ出力レベル設定の値を返す。
@@ -163,7 +172,7 @@ public static class CubismFramework
     /// <returns>現在のログ出力レベル設定の値</returns>
     public static LogLevel GetLoggingLevel()
     {
-        if ( s_option != null )
+        if (s_option != null)
         {
             return s_option.LoggingLevel;
         }
@@ -171,11 +180,23 @@ public static class CubismFramework
         return LogLevel.Off;
     }
 
-    public static IntPtr Allocate(int size) { return s_allocator!.Allocate(size); }
+    public static IntPtr Allocate(int size)
+    {
+        return s_allocator!.Allocate(size);
+    }
 
-    public static IntPtr AllocateAligned(int size, int alignment) { return s_allocator!.AllocateAligned(size, alignment); }
+    public static IntPtr AllocateAligned(int size, int alignment)
+    {
+        return s_allocator!.AllocateAligned(size, alignment);
+    }
 
-    public static void Deallocate(IntPtr address) { s_allocator!.Deallocate(address); }
+    public static void Deallocate(IntPtr address)
+    {
+        s_allocator!.Deallocate(address);
+    }
 
-    public static void DeallocateAligned(IntPtr address) { s_allocator!.DeallocateAligned(address); }
+    public static void DeallocateAligned(IntPtr address)
+    {
+        s_allocator!.DeallocateAligned(address);
+    }
 }

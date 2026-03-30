@@ -1,8 +1,6 @@
 ﻿using System.Collections.Concurrent;
-
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-
 using PersonaEngine.Lib.TTS.Synthesis;
 
 namespace PersonaEngine.Lib.Audio.Player;
@@ -20,13 +18,20 @@ public class DefaultAudioBufferManager : IAudioBufferManager
 
     private bool _disposed;
 
-    public DefaultAudioBufferManager(int maxBufferCount = 32, ILogger<DefaultAudioBufferManager>? logger = null)
+    public DefaultAudioBufferManager(
+        int maxBufferCount = 32,
+        ILogger<DefaultAudioBufferManager>? logger = null
+    )
     {
-        _maxBufferCount = maxBufferCount > 0
-                              ? maxBufferCount
-                              : throw new ArgumentException("Max buffer count must be positive", nameof(maxBufferCount));
+        _maxBufferCount =
+            maxBufferCount > 0
+                ? maxBufferCount
+                : throw new ArgumentException(
+                    "Max buffer count must be positive",
+                    nameof(maxBufferCount)
+                );
 
-        _logger     = logger ?? NullLogger<DefaultAudioBufferManager>.Instance;
+        _logger = logger ?? NullLogger<DefaultAudioBufferManager>.Instance;
         _audioQueue = new BlockingCollection<(Memory<float>, AudioSegment)>(_maxBufferCount);
     }
 
@@ -36,15 +41,16 @@ public class DefaultAudioBufferManager : IAudioBufferManager
 
     public async Task EnqueueSegmentsAsync(
         IAsyncEnumerable<AudioSegment> audioSegments,
-        CancellationToken              cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         try
         {
             ProducerCompleted = false;
 
-            await foreach ( var segment in audioSegments.WithCancellation(cancellationToken) )
+            await foreach (var segment in audioSegments.WithCancellation(cancellationToken))
             {
-                if ( segment.AudioData.Length <= 0 || cancellationToken.IsCancellationRequested )
+                if (segment.AudioData.Length <= 0 || cancellationToken.IsCancellationRequested)
                 {
                     continue;
                 }
@@ -86,20 +92,21 @@ public class DefaultAudioBufferManager : IAudioBufferManager
 
     public bool TryGetNextBuffer(
         out (Memory<float> Data, AudioSegment Segment) buffer,
-        int                                            timeoutMs,
-        CancellationToken                              cancellationToken)
+        int timeoutMs,
+        CancellationToken cancellationToken
+    )
     {
         return _audioQueue.TryTake(out buffer, timeoutMs, cancellationToken);
     }
 
     public void Clear()
     {
-        while ( _audioQueue.TryTake(out _) ) { }
+        while (_audioQueue.TryTake(out _)) { }
     }
 
     public async ValueTask DisposeAsync()
     {
-        if ( _disposed )
+        if (_disposed)
         {
             return;
         }

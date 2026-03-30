@@ -11,7 +11,5 @@ public interface IPhonemizer : IDisposable
     /// <param name="text">Input text</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Phoneme result</returns>
-    Task<PhonemeResult> ToPhonemesAsync(
-        string            text,
-        CancellationToken cancellationToken = default);
+    Task<PhonemeResult> ToPhonemesAsync(string text, CancellationToken cancellationToken = default);
 }

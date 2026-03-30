@@ -2,7 +2,15 @@
 
 namespace PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
 
-public class ChatMessage(Guid messageId, string participantId, string participantName, string text, DateTimeOffset timestamp, bool isPartial, ChatMessageRole role)
+public class ChatMessage(
+    Guid messageId,
+    string participantId,
+    string participantName,
+    string text,
+    DateTimeOffset timestamp,
+    bool isPartial,
+    ChatMessageRole role
+)
 {
     public Guid MessageId { get; } = messageId;
 

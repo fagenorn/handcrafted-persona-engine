@@ -26,7 +26,10 @@ public class LAppLive2DManager(LAppDelegate lapp) : IDisposable
     /// </summary>
     public CubismMatrix44 ViewMatrix { get; } = new();
 
-    public void Dispose() { ReleaseAllModel(); }
+    public void Dispose()
+    {
+        ReleaseAllModel();
+    }
 
     public event Action<CubismModel, ACubismMotion>? MotionFinished;
 
@@ -35,14 +38,17 @@ public class LAppLive2DManager(LAppDelegate lapp) : IDisposable
     /// </summary>
     /// <param name="no">モデルリストのインデックス値</param>
     /// <returns>モデルのインスタンスを返す。インデックス値が範囲外の場合はNULLを返す。</returns>
-    public LAppModel GetModel(int no) { return _models[no]; }
+    public LAppModel GetModel(int no)
+    {
+        return _models[no];
+    }
 
     /// <summary>
     ///     現在のシーンで保持しているすべてのモデルを解放する
     /// </summary>
     public void ReleaseAllModel()
     {
-        for ( var i = 0; i < _models.Count; i++ )
+        for (var i = 0; i < _models.Count; i++)
         {
             _models[i].Dispose();
         }
@@ -57,7 +63,7 @@ public class LAppLive2DManager(LAppDelegate lapp) : IDisposable
     /// <param name="y">画面のY座標</param>
     public void OnDrag(float x, float y)
     {
-        for ( var i = 0; i < _models.Count; i++ )
+        for (var i = 0; i < _models.Count; i++)
         {
             var model = GetModel(i);
 
@@ -74,17 +80,22 @@ public class LAppLive2DManager(LAppDelegate lapp) : IDisposable
     {
         CubismLog.Debug($"[Live2D]tap point: x:{x:0.00} y:{y:0.00}");
 
-        for ( var i = 0; i < _models.Count; i++ )
+        for (var i = 0; i < _models.Count; i++)
         {
-            if ( _models[i].HitTest(LAppDefine.HitAreaNameHead, x, y) )
+            if (_models[i].HitTest(LAppDefine.HitAreaNameHead, x, y))
             {
                 CubismLog.Debug($"[Live2D]hit area: [{LAppDefine.HitAreaNameHead}]");
                 _models[i].SetRandomExpression();
             }
-            else if ( _models[i].HitTest(LAppDefine.HitAreaNameBody, x, y) )
+            else if (_models[i].HitTest(LAppDefine.HitAreaNameBody, x, y))
             {
                 CubismLog.Debug($"[Live2D]hit area: [{LAppDefine.HitAreaNameBody}]");
-                _models[i].StartRandomMotion(LAppDefine.MotionGroupTapBody, MotionPriority.PriorityNormal, OnFinishedMotion);
+                _models[i]
+                    .StartRandomMotion(
+                        LAppDefine.MotionGroupTapBody,
+                        MotionPriority.PriorityNormal,
+                        OnFinishedMotion
+                    );
             }
         }
     }
@@ -104,11 +115,11 @@ public class LAppLive2DManager(LAppDelegate lapp) : IDisposable
         lapp.GL.GetWindowSize(out var width, out var height);
 
         var modelCount = _models.Count;
-        foreach ( var model in _models )
+        foreach (var model in _models)
         {
             _projection.LoadIdentity();
 
-            if ( model.Model.GetCanvasWidth() > 1.0f && width < height )
+            if (model.Model.GetCanvasWidth() > 1.0f && width < height)
             {
                 // 横に長いモデルを縦長ウィンドウに表示する際モデルの横サイズでscaleを算出する
                 model.ModelMatrix.SetWidth(2.0f);
@@ -120,7 +131,7 @@ public class LAppLive2DManager(LAppDelegate lapp) : IDisposable
             }
 
             // 必要があればここで乗算
-            if ( ViewMatrix != null )
+            if (ViewMatrix != null)
             {
                 _projection.MultiplyByMatrix(ViewMatrix);
             }
@@ -137,24 +148,24 @@ public class LAppLive2DManager(LAppDelegate lapp) : IDisposable
         // ModelDir[]に保持したディレクトリ名から
         // model3.jsonのパスを決定する.
         // ディレクトリ名とmodel3.jsonの名前を一致させておくこと.
-        if ( !dir.EndsWith('\\') && !dir.EndsWith('/') )
+        if (!dir.EndsWith('\\') && !dir.EndsWith('/'))
         {
             dir = Path.GetFullPath(dir + '/');
         }
 
         var modelJsonName = Path.GetFullPath($"{dir}{name}");
-        if ( !File.Exists(modelJsonName) )
+        if (!File.Exists(modelJsonName))
         {
             modelJsonName = Path.GetFullPath($"{dir}{name}.model3.json");
         }
 
-        if ( !File.Exists(modelJsonName) )
+        if (!File.Exists(modelJsonName))
         {
-            dir           = Path.GetFullPath(dir + name + '/');
+            dir = Path.GetFullPath(dir + name + '/');
             modelJsonName = Path.GetFullPath($"{dir}{name}.model3.json");
         }
 
-        if ( !File.Exists(modelJsonName) )
+        if (!File.Exists(modelJsonName))
         {
             throw new Exception($"[Live2D]File not found: {modelJsonName}");
         }
@@ -167,7 +178,7 @@ public class LAppLive2DManager(LAppDelegate lapp) : IDisposable
 
     public void RemoveModel(int index)
     {
-        if ( _models.Count > index )
+        if (_models.Count > index)
         {
             var model = _models[index];
             _models.RemoveAt(index);
@@ -179,15 +190,24 @@ public class LAppLive2DManager(LAppDelegate lapp) : IDisposable
     ///     モデル個数を得る
     /// </summary>
     /// <returns>所持モデル個数</returns>
-    public int GetModelNum() { return _models.Count; }
+    public int GetModelNum()
+    {
+        return _models.Count;
+    }
 
     public async void StartSpeaking(string filePath)
     {
-        for ( var i = 0; i < _models.Count; i++ )
+        for (var i = 0; i < _models.Count; i++)
         {
             _models[i]._wavFileHandler.Start(filePath);
             await _models[i]._wavFileHandler.LoadWavFile(filePath);
-            _models[i].StartMotion(LAppDefine.MotionGroupIdle, 0, MotionPriority.PriorityIdle, OnFinishedMotion);
+            _models[i]
+                .StartMotion(
+                    LAppDefine.MotionGroupIdle,
+                    0,
+                    MotionPriority.PriorityIdle,
+                    OnFinishedMotion
+                );
         }
     }
 }

@@ -3,7 +3,6 @@ using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Input;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
-
 using Stateless;
 
 namespace PersonaEngine.Lib.Core.Conversation.Implementations.Session;
@@ -94,10 +93,7 @@ public partial class ConversationSession
 
         try
         {
-            _context.StartTurn(
-                turnId,
-                [finalizedEvent.ParticipantId, ASSISTANT_PARTICIPANT.Id]
-            );
+            _context.StartTurn(turnId, [finalizedEvent.ParticipantId, ASSISTANT_PARTICIPANT.Id]);
             _context.AppendToTurn(finalizedEvent.ParticipantId, finalizedEvent.FinalTranscript);
 
             var userName = _context.Participants.TryGetValue(

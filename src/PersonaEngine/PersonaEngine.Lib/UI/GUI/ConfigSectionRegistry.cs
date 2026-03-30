@@ -9,7 +9,7 @@ public class ConfigSectionRegistry : IConfigSectionRegistry
 
     public void RegisterSection(IConfigSectionEditor section)
     {
-        if ( section == null )
+        if (section == null)
         {
             throw new ArgumentNullException(nameof(section));
         }
@@ -17,9 +17,18 @@ public class ConfigSectionRegistry : IConfigSectionRegistry
         _sections[section.SectionKey] = section;
     }
 
-    public void UnregisterSection(string sectionKey) { _sections.Remove(sectionKey); }
+    public void UnregisterSection(string sectionKey)
+    {
+        _sections.Remove(sectionKey);
+    }
 
-    public IConfigSectionEditor GetSection(string sectionKey) { return _sections.TryGetValue(sectionKey, out var section) ? section : null; }
+    public IConfigSectionEditor GetSection(string sectionKey)
+    {
+        return _sections.TryGetValue(sectionKey, out var section) ? section : null;
+    }
 
-    public IReadOnlyList<IConfigSectionEditor> GetSections() { return _sections.Values.ToList().AsReadOnly(); }
+    public IReadOnlyList<IConfigSectionEditor> GetSections()
+    {
+        return _sections.Values.ToList().AsReadOnly();
+    }
 }

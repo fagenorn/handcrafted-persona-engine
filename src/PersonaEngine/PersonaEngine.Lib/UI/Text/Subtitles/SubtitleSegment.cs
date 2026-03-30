@@ -6,7 +6,11 @@ namespace PersonaEngine.Lib.UI.Text.Subtitles;
 ///     Represents a processed audio segment, broken down into lines and words
 ///     with calculated timing and layout information ready for the timeline.
 /// </summary>
-public class SubtitleSegment(AudioSegment originalAudioSegment, float absoluteStartTime, string fullText)
+public class SubtitleSegment(
+    AudioSegment originalAudioSegment,
+    float absoluteStartTime,
+    string fullText
+)
 {
     public AudioSegment OriginalAudioSegment { get; } = originalAudioSegment;
 
@@ -21,13 +25,16 @@ public class SubtitleSegment(AudioSegment originalAudioSegment, float absoluteSt
     public void AddLine(SubtitleLine line)
     {
         Lines.Add(line);
-        if ( line.Words.Count <= 0 )
+        if (line.Words.Count <= 0)
         {
             return;
         }
 
         var lastWord = line.Words[^1];
-        EstimatedEndTime = Math.Max(EstimatedEndTime, lastWord.AbsoluteStartTime + lastWord.Duration);
+        EstimatedEndTime = Math.Max(
+            EstimatedEndTime,
+            lastWord.AbsoluteStartTime + lastWord.Duration
+        );
     }
 
     public void Clear()

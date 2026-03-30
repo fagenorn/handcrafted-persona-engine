@@ -13,5 +13,8 @@ public interface ISpeechTranscriptor : IAsyncDisposable
     /// <param name="source">The audio source to transcribe.</param>
     /// <param name="cancellationToken">The cancellation token to observe.</param>
     /// <returns></returns>
-    IAsyncEnumerable<TranscriptSegment> TranscribeAsync(IAudioSource source, CancellationToken cancellationToken);
+    IAsyncEnumerable<TranscriptSegment> TranscribeAsync(
+        IAudioSource source,
+        CancellationToken cancellationToken
+    );
 }

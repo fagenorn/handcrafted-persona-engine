@@ -10,6 +10,16 @@ public record TtsReadyToSynthesizeEvent(Guid SessionId, Guid? TurnId, DateTimeOf
 public record TtsStreamStartEvent(Guid SessionId, Guid? TurnId, DateTimeOffset Timestamp)
     : IOutputEvent { }
 
-public record TtsChunkEvent(Guid SessionId, Guid? TurnId, DateTimeOffset Timestamp, AudioSegment Chunk) : IOutputEvent { }
+public record TtsChunkEvent(
+    Guid SessionId,
+    Guid? TurnId,
+    DateTimeOffset Timestamp,
+    AudioSegment Chunk
+) : IOutputEvent { }
 
-public record TtsStreamEndEvent(Guid SessionId, Guid? TurnId, DateTimeOffset Timestamp, CompletionReason FinishReason) : IOutputEvent { }
+public record TtsStreamEndEvent(
+    Guid SessionId,
+    Guid? TurnId,
+    DateTimeOffset Timestamp,
+    CompletionReason FinishReason
+) : IOutputEvent { }

@@ -4,19 +4,15 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
-
 using Hexa.NET.ImGui;
 using Hexa.NET.ImGui.Utilities;
 using Hexa.NET.ImNodes;
-
 using PersonaEngine.Lib.UI.Common;
-
 using Silk.NET.Input;
 using Silk.NET.Input.Extensions;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
-
 using Shader = PersonaEngine.Lib.UI.Common.Shader;
 using Texture = PersonaEngine.Lib.UI.Common.Texture;
 
@@ -24,9 +20,11 @@ namespace PersonaEngine.Lib.UI.GUI;
 
 public class ImGuiController : IDisposable
 {
-    [FixedAddressValueType] private static SetClipboardDelegate setClipboardFn;
+    [FixedAddressValueType]
+    private static SetClipboardDelegate setClipboardFn;
 
-    [FixedAddressValueType] private static GetClipboardDelegate getClipboardFn;
+    [FixedAddressValueType]
+    private static GetClipboardDelegate getClipboardFn;
 
     private readonly List<char> _pressedChars = new();
 
@@ -77,47 +75,61 @@ public class ImGuiController : IDisposable
     /// <summary>
     ///     Constructs a new ImGuiController.
     /// </summary>
-    public ImGuiController(GL gl, IView view, IInputContext input) : this(gl, view, input, null, null) { }
+    public ImGuiController(GL gl, IView view, IInputContext input)
+        : this(gl, view, input, null, null) { }
 
     /// <summary>
     ///     Constructs a new ImGuiController with font configuration.
     /// </summary>
-    public ImGuiController(GL gl, IView view, IInputContext input, string primaryFontPath, string emojiFontPath) : this(gl, view, input, primaryFontPath, emojiFontPath, null) { }
+    public ImGuiController(
+        GL gl,
+        IView view,
+        IInputContext input,
+        string primaryFontPath,
+        string emojiFontPath
+    )
+        : this(gl, view, input, primaryFontPath, emojiFontPath, null) { }
 
     /// <summary>
     ///     Constructs a new ImGuiController with an onConfigureIO Action.
     /// </summary>
-    public ImGuiController(GL gl, IView view, IInputContext input, Action? onConfigureIO) : this(gl, view, input, null, null, onConfigureIO) { }
+    public ImGuiController(GL gl, IView view, IInputContext input, Action? onConfigureIO)
+        : this(gl, view, input, null, null, onConfigureIO) { }
 
     /// <summary>
     ///     Constructs a new ImGuiController with font configuration and onConfigure Action.
     /// </summary>
-    public ImGuiController(GL gl, IView view, IInputContext input, string? primaryFontPath = null, string? emojiFontPath = null, Action? onConfigureIO = null)
+    public ImGuiController(
+        GL gl,
+        IView view,
+        IInputContext input,
+        string? primaryFontPath = null,
+        string? emojiFontPath = null,
+        Action? onConfigureIO = null
+    )
     {
         Init(gl, view, input);
 
-        var io          = ImGui.GetIO();
+        var io = ImGui.GetIO();
         var fontBuilder = new ImGuiFontBuilder();
 
-        if ( primaryFontPath != null )
+        if (primaryFontPath != null)
         {
- 
-                fontBuilder.AddFontFromFileTTF(primaryFontPath, 18f, [0x1, 0x1FFFF]);
-            
+            fontBuilder.AddFontFromFileTTF(primaryFontPath, 18f, [0x1, 0x1FFFF]);
         }
         else
         {
             fontBuilder.AddDefaultFont();
         }
 
-        if ( emojiFontPath != null )
+        if (emojiFontPath != null)
         {
             fontBuilder.SetOption(config =>
-                                  {
-                                      config.FontBuilderFlags |= (uint)ImGuiFreeTypeBuilderFlags.LoadColor;
-                                      config.MergeMode        =  true;
-                                      config.PixelSnapH       =  true;
-                                  });
+            {
+                config.FontBuilderFlags |= (uint)ImGuiFreeTypeBuilderFlags.LoadColor;
+                config.MergeMode = true;
+                config.PixelSnapH = true;
+            });
 
             fontBuilder.AddFontFromFileTTF(emojiFontPath, 14f, [0x1, 0x1FFFF]);
         }
@@ -125,10 +137,10 @@ public class ImGuiController : IDisposable
         _ = fontBuilder.Build();
         io.Fonts.Build();
 
-        io.BackendFlags                 |= ImGuiBackendFlags.RendererHasVtxOffset;
-        io.ConfigFlags                  |= ImGuiConfigFlags.DockingEnable;
-        io.ConfigViewportsNoAutoMerge   =  false;
-        io.ConfigViewportsNoTaskBarIcon =  false;
+        io.BackendFlags |= ImGuiBackendFlags.RendererHasVtxOffset;
+        io.ConfigFlags |= ImGuiConfigFlags.DockingEnable;
+        io.ConfigViewportsNoAutoMerge = false;
+        io.ConfigViewportsNoTaskBarIcon = false;
 
         CreateDeviceResources();
 
@@ -147,7 +159,7 @@ public class ImGuiController : IDisposable
     /// </summary>
     public void Dispose()
     {
-        _view.Resize      -= WindowResized;
+        _view.Resize -= WindowResized;
         _keyboard.KeyChar -= OnKeyChar;
 
         _gl.DeleteBuffer(_vboHandle);
@@ -160,14 +172,17 @@ public class ImGuiController : IDisposable
         ImGui.DestroyContext(Context);
     }
 
-    public void MakeCurrent() { ImGui.SetCurrentContext(Context); }
+    public void MakeCurrent()
+    {
+        ImGui.SetCurrentContext(Context);
+    }
 
     private unsafe void Init(GL gl, IView view, IInputContext input)
     {
-        _gl           = gl;
-        _view         = view;
-        _input        = input;
-        _windowWidth  = view.Size.X;
+        _gl = gl;
+        _view = view;
+        _input = input;
+        _windowWidth = view.Size.X;
         _windowHeight = view.Size.Y;
 
         Context = ImGui.CreateContext();
@@ -181,15 +196,17 @@ public class ImGuiController : IDisposable
         getClipboardFn = GetClipboard;
 
         // Register clipboard handlers with both IO and PlatformIO
-        _platform.PlatformSetClipboardTextFn = (void*)Marshal.GetFunctionPointerForDelegate(setClipboardFn);
-        _platform.PlatformGetClipboardTextFn = (void*)Marshal.GetFunctionPointerForDelegate(getClipboardFn);
+        _platform.PlatformSetClipboardTextFn = (void*)
+            Marshal.GetFunctionPointerForDelegate(setClipboardFn);
+        _platform.PlatformGetClipboardTextFn = (void*)
+            Marshal.GetFunctionPointerForDelegate(getClipboardFn);
     }
 
     private void SetClipboard(IntPtr data)
     {
         Debug.WriteLine("SetClipboard called");
 
-        if ( data == IntPtr.Zero )
+        if (data == IntPtr.Zero)
         {
             return;
         }
@@ -198,7 +215,7 @@ public class ImGuiController : IDisposable
         try
         {
             // Try the Silk.NET method first
-            if ( _keyboard != null )
+            if (_keyboard != null)
             {
                 _keyboard.ClipboardText = text;
             }
@@ -217,21 +234,21 @@ public class ImGuiController : IDisposable
     {
         Debug.WriteLine("GetClipboard called");
 
-        if ( _clipboardTextPtr != IntPtr.Zero )
+        if (_clipboardTextPtr != IntPtr.Zero)
         {
             Marshal.FreeHGlobal(_clipboardTextPtr);
             _clipboardTextPtr = IntPtr.Zero;
         }
 
-        var text    = string.Empty;
+        var text = string.Empty;
         var success = false;
 
         // Try primary method
-        if ( _keyboard != null )
+        if (_keyboard != null)
         {
             try
             {
-                text    = _keyboard.ClipboardText ?? string.Empty;
+                text = _keyboard.ClipboardText ?? string.Empty;
                 success = true;
             }
             catch (Exception ex)
@@ -261,31 +278,40 @@ public class ImGuiController : IDisposable
     private void BeginFrame()
     {
         ImGui.NewFrame();
-        _frameBegun       =  true;
-        _keyboard         =  _input.Keyboards[0];
-        _view.Resize      += WindowResized;
+        _frameBegun = true;
+        _keyboard = _input.Keyboards[0];
+        _view.Resize += WindowResized;
         _keyboard.KeyDown += OnKeyDown;
-        _keyboard.KeyUp   += OnKeyUp;
+        _keyboard.KeyUp += OnKeyUp;
         _keyboard.KeyChar += OnKeyChar;
     }
 
-    private static void OnKeyDown(IKeyboard keyboard, Key keycode, int scancode) { OnKeyEvent(keyboard, keycode, scancode, true); }
+    private static void OnKeyDown(IKeyboard keyboard, Key keycode, int scancode)
+    {
+        OnKeyEvent(keyboard, keycode, scancode, true);
+    }
 
-    private static void OnKeyUp(IKeyboard keyboard, Key keycode, int scancode) { OnKeyEvent(keyboard, keycode, scancode, false); }
+    private static void OnKeyUp(IKeyboard keyboard, Key keycode, int scancode)
+    {
+        OnKeyEvent(keyboard, keycode, scancode, false);
+    }
 
     private static void OnKeyEvent(IKeyboard keyboard, Key keycode, int scancode, bool down)
     {
-        var io       = ImGui.GetIO();
+        var io = ImGui.GetIO();
         var imGuiKey = TranslateInputKeyToImGuiKey(keycode);
         io.AddKeyEvent(imGuiKey, down);
         io.SetKeyEventNativeData(imGuiKey, (int)keycode, scancode);
     }
 
-    private void OnKeyChar(IKeyboard arg1, char arg2) { _pressedChars.Add(arg2); }
+    private void OnKeyChar(IKeyboard arg1, char arg2)
+    {
+        _pressedChars.Add(arg2);
+    }
 
     private void WindowResized(Vector2D<int> size)
     {
-        _windowWidth  = size.X;
+        _windowWidth = size.X;
         _windowHeight = size.Y;
     }
 
@@ -297,13 +323,13 @@ public class ImGuiController : IDisposable
     /// </summary>
     public void Render()
     {
-        if ( _frameBegun )
+        if (_frameBegun)
         {
             ImGui.End();
 
             var oldCtx = ImGui.GetCurrentContext();
 
-            if ( oldCtx != Context )
+            if (oldCtx != Context)
             {
                 ImGui.SetCurrentContext(Context);
             }
@@ -312,7 +338,7 @@ public class ImGuiController : IDisposable
             ImGui.Render();
             RenderImDrawData(ImGui.GetDrawData());
 
-            if ( oldCtx != Context )
+            if (oldCtx != Context)
             {
                 ImGui.SetCurrentContext(oldCtx);
             }
@@ -326,12 +352,12 @@ public class ImGuiController : IDisposable
     {
         var oldCtx = ImGui.GetCurrentContext();
 
-        if ( oldCtx != Context )
+        if (oldCtx != Context)
         {
             ImGui.SetCurrentContext(Context);
         }
 
-        if ( _frameBegun )
+        if (_frameBegun)
         {
             ImGui.Render();
         }
@@ -348,11 +374,12 @@ public class ImGuiController : IDisposable
         ImGui.NewFrame();
         var viewport = ImGui.GetMainViewport();
 
-        var windowFlags = ImGuiWindowFlags.NoTitleBar |
-                          ImGuiWindowFlags.NoResize |
-                          ImGuiWindowFlags.NoMove |
-                          ImGuiWindowFlags.NoBringToFrontOnFocus |
-                          ImGuiWindowFlags.NoNavFocus;
+        var windowFlags =
+            ImGuiWindowFlags.NoTitleBar
+            | ImGuiWindowFlags.NoResize
+            | ImGuiWindowFlags.NoMove
+            | ImGuiWindowFlags.NoBringToFrontOnFocus
+            | ImGuiWindowFlags.NoNavFocus;
 
         ImGui.SetNextWindowPos(viewport.Pos);
         ImGui.SetNextWindowSize(viewport.Size);
@@ -376,10 +403,12 @@ public class ImGuiController : IDisposable
         var io = ImGui.GetIO();
         io.DisplaySize = new Vector2(_windowWidth, _windowHeight);
 
-        if ( _windowWidth > 0 && _windowHeight > 0 )
+        if (_windowWidth > 0 && _windowHeight > 0)
         {
-            io.DisplayFramebufferScale = new Vector2(_view.FramebufferSize.X / _windowWidth,
-                                                     _view.FramebufferSize.Y / _windowHeight);
+            io.DisplayFramebufferScale = new Vector2(
+                _view.FramebufferSize.X / _windowWidth,
+                _view.FramebufferSize.Y / _windowHeight
+            );
         }
 
         io.DeltaTime = deltaSeconds; // DeltaTime is in seconds.
@@ -399,22 +428,25 @@ public class ImGuiController : IDisposable
         io.MousePos = new Vector2(point.X, point.Y);
 
         var wheel = mouseState.GetScrollWheels()[0];
-        io.MouseWheel  = wheel.Y;
+        io.MouseWheel = wheel.Y;
         io.MouseWheelH = wheel.X;
 
-        foreach ( var c in _pressedChars )
+        foreach (var c in _pressedChars)
         {
             io.AddInputCharacter(c);
         }
 
         _pressedChars.Clear();
 
-        io.KeyCtrl  = _keyboard.IsKeyPressed(Key.ControlLeft) || _keyboard.IsKeyPressed(Key.ControlRight);
-        io.KeyAlt   = _keyboard.IsKeyPressed(Key.AltLeft) || _keyboard.IsKeyPressed(Key.AltRight);
-        io.KeyShift = _keyboard.IsKeyPressed(Key.ShiftLeft) || _keyboard.IsKeyPressed(Key.ShiftRight);
-        io.KeySuper = _keyboard.IsKeyPressed(Key.SuperLeft) || _keyboard.IsKeyPressed(Key.SuperRight);
+        io.KeyCtrl =
+            _keyboard.IsKeyPressed(Key.ControlLeft) || _keyboard.IsKeyPressed(Key.ControlRight);
+        io.KeyAlt = _keyboard.IsKeyPressed(Key.AltLeft) || _keyboard.IsKeyPressed(Key.AltRight);
+        io.KeyShift =
+            _keyboard.IsKeyPressed(Key.ShiftLeft) || _keyboard.IsKeyPressed(Key.ShiftRight);
+        io.KeySuper =
+            _keyboard.IsKeyPressed(Key.SuperLeft) || _keyboard.IsKeyPressed(Key.SuperRight);
 
-        if ( io.KeyCtrl && _keyboard.IsKeyPressed(Key.C) )
+        if (io.KeyCtrl && _keyboard.IsKeyPressed(Key.C))
         {
             io.AddKeyEvent(ImGuiKey.C, true);
             io.AddKeyEvent(ImGuiKey.LeftCtrl, true);
@@ -424,20 +456,20 @@ public class ImGuiController : IDisposable
 
         var isCtrlVPressed = io.KeyCtrl && _keyboard.IsKeyPressed(Key.V);
 
-        if ( isCtrlVPressed && !_wasCtrlVPressed )
+        if (isCtrlVPressed && !_wasCtrlVPressed)
         {
             _ctrlVProcessed = false;
         }
 
-        if ( isCtrlVPressed && !_ctrlVProcessed )
+        if (isCtrlVPressed && !_ctrlVProcessed)
         {
             io.AddKeyEvent(ImGuiKey.V, true);
             io.AddKeyEvent(ImGuiKey.LeftCtrl, true);
 
             var clipboardText = ImGui.GetClipboardTextS();
-            if ( ImGui.IsAnyItemActive() )
+            if (ImGui.IsAnyItemActive())
             {
-                foreach ( var c in clipboardText )
+                foreach (var c in clipboardText)
                 {
                     io.AddInputCharacter(c);
                 }
@@ -452,7 +484,10 @@ public class ImGuiController : IDisposable
         _wasCtrlVPressed = isCtrlVPressed;
     }
 
-    internal void PressChar(char keyChar) { _pressedChars.Add(keyChar); }
+    internal void PressChar(char keyChar)
+    {
+        _pressedChars.Add(keyChar);
+    }
 
     /// <summary>
     ///     Translates a Silk.NET.Input.Key to an ImGuiKey.
@@ -462,7 +497,8 @@ public class ImGuiController : IDisposable
     /// <exception cref="NotImplementedException">When the key has not been implemented yet.</exception>
     private static ImGuiKey TranslateInputKeyToImGuiKey(Key key)
     {
-        return key switch {
+        return key switch
+        {
             Key.Tab => ImGuiKey.Tab,
             Key.Left => ImGuiKey.LeftArrow,
             Key.Right => ImGuiKey.RightArrow,
@@ -580,16 +616,25 @@ public class ImGuiController : IDisposable
             Key.F22 => ImGuiKey.F22,
             Key.F23 => ImGuiKey.F23,
             Key.F24 => ImGuiKey.F24,
-            _ => ImGuiKey.None
+            _ => ImGuiKey.None,
         };
     }
 
-    private unsafe void SetupRenderState(ImDrawDataPtr drawDataPtr, int framebufferWidth, int framebufferHeight)
+    private unsafe void SetupRenderState(
+        ImDrawDataPtr drawDataPtr,
+        int framebufferWidth,
+        int framebufferHeight
+    )
     {
         // Setup render state: alpha-blending enabled, no face culling, no depth testing, scissor enabled, polygon fill
         _gl.Enable(GLEnum.Blend);
         _gl.BlendEquation(GLEnum.FuncAdd);
-        _gl.BlendFuncSeparate(GLEnum.SrcAlpha, GLEnum.OneMinusSrcAlpha, GLEnum.One, GLEnum.OneMinusSrcAlpha);
+        _gl.BlendFuncSeparate(
+            GLEnum.SrcAlpha,
+            GLEnum.OneMinusSrcAlpha,
+            GLEnum.One,
+            GLEnum.OneMinusSrcAlpha
+        );
         _gl.Disable(GLEnum.CullFace);
         _gl.Disable(GLEnum.DepthTest);
         _gl.Disable(GLEnum.StencilTest);
@@ -604,7 +649,25 @@ public class ImGuiController : IDisposable
         var T = drawDataPtr.DisplayPos.Y;
         var B = drawDataPtr.DisplayPos.Y + drawDataPtr.DisplaySize.Y;
 
-        Span<float> orthoProjection = stackalloc float[] { 2.0f / (R - L), 0.0f, 0.0f, 0.0f, 0.0f, 2.0f / (T - B), 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, (R + L) / (L - R), (T + B) / (B - T), 0.0f, 1.0f };
+        Span<float> orthoProjection =
+            stackalloc float[] {
+                2.0f / (R - L),
+                0.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                2.0f / (T - B),
+                0.0f,
+                0.0f,
+                0.0f,
+                0.0f,
+                -1.0f,
+                0.0f,
+                (R + L) / (L - R),
+                (T + B) / (B - T),
+                0.0f,
+                1.0f,
+            };
 
         _shader.Use();
         _gl.Uniform1(_attribLocationTex, 0);
@@ -626,16 +689,37 @@ public class ImGuiController : IDisposable
         _gl.EnableVertexAttribArray((uint)_attribLocationVtxPos);
         _gl.EnableVertexAttribArray((uint)_attribLocationVtxUV);
         _gl.EnableVertexAttribArray((uint)_attribLocationVtxColor);
-        _gl.VertexAttribPointer((uint)_attribLocationVtxPos, 2, GLEnum.Float, false, (uint)sizeof(ImDrawVert), (void*)0);
-        _gl.VertexAttribPointer((uint)_attribLocationVtxUV, 2, GLEnum.Float, false, (uint)sizeof(ImDrawVert), (void*)8);
-        _gl.VertexAttribPointer((uint)_attribLocationVtxColor, 4, GLEnum.UnsignedByte, true, (uint)sizeof(ImDrawVert), (void*)16);
+        _gl.VertexAttribPointer(
+            (uint)_attribLocationVtxPos,
+            2,
+            GLEnum.Float,
+            false,
+            (uint)sizeof(ImDrawVert),
+            (void*)0
+        );
+        _gl.VertexAttribPointer(
+            (uint)_attribLocationVtxUV,
+            2,
+            GLEnum.Float,
+            false,
+            (uint)sizeof(ImDrawVert),
+            (void*)8
+        );
+        _gl.VertexAttribPointer(
+            (uint)_attribLocationVtxColor,
+            4,
+            GLEnum.UnsignedByte,
+            true,
+            (uint)sizeof(ImDrawVert),
+            (void*)16
+        );
     }
 
     private unsafe void RenderImDrawData(ImDrawDataPtr drawDataPtr)
     {
-        var framebufferWidth  = (int)(drawDataPtr.DisplaySize.X * drawDataPtr.FramebufferScale.X);
+        var framebufferWidth = (int)(drawDataPtr.DisplaySize.X * drawDataPtr.FramebufferScale.X);
         var framebufferHeight = (int)(drawDataPtr.DisplaySize.Y * drawDataPtr.FramebufferScale.Y);
-        if ( framebufferWidth <= 0 || framebufferHeight <= 0 )
+        if (framebufferWidth <= 0 || framebufferHeight <= 0)
         {
             return;
         }
@@ -669,9 +753,9 @@ public class ImGuiController : IDisposable
         _gl.GetInteger(GLEnum.BlendEquationRgb, out var lastBlendEquationRgb);
         _gl.GetInteger(GLEnum.BlendEquationAlpha, out var lastBlendEquationAlpha);
 
-        var lastEnableBlend       = _gl.IsEnabled(GLEnum.Blend);
-        var lastEnableCullFace    = _gl.IsEnabled(GLEnum.CullFace);
-        var lastEnableDepthTest   = _gl.IsEnabled(GLEnum.DepthTest);
+        var lastEnableBlend = _gl.IsEnabled(GLEnum.Blend);
+        var lastEnableCullFace = _gl.IsEnabled(GLEnum.CullFace);
+        var lastEnableDepthTest = _gl.IsEnabled(GLEnum.DepthTest);
         var lastEnableStencilTest = _gl.IsEnabled(GLEnum.StencilTest);
         var lastEnableScissorTest = _gl.IsEnabled(GLEnum.ScissorTest);
 
@@ -682,26 +766,36 @@ public class ImGuiController : IDisposable
         SetupRenderState(drawDataPtr, framebufferWidth, framebufferHeight);
 
         // Will project scissor/clipping rectangles into framebuffer space
-        var clipOff   = drawDataPtr.DisplayPos;       // (0,0) unless using multi-viewports
+        var clipOff = drawDataPtr.DisplayPos; // (0,0) unless using multi-viewports
         var clipScale = drawDataPtr.FramebufferScale; // (1,1) unless using retina display which are often (2,2)
 
         // Render command lists
-        for ( var n = 0; n < drawDataPtr.CmdListsCount; n++ )
+        for (var n = 0; n < drawDataPtr.CmdListsCount; n++)
         {
             var cmdListPtr = drawDataPtr.CmdLists[n];
 
             // Upload vertex/index buffers
 
-            _gl.BufferData(GLEnum.ArrayBuffer, (nuint)(cmdListPtr.VtxBuffer.Size * sizeof(ImDrawVert)), cmdListPtr.VtxBuffer.Data, GLEnum.StreamDraw);
+            _gl.BufferData(
+                GLEnum.ArrayBuffer,
+                (nuint)(cmdListPtr.VtxBuffer.Size * sizeof(ImDrawVert)),
+                cmdListPtr.VtxBuffer.Data,
+                GLEnum.StreamDraw
+            );
             _gl.CheckError($"Data Vert {n}");
-            _gl.BufferData(GLEnum.ElementArrayBuffer, (nuint)(cmdListPtr.IdxBuffer.Size * sizeof(ushort)), cmdListPtr.IdxBuffer.Data, GLEnum.StreamDraw);
+            _gl.BufferData(
+                GLEnum.ElementArrayBuffer,
+                (nuint)(cmdListPtr.IdxBuffer.Size * sizeof(ushort)),
+                cmdListPtr.IdxBuffer.Data,
+                GLEnum.StreamDraw
+            );
             _gl.CheckError($"Data Idx {n}");
 
-            for ( var cmd_i = 0; cmd_i < cmdListPtr.CmdBuffer.Size; cmd_i++ )
+            for (var cmd_i = 0; cmd_i < cmdListPtr.CmdBuffer.Size; cmd_i++)
             {
                 var cmdPtr = cmdListPtr.CmdBuffer[cmd_i];
 
-                if ( cmdPtr.UserCallback != null )
+                if (cmdPtr.UserCallback != null)
                 {
                     throw new NotImplementedException();
                 }
@@ -712,17 +806,33 @@ public class ImGuiController : IDisposable
                 clipRect.Z = (cmdPtr.ClipRect.Z - clipOff.X) * clipScale.X;
                 clipRect.W = (cmdPtr.ClipRect.W - clipOff.Y) * clipScale.Y;
 
-                if ( clipRect.X < framebufferWidth && clipRect.Y < framebufferHeight && clipRect.Z >= 0.0f && clipRect.W >= 0.0f )
+                if (
+                    clipRect.X < framebufferWidth
+                    && clipRect.Y < framebufferHeight
+                    && clipRect.Z >= 0.0f
+                    && clipRect.W >= 0.0f
+                )
                 {
                     // Apply scissor/clipping rectangle
-                    _gl.Scissor((int)clipRect.X, (int)(framebufferHeight - clipRect.W), (uint)(clipRect.Z - clipRect.X), (uint)(clipRect.W - clipRect.Y));
+                    _gl.Scissor(
+                        (int)clipRect.X,
+                        (int)(framebufferHeight - clipRect.W),
+                        (uint)(clipRect.Z - clipRect.X),
+                        (uint)(clipRect.W - clipRect.Y)
+                    );
                     _gl.CheckError("Scissor");
 
                     // Bind texture, Draw
                     _gl.BindTexture(GLEnum.Texture2D, (uint)cmdPtr.TextureId.Handle);
                     _gl.CheckError("Texture");
 
-                    _gl.DrawElementsBaseVertex(GLEnum.Triangles, cmdPtr.ElemCount, GLEnum.UnsignedShort, (void*)(cmdPtr.IdxOffset * sizeof(ushort)), (int)cmdPtr.VtxOffset);
+                    _gl.DrawElementsBaseVertex(
+                        GLEnum.Triangles,
+                        cmdPtr.ElemCount,
+                        GLEnum.UnsignedShort,
+                        (void*)(cmdPtr.IdxOffset * sizeof(ushort)),
+                        (int)cmdPtr.VtxOffset
+                    );
                     _gl.CheckError("Draw");
                 }
             }
@@ -744,9 +854,14 @@ public class ImGuiController : IDisposable
 
         _gl.BindBuffer(GLEnum.ArrayBuffer, (uint)lastArrayBuffer);
         _gl.BlendEquationSeparate((GLEnum)lastBlendEquationRgb, (GLEnum)lastBlendEquationAlpha);
-        _gl.BlendFuncSeparate((GLEnum)lastBlendSrcRgb, (GLEnum)lastBlendDstRgb, (GLEnum)lastBlendSrcAlpha, (GLEnum)lastBlendDstAlpha);
+        _gl.BlendFuncSeparate(
+            (GLEnum)lastBlendSrcRgb,
+            (GLEnum)lastBlendDstRgb,
+            (GLEnum)lastBlendSrcAlpha,
+            (GLEnum)lastBlendDstAlpha
+        );
 
-        if ( lastEnableBlend )
+        if (lastEnableBlend)
         {
             _gl.Enable(GLEnum.Blend);
         }
@@ -755,7 +870,7 @@ public class ImGuiController : IDisposable
             _gl.Disable(GLEnum.Blend);
         }
 
-        if ( lastEnableCullFace )
+        if (lastEnableCullFace)
         {
             _gl.Enable(GLEnum.CullFace);
         }
@@ -764,7 +879,7 @@ public class ImGuiController : IDisposable
             _gl.Disable(GLEnum.CullFace);
         }
 
-        if ( lastEnableDepthTest )
+        if (lastEnableDepthTest)
         {
             _gl.Enable(GLEnum.DepthTest);
         }
@@ -773,7 +888,7 @@ public class ImGuiController : IDisposable
             _gl.Disable(GLEnum.DepthTest);
         }
 
-        if ( lastEnableStencilTest )
+        if (lastEnableStencilTest)
         {
             _gl.Enable(GLEnum.StencilTest);
         }
@@ -782,7 +897,7 @@ public class ImGuiController : IDisposable
             _gl.Disable(GLEnum.StencilTest);
         }
 
-        if ( lastEnableScissorTest )
+        if (lastEnableScissorTest)
         {
             _gl.Enable(GLEnum.ScissorTest);
         }
@@ -792,7 +907,7 @@ public class ImGuiController : IDisposable
         }
 
 #if !GLES && !LEGACY
-        if ( lastEnablePrimitiveRestart )
+        if (lastEnablePrimitiveRestart)
         {
             _gl.Enable(GLEnum.PrimitiveRestart);
         }
@@ -804,7 +919,12 @@ public class ImGuiController : IDisposable
         _gl.PolygonMode(GLEnum.FrontAndBack, (GLEnum)lastPolygonMode[0]);
 #endif
 
-        _gl.Scissor(lastScissorBox[0], lastScissorBox[1], (uint)lastScissorBox[2], (uint)lastScissorBox[3]);
+        _gl.Scissor(
+            lastScissorBox[0],
+            lastScissorBox[1],
+            (uint)lastScissorBox[2],
+            (uint)lastScissorBox[3]
+        );
     }
 
     private void CreateDeviceResources()
@@ -843,13 +963,13 @@ public class ImGuiController : IDisposable
 
         _shader = new Shader(_gl, vertexSource, fragmentSource);
 
-        _attribLocationTex      = _shader.GetUniformLocation("Texture");
-        _attribLocationProjMtx  = _shader.GetUniformLocation("ProjMtx");
-        _attribLocationVtxPos   = _shader.GetAttribLocation("Position");
-        _attribLocationVtxUV    = _shader.GetAttribLocation("UV");
+        _attribLocationTex = _shader.GetUniformLocation("Texture");
+        _attribLocationProjMtx = _shader.GetUniformLocation("ProjMtx");
+        _attribLocationVtxPos = _shader.GetAttribLocation("Position");
+        _attribLocationVtxUV = _shader.GetAttribLocation("UV");
         _attribLocationVtxColor = _shader.GetAttribLocation("Color");
 
-        _vboHandle      = _gl.GenBuffer();
+        _vboHandle = _gl.GenBuffer();
         _elementsHandle = _gl.GenBuffer();
 
         RecreateFontDeviceTexture();
@@ -869,11 +989,11 @@ public class ImGuiController : IDisposable
     private unsafe void RecreateFontDeviceTexture()
     {
         // Build texture atlas
-        var   io            = ImGui.GetIO();
-        byte* pixels        = null;
-        var   width         = 0;
-        var   height        = 0;
-        var   bytesPerPixel = 0;
+        var io = ImGui.GetIO();
+        byte* pixels = null;
+        var width = 0;
+        var height = 0;
+        var bytesPerPixel = 0;
         io.Fonts.GetTexDataAsRGBA32(ref pixels, ref width, ref height, ref bytesPerPixel); // Load as RGBA 32-bit (75% of the memory is wasted, but default font is so small) because it is more likely to be compatible with user's existing shaders. If your ImTextureId represent a higher-level concept than just a GL texture id, consider calling GetTexDataAsAlpha8() instead to save on GPU memory.
 
         // Upload texture to graphics system

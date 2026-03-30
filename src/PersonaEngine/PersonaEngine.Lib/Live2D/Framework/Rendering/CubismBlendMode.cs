@@ -23,5 +23,5 @@ public enum CubismBlendMode
     /// <summary>
     ///     マスク
     /// </summary>
-    Mask = 3
+    Mask = 3,
 }

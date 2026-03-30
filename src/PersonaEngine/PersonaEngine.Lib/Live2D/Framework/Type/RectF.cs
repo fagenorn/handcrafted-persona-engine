@@ -36,9 +36,9 @@ public class RectF
     /// <param name="h">高さ</param>
     public RectF(float x, float y, float w, float h)
     {
-        X      = x;
-        Y      = y;
-        Width  = w;
+        X = x;
+        Y = y;
+        Width = w;
         Height = h;
     }
 
@@ -48,9 +48,9 @@ public class RectF
     /// <param name="r">矩形のインスタンス</param>
     public void SetRect(RectF r)
     {
-        X      = r.X;
-        Y      = r.Y;
-        Width  = r.Width;
+        X = r.X;
+        Y = r.Y;
+        Width = r.Width;
         Height = r.Height;
     }
 
@@ -61,29 +61,41 @@ public class RectF
     /// <param name="h">高さ方向に拡縮する量</param>
     public void Expand(float w, float h)
     {
-        X      -= w;
-        Y      -= h;
-        Width  += w * 2.0f;
+        X -= w;
+        Y -= h;
+        Width += w * 2.0f;
         Height += h * 2.0f;
     }
 
     /// <summary>
     ///     矩形中央のX座標を取得する
     /// </summary>
-    public float GetCenterX() { return X + 0.5f * Width; }
+    public float GetCenterX()
+    {
+        return X + 0.5f * Width;
+    }
 
     /// <summary>
     ///     矩形中央のY座標を取得する
     /// </summary>
-    public float GetCenterY() { return Y + 0.5f * Height; }
+    public float GetCenterY()
+    {
+        return Y + 0.5f * Height;
+    }
 
     /// <summary>
     ///     右端のX座標を取得する
     /// </summary>
-    public float GetRight() { return X + Width; }
+    public float GetRight()
+    {
+        return X + Width;
+    }
 
     /// <summary>
     ///     下端のY座標を取得する
     /// </summary>
-    public float GetBottom() { return Y + Height; }
+    public float GetBottom()
+    {
+        return Y + Height;
+    }
 }

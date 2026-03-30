@@ -1,6 +1,5 @@
 ﻿using System.Collections.Concurrent;
 using System.Diagnostics;
-
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -30,19 +29,18 @@ public class TtsMemoryCache : ITtsCache, IAsyncDisposable
 
     private long _misses;
 
-    public TtsMemoryCache(
-        ILogger<TtsMemoryCache>   logger,
-        IOptions<TtsCacheOptions> options = null)
+    public TtsMemoryCache(ILogger<TtsMemoryCache> logger, IOptions<TtsCacheOptions> options = null)
     {
-        _logger  = logger ?? throw new ArgumentNullException(nameof(logger));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options?.Value ?? new TtsCacheOptions();
 
         // Set up periodic cleanup if expiration is enabled
-        if ( _options.ItemExpiration.HasValue )
+        if (_options.ItemExpiration.HasValue)
         {
             // Run cleanup at half the expiration interval or at least every minute
             var cleanupInterval = TimeSpan.FromMilliseconds(
-                                                            Math.Max(_options.ItemExpiration.Value.TotalMilliseconds / 2, 60000));
+                Math.Max(_options.ItemExpiration.Value.TotalMilliseconds / 2, 60000)
+            );
 
             _cleanupTimer = new Timer(CleanupExpiredItems, null, cleanupInterval, cleanupInterval);
         }
@@ -52,17 +50,19 @@ public class TtsMemoryCache : ITtsCache, IAsyncDisposable
     ///     Gets or adds an item to the cache with metrics and expiration support
     /// </summary>
     public async Task<T> GetOrAddAsync<T>(
-        string                           key,
+        string key,
         Func<CancellationToken, Task<T>> valueFactory,
-        CancellationToken                cancellationToken = default) where T : class
+        CancellationToken cancellationToken = default
+    )
+        where T : class
     {
         // Argument validation
-        if ( string.IsNullOrEmpty(key) )
+        if (string.IsNullOrEmpty(key))
         {
             throw new ArgumentException("Cache key cannot be null or empty", nameof(key));
         }
 
-        if ( valueFactory == null )
+        if (valueFactory == null)
         {
             throw new ArgumentNullException(nameof(valueFactory));
         }
@@ -71,9 +71,9 @@ public class TtsMemoryCache : ITtsCache, IAsyncDisposable
         cancellationToken.ThrowIfCancellationRequested();
 
         // Check if the item exists in cache and is valid
-        if ( _cache.TryGetValue(key, out var cacheItem) )
+        if (_cache.TryGetValue(key, out var cacheItem))
         {
-            if ( cacheItem.Value is T typedValue && !IsExpired(cacheItem) )
+            if (cacheItem.Value is T typedValue && !IsExpired(cacheItem))
             {
                 Interlocked.Increment(ref _hits);
                 _logger.LogDebug("Cache hit for key {Key}", key);
@@ -90,7 +90,7 @@ public class TtsMemoryCache : ITtsCache, IAsyncDisposable
         _logger.LogDebug("Cache miss for key {Key}, creating new value", key);
 
         var stopwatch = new Stopwatch();
-        if ( _options.CollectMetrics )
+        if (_options.CollectMetrics)
         {
             _pendingOperations[key] = stopwatch;
             stopwatch.Start();
@@ -101,7 +101,7 @@ public class TtsMemoryCache : ITtsCache, IAsyncDisposable
             // Create the value
             var value = await valueFactory(cancellationToken);
 
-            if ( value == null )
+            if (value == null)
             {
                 _logger.LogWarning("Value factory for key {Key} returned null", key);
 
@@ -113,11 +113,15 @@ public class TtsMemoryCache : ITtsCache, IAsyncDisposable
 
             // Add to cache using GetOrAdd to handle the case where another thread might have
             // added the same key while we were creating the value
-            var newItem    = new CacheItem { Value = value };
+            var newItem = new CacheItem { Value = value };
             var actualItem = _cache.GetOrAdd(key, newItem);
 
             // If another thread beat us to it and that value is of the correct type, use it
-            if ( actualItem != newItem && actualItem.Value is T existingValue && !IsExpired(actualItem) )
+            if (
+                actualItem != newItem
+                && actualItem.Value is T existingValue
+                && !IsExpired(actualItem)
+            )
             {
                 _logger.LogDebug("Another thread already added key {Key}", key);
 
@@ -134,10 +138,14 @@ public class TtsMemoryCache : ITtsCache, IAsyncDisposable
         }
         finally
         {
-            if ( _options.CollectMetrics && _pendingOperations.TryRemove(key, out var sw) )
+            if (_options.CollectMetrics && _pendingOperations.TryRemove(key, out var sw))
             {
                 sw.Stop();
-                _logger.LogDebug("Value creation for key {Key} took {ElapsedMs}ms", key, sw.ElapsedMilliseconds);
+                _logger.LogDebug(
+                    "Value creation for key {Key} took {ElapsedMs}ms",
+                    key,
+                    sw.ElapsedMilliseconds
+                );
             }
         }
     }
@@ -147,12 +155,12 @@ public class TtsMemoryCache : ITtsCache, IAsyncDisposable
     /// </summary>
     public void Remove(string key)
     {
-        if ( string.IsNullOrEmpty(key) )
+        if (string.IsNullOrEmpty(key))
         {
             throw new ArgumentException("Cache key cannot be null or empty", nameof(key));
         }
 
-        if ( _cache.TryRemove(key, out _) )
+        if (_cache.TryRemove(key, out _))
         {
             _logger.LogDebug("Removed item with key {Key} from cache", key);
         }
@@ -172,7 +180,7 @@ public class TtsMemoryCache : ITtsCache, IAsyncDisposable
     /// </summary>
     public async ValueTask DisposeAsync()
     {
-        if ( _disposed )
+        if (_disposed)
         {
             return;
         }
@@ -184,8 +192,12 @@ public class TtsMemoryCache : ITtsCache, IAsyncDisposable
 
         var stats = GetStatistics();
         _logger.LogInformation(
-                               "Cache disposed. Final stats: Size={Size}, Hits={Hits}, Misses={Misses}, Evictions={Evictions}",
-                               stats.Size, stats.Hits, stats.Misses, stats.Evictions);
+            "Cache disposed. Final stats: Size={Size}, Hits={Hits}, Misses={Misses}, Evictions={Evictions}",
+            stats.Size,
+            stats.Hits,
+            stats.Misses,
+            stats.Evictions
+        );
 
         await Task.CompletedTask;
     }
@@ -193,14 +205,17 @@ public class TtsMemoryCache : ITtsCache, IAsyncDisposable
     /// <summary>
     ///     Gets the current cache statistics
     /// </summary>
-    public (int Size, long Hits, long Misses, long Evictions) GetStatistics() { return (_cache.Count, _hits, _misses, _evictions); }
+    public (int Size, long Hits, long Misses, long Evictions) GetStatistics()
+    {
+        return (_cache.Count, _hits, _misses, _evictions);
+    }
 
     /// <summary>
     ///     Determines if a cache item has expired
     /// </summary>
     private bool IsExpired(CacheItem item)
     {
-        if ( _options.ItemExpiration == null )
+        if (_options.ItemExpiration == null)
         {
             return false;
         }
@@ -213,7 +228,7 @@ public class TtsMemoryCache : ITtsCache, IAsyncDisposable
     /// </summary>
     private void EnforceSizeLimit()
     {
-        if ( _options.MaxItems <= 0 || _cache.Count < _options.MaxItems )
+        if (_options.MaxItems <= 0 || _cache.Count < _options.MaxItems)
         {
             return;
         }
@@ -228,9 +243,9 @@ public class TtsMemoryCache : ITtsCache, IAsyncDisposable
         // We'll remove 10% of max capacity to avoid doing this too frequently
         var toRemove = Math.Max(1, _options.MaxItems / 10);
 
-        for ( var i = 0; i < toRemove && i < items.Length; i++ )
+        for (var i = 0; i < toRemove && i < items.Length; i++)
         {
-            if ( _cache.TryRemove(items[i].Key, out _) )
+            if (_cache.TryRemove(items[i].Key, out _))
             {
                 Interlocked.Increment(ref _evictions);
             }
@@ -244,7 +259,7 @@ public class TtsMemoryCache : ITtsCache, IAsyncDisposable
     /// </summary>
     private void CleanupExpiredItems(object state)
     {
-        if ( _disposed )
+        if (_disposed)
         {
             return;
         }
@@ -252,11 +267,11 @@ public class TtsMemoryCache : ITtsCache, IAsyncDisposable
         try
         {
             var removed = 0;
-            foreach ( var key in _cache.Keys )
+            foreach (var key in _cache.Keys)
             {
-                if ( _cache.TryGetValue(key, out var item) && IsExpired(item) )
+                if (_cache.TryGetValue(key, out var item) && IsExpired(item))
                 {
-                    if ( _cache.TryRemove(key, out _) )
+                    if (_cache.TryRemove(key, out _))
                     {
                         removed++;
                         Interlocked.Increment(ref _evictions);
@@ -264,7 +279,7 @@ public class TtsMemoryCache : ITtsCache, IAsyncDisposable
                 }
             }
 
-            if ( removed > 0 )
+            if (removed > 0)
             {
                 _logger.LogInformation("Removed {Count} expired items from cache", removed);
             }

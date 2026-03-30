@@ -43,9 +43,11 @@ public record ModelSettingObj
 
             public string Sound { get; set; }
 
-            [DefaultValue(-1f)] public float FadeInTime { get; set; }
+            [DefaultValue(-1f)]
+            public float FadeInTime { get; set; }
 
-            [DefaultValue(-1f)] public float FadeOutTime { get; set; }
+            [DefaultValue(-1f)]
+            public float FadeOutTime { get; set; }
         }
     }
 

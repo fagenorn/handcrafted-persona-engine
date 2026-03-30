@@ -20,10 +20,11 @@ public interface IAudioTransport : IAsyncDisposable
     /// <param name="cancellationToken">Cancellation token.</param>
     Task SendAudioPacketAsync(
         ReadOnlyMemory<float> audioData,
-        int                   sampleRate,
-        int                   samplesPerChannel,
-        int                   channels,
-        CancellationToken     cancellationToken);
+        int sampleRate,
+        int samplesPerChannel,
+        int channels,
+        CancellationToken cancellationToken
+    );
 
     Task FlushAsync(CancellationToken cancellationToken);
 }

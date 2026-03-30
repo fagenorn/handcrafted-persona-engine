@@ -1,6 +1,5 @@
 ﻿using System.Collections.Concurrent;
 using System.Numerics;
-
 using FontStashSharp;
 
 namespace PersonaEngine.Lib.UI.Text.Subtitles;
@@ -20,13 +19,18 @@ public class TextMeasurer
 
     private int _viewportWidth;
 
-    public TextMeasurer(DynamicSpriteFont font, float sideMargin, int initialWidth, int initialHeight)
+    public TextMeasurer(
+        DynamicSpriteFont font,
+        float sideMargin,
+        int initialWidth,
+        int initialHeight
+    )
     {
-        Font        = font;
+        Font = font;
         _sideMargin = sideMargin;
         UpdateViewport(initialWidth, initialHeight);
         LineHeight = Font.MeasureString("Ay").Y;
-        if ( LineHeight <= 0 )
+        if (LineHeight <= 0)
         {
             LineHeight = Font.FontSize;
         }
@@ -40,15 +44,15 @@ public class TextMeasurer
 
     public void UpdateViewport(int width, int height)
     {
-        _viewportWidth  = width;
+        _viewportWidth = width;
         _viewportHeight = height;
-        AvailableWidth  = Math.Max(1, _viewportWidth - 2 * _sideMargin);
+        AvailableWidth = Math.Max(1, _viewportWidth - 2 * _sideMargin);
         _cache.Clear();
     }
 
     public Vector2 MeasureText(string text)
     {
-        if ( string.IsNullOrEmpty(text) )
+        if (string.IsNullOrEmpty(text))
         {
             return Vector2.Zero;
         }
