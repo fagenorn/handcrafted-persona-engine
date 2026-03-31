@@ -48,7 +48,12 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -72,14 +77,22 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = true },
-                    new() { Text = "world", PartOfSpeech = "NN", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "world",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
-        SetupLexicon(
-            new() { ["hello"] = ("həˈloʊ", 5), ["world"] = ("wɜːɹld", 5) }
-        );
+        SetupLexicon(new() { ["hello"] = ("həˈloʊ", 5), ["world"] = ("wɜːɹld", 5) });
 
         using var sut = CreateSut(withFallback: false);
         var result = await sut.ToPhonemesAsync("hello world");
@@ -100,9 +113,24 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "I", PartOfSpeech = "PRP", IsWhitespace = true },
-                    new() { Text = "like", PartOfSpeech = "VBP", IsWhitespace = true },
-                    new() { Text = "cats", PartOfSpeech = "NNS", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "I",
+                        PartOfSpeech = "PRP",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "like",
+                        PartOfSpeech = "VBP",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "cats",
+                        PartOfSpeech = "NNS",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -134,7 +162,12 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "xyzzy", PartOfSpeech = "NN", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "xyzzy",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -159,7 +192,12 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "xyzzy", PartOfSpeech = "NN", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "xyzzy",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -179,8 +217,18 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = true },
-                    new() { Text = "xyzzy", PartOfSpeech = "NN", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "xyzzy",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -210,15 +258,28 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = false },
-                    new() { Text = ",", PartOfSpeech = ",", IsWhitespace = true },
-                    new() { Text = "world", PartOfSpeech = "NN", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = false,
+                    },
+                    new()
+                    {
+                        Text = ",",
+                        PartOfSpeech = ",",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "world",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
-        SetupLexicon(
-            new() { ["hello"] = ("həˈloʊ", 5), ["world"] = ("wɜːɹld", 5) }
-        );
+        SetupLexicon(new() { ["hello"] = ("həˈloʊ", 5), ["world"] = ("wɜːɹld", 5) });
 
         using var sut = CreateSut(withFallback: false);
         var result = await sut.ToPhonemesAsync("hello, world");
@@ -237,8 +298,18 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = false },
-                    new() { Text = ".", PartOfSpeech = ".", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = false,
+                    },
+                    new()
+                    {
+                        Text = ".",
+                        PartOfSpeech = ".",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -260,9 +331,24 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "(", PartOfSpeech = "-LRB-", IsWhitespace = false },
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = false },
-                    new() { Text = ")", PartOfSpeech = "-RRB-", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "(",
+                        PartOfSpeech = "-LRB-",
+                        IsWhitespace = false,
+                    },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = false,
+                    },
+                    new()
+                    {
+                        Text = ")",
+                        PartOfSpeech = "-RRB-",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -284,8 +370,18 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "``", PartOfSpeech = "``", IsWhitespace = false },
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "``",
+                        PartOfSpeech = "``",
+                        IsWhitespace = false,
+                    },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -305,8 +401,18 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = false },
-                    new() { Text = "''", PartOfSpeech = "''", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = false,
+                    },
+                    new()
+                    {
+                        Text = "''",
+                        PartOfSpeech = "''",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -326,9 +432,24 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "word", PartOfSpeech = "NN", IsWhitespace = true },
-                    new() { Text = "-", PartOfSpeech = ":", IsWhitespace = true },
-                    new() { Text = "word", PartOfSpeech = "NN", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "word",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "-",
+                        PartOfSpeech = ":",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "word",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -350,9 +471,24 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "word", PartOfSpeech = "NN", IsWhitespace = true },
-                    new() { Text = "–", PartOfSpeech = ":", IsWhitespace = true },
-                    new() { Text = "word", PartOfSpeech = "NN", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "word",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "–",
+                        PartOfSpeech = ":",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "word",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -373,8 +509,18 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = false },
-                    new() { Text = "!", PartOfSpeech = ".", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = false,
+                    },
+                    new()
+                    {
+                        Text = "!",
+                        PartOfSpeech = ".",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -401,8 +547,18 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "$", PartOfSpeech = "$", IsWhitespace = false },
-                    new() { Text = "50", PartOfSpeech = "CD", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "$",
+                        PartOfSpeech = "$",
+                        IsWhitespace = false,
+                    },
+                    new()
+                    {
+                        Text = "50",
+                        PartOfSpeech = "CD",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -437,8 +593,18 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "£", PartOfSpeech = "$", IsWhitespace = false },
-                    new() { Text = "10", PartOfSpeech = "CD", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "£",
+                        PartOfSpeech = "$",
+                        IsWhitespace = false,
+                    },
+                    new()
+                    {
+                        Text = "10",
+                        PartOfSpeech = "CD",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -469,8 +635,18 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "$", PartOfSpeech = "$", IsWhitespace = true },
-                    new() { Text = "word", PartOfSpeech = "NN", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "$",
+                        PartOfSpeech = "$",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "word",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -497,7 +673,12 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -521,7 +702,12 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -555,7 +741,12 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -586,7 +777,12 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -617,7 +813,12 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "50", PartOfSpeech = "CD", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "50",
+                        PartOfSpeech = "CD",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -650,8 +851,18 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = true },
-                    new() { Text = "world", PartOfSpeech = "NN", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "world",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -676,8 +887,18 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "say", PartOfSpeech = "VB", IsWhitespace = true },
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "say",
+                        PartOfSpeech = "VB",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -707,8 +928,18 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "good", PartOfSpeech = "JJ", IsWhitespace = true },
-                    new() { Text = "morning", PartOfSpeech = "NN", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "good",
+                        PartOfSpeech = "JJ",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "morning",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -739,7 +970,12 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "self-care", PartOfSpeech = "NN", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "self-care",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -773,7 +1009,12 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "self-care", PartOfSpeech = "NN", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "self-care",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -808,7 +1049,12 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "self-zyxwv", PartOfSpeech = "NN", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "self-zyxwv",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -837,7 +1083,12 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "b2b", PartOfSpeech = "NN", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "b2b",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -878,7 +1129,12 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -902,9 +1158,24 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "the", PartOfSpeech = "DT", IsWhitespace = true },
-                    new() { Text = "cat", PartOfSpeech = "NN", IsWhitespace = true },
-                    new() { Text = "sat", PartOfSpeech = "VBD", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "the",
+                        PartOfSpeech = "DT",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "cat",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "sat",
+                        PartOfSpeech = "VBD",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -937,8 +1208,18 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "a", PartOfSpeech = "DT", IsWhitespace = true },
-                    new() { Text = "b", PartOfSpeech = "NN", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "a",
+                        PartOfSpeech = "DT",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "b",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -965,7 +1246,12 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "read", PartOfSpeech = "VBD", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "read",
+                        PartOfSpeech = "VBD",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -998,8 +1284,18 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "to", PartOfSpeech = "TO", IsWhitespace = true },
-                    new() { Text = "eat", PartOfSpeech = "VB", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "to",
+                        PartOfSpeech = "TO",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "eat",
+                        PartOfSpeech = "VB",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -1039,9 +1335,7 @@ public class PhonemizerG2PTests : IDisposable
     [Fact]
     public void Constructor_NullPosTagger_ThrowsArgumentNullException()
     {
-        Assert.Throws<ArgumentNullException>(
-            () => new PhonemizerG2P(null!, _lexicon, _fallback)
-        );
+        Assert.Throws<ArgumentNullException>(() => new PhonemizerG2P(null!, _lexicon, _fallback));
     }
 
     [Fact]
@@ -1052,7 +1346,12 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -1076,16 +1375,34 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = false },
-                    new() { Text = ",", PartOfSpeech = ",", IsWhitespace = true },
-                    new() { Text = "world", PartOfSpeech = "NN", IsWhitespace = false },
-                    new() { Text = "!", PartOfSpeech = ".", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = false,
+                    },
+                    new()
+                    {
+                        Text = ",",
+                        PartOfSpeech = ",",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "world",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
+                    new()
+                    {
+                        Text = "!",
+                        PartOfSpeech = ".",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
-        SetupLexicon(
-            new() { ["hello"] = ("həˈloʊ", 5), ["world"] = ("wɜːɹld", 5) }
-        );
+        SetupLexicon(new() { ["hello"] = ("həˈloʊ", 5), ["world"] = ("wɜːɹld", 5) });
 
         using var sut = CreateSut(withFallback: false);
         var result = await sut.ToPhonemesAsync("hello, world!");
@@ -1108,15 +1425,28 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = true },
-                    new() { Text = "-", PartOfSpeech = ":", IsWhitespace = true },
-                    new() { Text = "world", PartOfSpeech = "NN", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "-",
+                        PartOfSpeech = ":",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "world",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
-        SetupLexicon(
-            new() { ["hello"] = ("həˈloʊ", 5), ["world"] = ("wɜːɹld", 5) }
-        );
+        SetupLexicon(new() { ["hello"] = ("həˈloʊ", 5), ["world"] = ("wɜːɹld", 5) });
 
         using var sut = CreateSut(withFallback: false);
         var result = await sut.ToPhonemesAsync("hello - world");
@@ -1137,11 +1467,36 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "I", PartOfSpeech = "PRP", IsWhitespace = true },
-                    new() { Text = "read", PartOfSpeech = "VBP", IsWhitespace = true },
-                    new() { Text = "books", PartOfSpeech = "NNS", IsWhitespace = true },
-                    new() { Text = "I", PartOfSpeech = "PRP", IsWhitespace = true },
-                    new() { Text = "read", PartOfSpeech = "VBD", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "I",
+                        PartOfSpeech = "PRP",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "read",
+                        PartOfSpeech = "VBP",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "books",
+                        PartOfSpeech = "NNS",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "I",
+                        PartOfSpeech = "PRP",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "read",
+                        PartOfSpeech = "VBD",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -1190,7 +1545,12 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -1216,8 +1576,18 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = false },
-                    new() { Text = "...", PartOfSpeech = "NFP", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = false,
+                    },
+                    new()
+                    {
+                        Text = "...",
+                        PartOfSpeech = "NFP",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -1245,15 +1615,28 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "hello", PartOfSpeech = "UH", IsWhitespace = false },
-                    new() { Text = ";", PartOfSpeech = ":", IsWhitespace = true },
-                    new() { Text = "world", PartOfSpeech = "NN", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "UH",
+                        IsWhitespace = false,
+                    },
+                    new()
+                    {
+                        Text = ";",
+                        PartOfSpeech = ":",
+                        IsWhitespace = true,
+                    },
+                    new()
+                    {
+                        Text = "world",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
-        SetupLexicon(
-            new() { ["hello"] = ("həˈloʊ", 5), ["world"] = ("wɜːɹld", 5) }
-        );
+        SetupLexicon(new() { ["hello"] = ("həˈloʊ", 5), ["world"] = ("wɜːɹld", 5) });
 
         using var sut = CreateSut(withFallback: false);
         var result = await sut.ToPhonemesAsync("hello; world");
@@ -1277,8 +1660,18 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "#", PartOfSpeech = "#", IsWhitespace = false },
-                    new() { Text = "hello", PartOfSpeech = "NN", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "#",
+                        PartOfSpeech = "#",
+                        IsWhitespace = false,
+                    },
+                    new()
+                    {
+                        Text = "hello",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
@@ -1304,7 +1697,12 @@ public class PhonemizerG2PTests : IDisposable
             .Returns(
                 new List<PosToken>
                 {
-                    new() { Text = "xyzzy", PartOfSpeech = "NN", IsWhitespace = false },
+                    new()
+                    {
+                        Text = "xyzzy",
+                        PartOfSpeech = "NN",
+                        IsWhitespace = false,
+                    },
                 }
             );
 
