@@ -62,17 +62,24 @@
   <ItemGroup>
     <!-- Windows x64 -->
     <Content Include="Rust/target/release/*.dll">
-      <Link>runtimes/win-x64/native/%(Filename)%(Extension)</Link>
+      <Link>native/%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <!-- Linux x64 -->
     <Content Include="Rust/target/release/*.so">
-      <Link>runtimes/linux-x64/native/%(Filename)%(Extension)</Link>
+      <Link>native/%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <!-- macOS arm64 -->
     <Content Include="Rust/target/release/*.dylib">
-      <Link>runtimes/osx-arm64/native/%(Filename)%(Extension)</Link>
+      <Link>native/%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <!-- CUDA/cuDNN Runtime (bundled for zero-install GPU support) -->
+  <ItemGroup>
+    <Content Include="Resources/native/cuda/windows/x86_64/*.dll">
+      <Link>native/%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
@@ -80,17 +87,17 @@
   <ItemGroup>
     <!-- Windows x64 -->
     <Content Include="Resources/native/windows/x86_64/*.dll">
-      <Link>runtimes/win-x64/native/%(Filename)%(Extension)</Link>
+      <Link>native/%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <!-- Linux x64 -->
     <Content Include="Resources/native/linux/x86_64/*.so">
-      <Link>runtimes/linux-x64/native/%(Filename)%(Extension)</Link>
+      <Link>native/%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <!-- macOS arm64 -->
     <Content Include="Resources/native/macos/*.dylib">
-      <Link>runtimes/osx-arm64/native/%(Filename)%(Extension)</Link>
+      <Link>native/%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

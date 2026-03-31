@@ -12,6 +12,8 @@
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
     <PlatformTarget>x64</PlatformTarget>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\PersonaEngine.Lib\PersonaEngine.Lib.csproj" />
@@ -33,4 +35,12 @@
     <PackageReference Include="Serilog.Extensions.Logging" Version="9.0.1" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
   </ItemGroup>
+  <!-- After publish, move loose native DLLs into native/ subfolder for a clean root -->
+  <Target Name="MoveNativeDllsToSubfolder" AfterTargets="Publish">
+    <ItemGroup>
+      <NativeDllsToMove Include="$(PublishDir)*.dll" />
+      <NativeDllsToMove Include="$(PublishDir)*.lib" />
+    </ItemGroup>
+    <Move SourceFiles="@(NativeDllsToMove)" DestinationFolder="$(PublishDir)native" />
+  </Target>
 </Project>
