@@ -15,11 +15,11 @@ internal readonly struct RetokenizedItem
     public bool IsTokenGroup => _group != null;
 
     public Token SingleToken =>
-        _single ?? throw new InvalidOperationException("Item is a token group, not a single token.");
+        _single
+        ?? throw new InvalidOperationException("Item is a token group, not a single token.");
 
     public List<Token> TokenGroup =>
-        _group
-        ?? throw new InvalidOperationException("Item is a single token, not a token group.");
+        _group ?? throw new InvalidOperationException("Item is a single token, not a token group.");
 
     private RetokenizedItem(Token? single, List<Token>? group)
     {

@@ -248,7 +248,7 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
             EnableMemoryPattern = true,
             ExecutionMode = ExecutionMode.ORT_PARALLEL,
             GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_WARNING,
+            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR,
         };
 
         sessionOptions.AppendExecutionProvider_CUDA();
