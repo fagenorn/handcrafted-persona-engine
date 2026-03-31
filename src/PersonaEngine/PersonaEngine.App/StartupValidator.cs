@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.ML.OnnxRuntime;
 using Serilog;
@@ -46,10 +48,7 @@ internal static class StartupValidator
         }
         else if (warnings > 0)
         {
-            log.Information(
-                "Startup validation passed with {WarningCount} warning(s)",
-                warnings
-            );
+            log.Information("Startup validation passed with {WarningCount} warning(s)", warnings);
         }
         else
         {
@@ -117,11 +116,12 @@ internal static class StartupValidator
         }
         catch (Exception ex)
         {
-            var detail = ex.Message.Contains("cudnn", StringComparison.OrdinalIgnoreCase)
-                ? "cuDNN libraries not found"
+            var detail =
+                ex.Message.Contains("cudnn", StringComparison.OrdinalIgnoreCase)
+                    ? "cuDNN libraries not found"
                 : ex.Message.Contains("cuda", StringComparison.OrdinalIgnoreCase)
                     ? "CUDA runtime libraries not found"
-                    : $"CUDA provider failed: {Truncate(ex.Message, 80)}";
+                : $"CUDA provider failed: {Truncate(ex.Message, 80)}";
 
             log.Error(
                 "CUDA: {Detail}. Ensure NVIDIA drivers are up to date and native/ folder contains CUDA/cuDNN DLLs. See INSTALLATION.md section 2",
@@ -229,33 +229,168 @@ internal static class StartupValidator
 
     private static void CheckLlmConfig(ILogger log, IConfiguration config, ref int errors)
     {
-        var endpoint = config["Config:Llm:TextEndpoint"];
-        var model = config["Config:Llm:TextModel"];
+        var textEndpoint = config["Config:Llm:TextEndpoint"];
+        var textModel = config["Config:Llm:TextModel"];
+        var textApiKey = config["Config:Llm:TextApiKey"];
+        var visionEndpoint = config["Config:Llm:VisionEndpoint"];
+        var visionModel = config["Config:Llm:VisionModel"];
+        var visionApiKey = config["Config:Llm:VisionApiKey"];
 
-        var issues = new List<string>();
+        var formatIssues = new List<string>();
 
-        if (string.IsNullOrWhiteSpace(endpoint))
+        ValidateEndpointFormat(textEndpoint, "TextEndpoint", formatIssues);
+
+        if (string.IsNullOrWhiteSpace(textModel))
         {
-            issues.Add("TextEndpoint not set");
+            formatIssues.Add("TextModel not set");
         }
 
-        if (string.IsNullOrWhiteSpace(model))
+        if (!string.IsNullOrWhiteSpace(visionEndpoint))
         {
-            issues.Add("TextModel not set");
+            ValidateEndpointFormat(visionEndpoint, "VisionEndpoint", formatIssues);
         }
 
-        if (issues.Count == 0)
-        {
-            log.Information("LLM: {Model} @ {Endpoint}", model, Truncate(endpoint!, 40));
-        }
-        else
+        if (formatIssues.Count > 0)
         {
             log.Error(
                 "LLM: {Issues}. Set Config:Llm:TextEndpoint and TextModel in appsettings.json",
-                string.Join("; ", issues)
+                string.Join("; ", formatIssues)
             );
             errors++;
+            return;
         }
+
+        // Validate text endpoint is a working OpenAI-compatible API with the configured model
+        ValidateOpenAiEndpoint(log, textEndpoint!, textModel!, textApiKey, "Text", ref errors);
+
+        // Validate vision endpoint if configured
+        if (!string.IsNullOrWhiteSpace(visionEndpoint) && !string.IsNullOrWhiteSpace(visionModel))
+        {
+            ValidateOpenAiEndpoint(
+                log,
+                visionEndpoint,
+                visionModel,
+                visionApiKey,
+                "Vision",
+                ref errors
+            );
+        }
+    }
+
+    private static void ValidateEndpointFormat(string? endpoint, string name, List<string> issues)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint))
+        {
+            issues.Add($"{name} not set");
+            return;
+        }
+
+        if (
+            !Uri.TryCreate(endpoint, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+        )
+        {
+            issues.Add($"{name} '{Truncate(endpoint, 40)}' is not a valid HTTP/HTTPS URL");
+        }
+    }
+
+    private static void ValidateOpenAiEndpoint(
+        ILogger log,
+        string endpoint,
+        string model,
+        string? apiKey,
+        string label,
+        ref int errors
+    )
+    {
+        List<string>? availableModels;
+
+        try
+        {
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+
+            if (!string.IsNullOrWhiteSpace(apiKey) && apiKey != "sk-")
+            {
+                client.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+            }
+
+            var modelsUrl = endpoint.TrimEnd('/') + "/models";
+            using var response = client.GetAsync(modelsUrl).GetAwaiter().GetResult();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                log.Error(
+                    "LLM {Label}: {Endpoint}/models returned HTTP {StatusCode}. Is this an OpenAI-compatible API?",
+                    label,
+                    Truncate(endpoint, 40),
+                    (int)response.StatusCode
+                );
+                errors++;
+                return;
+            }
+
+            var json = response.Content.ReadFromJsonAsync<JsonElement>().GetAwaiter().GetResult();
+
+            if (!json.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+            {
+                log.Error(
+                    "LLM {Label}: {Endpoint}/models did not return an OpenAI-compatible response (missing 'data' array)",
+                    label,
+                    Truncate(endpoint, 40)
+                );
+                errors++;
+                return;
+            }
+
+            availableModels = new List<string>();
+            foreach (var item in data.EnumerateArray())
+            {
+                if (item.TryGetProperty("id", out var id))
+                {
+                    availableModels.Add(id.GetString() ?? "");
+                }
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            log.Error(
+                "LLM {Label}: {Endpoint} timed out after 5s. Is the server running?",
+                label,
+                Truncate(endpoint, 40)
+            );
+            errors++;
+            return;
+        }
+        catch (HttpRequestException ex)
+        {
+            log.Error(
+                "LLM {Label}: {Endpoint} is not reachable: {Reason}",
+                label,
+                Truncate(endpoint, 40),
+                Truncate(ex.InnerException?.Message ?? ex.Message, 80)
+            );
+            errors++;
+            return;
+        }
+
+        if (
+            availableModels.Count > 0
+            && !availableModels.Any(m => m.Equals(model, StringComparison.OrdinalIgnoreCase))
+        )
+        {
+            log.Error(
+                "LLM {Label}: Model '{Model}' not found at {Endpoint}. Available: {Available}",
+                label,
+                model,
+                Truncate(endpoint, 40),
+                string.Join(", ", availableModels.Take(10))
+            );
+            errors++;
+            return;
+        }
+
+        log.Information("LLM {Label}: {Model} @ {Endpoint}", label, model, Truncate(endpoint, 40));
     }
 
     private static void CheckLive2D(ILogger log, IConfiguration config, ref int warnings)
@@ -281,8 +416,7 @@ internal static class StartupValidator
 
     private static void CheckPrompt(ILogger log, IConfiguration config, ref int warnings)
     {
-        var promptFile =
-            config["Config:ConversationContext:SystemPromptFile"] ?? "personality.txt";
+        var promptFile = config["Config:ConversationContext:SystemPromptFile"] ?? "personality.txt";
         var fullPath = Path.Combine(
             Directory.GetCurrentDirectory(),
             "Resources",

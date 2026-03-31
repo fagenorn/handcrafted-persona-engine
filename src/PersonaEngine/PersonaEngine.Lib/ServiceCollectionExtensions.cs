@@ -213,12 +213,15 @@ public static class ServiceCollectionExtensions
                 llmOptions.TextApiKey,
                 serviceId: "text"
             );
-            kernelBuilder.AddOpenAIChatCompletion(
-                llmOptions.VisionEndpoint,
-                new Uri(llmOptions.VisionEndpoint),
-                llmOptions.VisionApiKey,
-                serviceId: "vision"
-            );
+            if (!string.IsNullOrWhiteSpace(llmOptions.VisionEndpoint))
+            {
+                kernelBuilder.AddOpenAIChatCompletion(
+                    llmOptions.VisionModel,
+                    new Uri(llmOptions.VisionEndpoint),
+                    llmOptions.VisionApiKey,
+                    serviceId: "vision"
+                );
+            }
 
             configureKernel?.Invoke(kernelBuilder);
 
