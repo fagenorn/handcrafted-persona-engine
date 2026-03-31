@@ -691,12 +691,16 @@ Cargo.lock
 # Claude Code
 CLAUDE.md
 .claude/
+.mcp.json
 
 src/PersonaEngine/PersonaEngine.Lib/Resources/*
 !src/PersonaEngine/PersonaEngine.Lib/Resources/.gitkeep 
 
 # Native resources for PersonaEngine
 !src/PersonaEngine/PersonaEngine.Lib/Resources/native
+
+# CUDA/cuDNN DLLs (too large to commit, ~1.9GB)
+src/PersonaEngine/PersonaEngine.Lib/Resources/native/cuda/
 
 src/PersonaEngine/PersonaEngine.Lib/Rust/target/**
 !src/PersonaEngine/PersonaEngine.Lib/Rust/target/release

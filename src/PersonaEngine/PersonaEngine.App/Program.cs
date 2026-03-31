@@ -1,17 +1,26 @@
-﻿using System.Text;
+﻿using System.Runtime.InteropServices;
+using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using PersonaEngine.Lib;
 using PersonaEngine.Lib.Core;
 using Serilog;
 using Serilog.Events;
-
 namespace PersonaEngine.App;
 
 internal static class Program
 {
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool SetDllDirectory(string lpPathName);
+
     private static async Task Main()
     {
+        var nativeDir = Path.Combine(AppContext.BaseDirectory, "native");
+        if (Directory.Exists(nativeDir))
+        {
+            SetDllDirectory(nativeDir);
+        }
+
         Console.OutputEncoding = Encoding.UTF8;
 
         var builder = new ConfigurationBuilder()
