@@ -39,6 +39,9 @@ internal static class Program
         if (!StartupValidator.Run(config))
         {
             Log.CloseAndFlush();
+            Console.WriteLine();
+            Console.WriteLine("Press any key to exit...");
+            Console.ReadKey(true);
             return;
         }
 
