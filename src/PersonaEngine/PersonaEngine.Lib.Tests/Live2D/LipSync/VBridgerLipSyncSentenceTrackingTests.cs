@@ -17,7 +17,9 @@ public class VBridgerLipSyncSentenceTrackingTests
 
     private VBridgerLipSyncService CreateService()
     {
-        return new VBridgerLipSyncService(_logger, _notifier);
+        var service = new VBridgerLipSyncService(_logger, _notifier);
+        service._isStarted = true;
+        return service;
     }
 
     private void RaiseChunkStarted(AudioSegment chunk)

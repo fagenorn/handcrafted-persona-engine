@@ -97,7 +97,7 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
 
     internal double _cumulativeTimeOffset;
 
-    private bool _isStarted = false;
+    internal bool _isStarted = false;
 
     private bool _disposed = false;
 
@@ -509,6 +509,11 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
 
     private void HandleChunkStarted(object? sender, AudioChunkPlaybackStartedEvent e)
     {
+        if (!_isStarted)
+        {
+            return;
+        }
+
         var chunk = e.Chunk;
         var isNewSentence = chunk.SentenceId != _currentSentenceId;
 
@@ -554,6 +559,11 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
 
     private void HandleChunkEnded(object? sender, AudioChunkPlaybackEndedEvent e)
     {
+        if (!_isStarted)
+        {
+            return;
+        }
+
         _logger.LogTrace("Audio Chunk Playback Ended.");
 
         if (e.Chunk.SentenceId == _currentSentenceId)
