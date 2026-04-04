@@ -527,15 +527,36 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
         }
         else if (chunk.Tokens.Count > 0)
         {
-            // Same sentence, updated timing data — replace phonemes, keep offset
-            _logger.LogTrace(
-                "Sentence {SentenceId}: updated timing ({TokenCount} tokens) at offset {Offset:F3}s",
-                chunk.SentenceId,
-                chunk.Tokens.Count,
-                _cumulativeTimeOffset
-            );
-            ProcessAudioSegment(chunk);
-            _currentPhonemeIndex = -1;
+            // Same sentence — only replace phonemes if new timing covers at least
+            // as much time as existing, so partial CTC updates don't destroy
+            // phonemes for words not yet spoken.
+            var newMaxTime = chunk.Tokens[^1].EndTs ?? 0.0;
+            var existingMaxTime = _activePhonemes.Count > 0
+                ? _activePhonemes[^1].EndTime
+                : 0.0;
+
+            if (newMaxTime >= existingMaxTime)
+            {
+                _logger.LogTrace(
+                    "Sentence {SentenceId}: replacing timing ({TokenCount} tokens, covers {NewMax:F3}s >= {ExistingMax:F3}s)",
+                    chunk.SentenceId,
+                    chunk.Tokens.Count,
+                    newMaxTime,
+                    existingMaxTime
+                );
+                ProcessAudioSegment(chunk);
+                _currentPhonemeIndex = -1;
+            }
+            else
+            {
+                _logger.LogTrace(
+                    "Sentence {SentenceId}: skipping timing update ({TokenCount} tokens, covers {NewMax:F3}s < {ExistingMax:F3}s)",
+                    chunk.SentenceId,
+                    chunk.Tokens.Count,
+                    newMaxTime,
+                    existingMaxTime
+                );
+            }
         }
         else
         {
