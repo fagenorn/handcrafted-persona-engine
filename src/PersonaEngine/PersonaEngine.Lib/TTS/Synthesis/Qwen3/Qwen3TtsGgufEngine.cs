@@ -405,10 +405,9 @@ internal sealed class Qwen3TtsGgufEngine : IDisposable
     /// <summary>
     ///     Generates speech audio in streaming chunks with word-level timing.
     ///     Strategy:
-    ///       1. First chunk: proportional estimate (immediate, zero latency)
-    ///       2. After ~1s accumulated audio: CTC forced alignment replaces estimate
-    ///       3. Subsequent CTC refinements every ~1s of new audio
-    ///     Tokens are emitted on the first chunk and on each CTC refinement.
+    ///       1. After ~1s accumulated audio: CTC forced alignment
+    ///       2. Subsequent CTC refinements every ~1s of new audio
+    ///     Before enough audio accumulates for the first CTC run, chunks get empty tokens.
     /// </summary>
     public async IAsyncEnumerable<AudioSegment> GenerateStreamingWithTimings(
         StreamingAudioDecoder decoder,
@@ -425,8 +424,7 @@ internal sealed class Qwen3TtsGgufEngine : IDisposable
         var words = SplitIntoWords(text);
         var accumulatedAudio = new List<float[]>();
         var totalSamplesEmitted = 0;
-        var isFirstChunk = true;
-        var lastCtcAlignAt = 0; // samples count at last CTC run
+        var lastCtcAlignAt = 0;
         const int ctcIntervalSamples = OutputSampleRate; // re-align every ~1s
 
         await foreach (
@@ -448,14 +446,7 @@ internal sealed class Qwen3TtsGgufEngine : IDisposable
 
             IReadOnlyList<Token> tokens;
 
-            if (isFirstChunk)
-            {
-                // Immediate proportional estimate for first chunk
-                var estimatedDurationSec = 1.0 + text.Length * 0.06;
-                tokens = ComputeWordTimings(words, estimatedDurationSec);
-                isFirstChunk = false;
-            }
-            else if (totalSamplesEmitted - lastCtcAlignAt >= ctcIntervalSamples)
+            if (totalSamplesEmitted - lastCtcAlignAt >= ctcIntervalSamples)
             {
                 // Run CTC alignment on accumulated audio
                 var allAudio = ConcatAudio(accumulatedAudio, totalSamplesEmitted);
@@ -506,40 +497,6 @@ internal sealed class Qwen3TtsGgufEngine : IDisposable
         }
 
         return result;
-    }
-
-    private static IReadOnlyList<Token> ComputeWordTimings(
-        List<(string Word, string Whitespace)> words,
-        double totalDurationSec
-    )
-    {
-        var totalChars = words.Sum(w => (double)w.Word.Length);
-        if (totalChars == 0)
-        {
-            return Array.Empty<Token>();
-        }
-
-        var tokens = new Token[words.Count];
-        var pos = 0.0;
-
-        for (var i = 0; i < words.Count; i++)
-        {
-            var (word, ws) = words[i];
-            var fraction = word.Length / totalChars;
-            var duration = totalDurationSec * fraction;
-
-            tokens[i] = new Token
-            {
-                Text = word,
-                Whitespace = ws,
-                StartTs = pos,
-                EndTs = pos + duration,
-            };
-
-            pos += duration;
-        }
-
-        return tokens;
     }
 
     private static float[] ConcatAudio(List<float[]> chunks, int totalSamples)
