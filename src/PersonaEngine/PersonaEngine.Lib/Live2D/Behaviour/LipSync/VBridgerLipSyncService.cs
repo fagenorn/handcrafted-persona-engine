@@ -93,6 +93,10 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
 
     internal bool _isPlaying = false;
 
+    internal Guid _currentSentenceId;
+
+    internal double _cumulativeTimeOffset;
+
     private bool _isStarted = false;
 
     private bool _disposed = false;
@@ -505,30 +509,61 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
 
     private void HandleChunkStarted(object? sender, AudioChunkPlaybackStartedEvent e)
     {
-        if (!_isStarted)
+        var chunk = e.Chunk;
+        var isNewSentence = chunk.SentenceId != _currentSentenceId;
+
+        if (isNewSentence)
         {
-            return;
+            _logger.LogTrace("New sentence started: {SentenceId}", chunk.SentenceId);
+            _currentSentenceId = chunk.SentenceId;
+            _cumulativeTimeOffset = 0.0;
+            ProcessAudioSegment(chunk);
+            _currentPhonemeIndex = -1;
+        }
+        else if (chunk.Tokens.Count > 0)
+        {
+            // Same sentence, updated timing data — replace phonemes, keep offset
+            _logger.LogTrace(
+                "Sentence {SentenceId}: updated timing ({TokenCount} tokens) at offset {Offset:F3}s",
+                chunk.SentenceId,
+                chunk.Tokens.Count,
+                _cumulativeTimeOffset
+            );
+            ProcessAudioSegment(chunk);
+            _currentPhonemeIndex = -1;
+        }
+        else
+        {
+            _logger.LogTrace(
+                "Sentence {SentenceId}: continuation chunk at offset {Offset:F3}s",
+                chunk.SentenceId,
+                _cumulativeTimeOffset
+            );
         }
 
-        _logger.LogTrace("Audio Chunk Playback Started.");
-        ProcessAudioSegment(e.Chunk);
         _isPlaying = true;
-        _currentPhonemeIndex = -1;
 
-        var initialTime =
-            _activePhonemes.Count != 0 ? (float)_activePhonemes.First().StartTime : 0f;
-        UpdateTargetPoses(initialTime);
+        if (_activePhonemes.Count != 0)
+        {
+            var initialTime = isNewSentence
+                ? (float)_activePhonemes[0].StartTime
+                : (float)(_cumulativeTimeOffset + _activePhonemes[0].StartTime);
+            UpdateTargetPoses(initialTime);
+        }
     }
 
     private void HandleChunkEnded(object? sender, AudioChunkPlaybackEndedEvent e)
     {
-        if (!_isStarted)
+        _logger.LogTrace("Audio Chunk Playback Ended.");
+
+        if (e.Chunk.SentenceId == _currentSentenceId)
         {
-            return;
+            // Accumulate this chunk's duration for the next chunk's time offset
+            _cumulativeTimeOffset += e.Chunk.DurationInSeconds;
         }
 
-        _logger.LogTrace("Audio Chunk Playback Ended.");
-        _isPlaying = false;
+        // Don't set _isPlaying = false — next same-sentence chunk arrives shortly.
+        // When playback truly ends, ResetState() handles cleanup.
     }
 
     private void HandleProgress(object? sender, AudioPlaybackProgressEvent e)
@@ -538,7 +573,8 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
             return;
         }
 
-        UpdateTargetPoses((float)e.CurrentPlaybackTime.TotalSeconds);
+        var effectiveTime = _cumulativeTimeOffset + e.CurrentPlaybackTime.TotalSeconds;
+        UpdateTargetPoses((float)effectiveTime);
     }
 
     private void ResetState()
@@ -546,6 +582,8 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
         _activePhonemes.Clear();
         _currentPhonemeIndex = -1;
         _isPlaying = false;
+        _currentSentenceId = Guid.Empty;
+        _cumulativeTimeOffset = 0.0;
         _currentTargetPose = PhonemePose.Neutral;
         _nextTargetPose = PhonemePose.Neutral;
         _interpolationT = 0f;
