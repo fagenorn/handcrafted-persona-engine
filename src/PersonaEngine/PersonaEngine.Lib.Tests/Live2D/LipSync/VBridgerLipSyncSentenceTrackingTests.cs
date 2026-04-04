@@ -157,12 +157,15 @@ public class VBridgerLipSyncSentenceTrackingTests
     }
 
     [Fact]
-    public void SameSentenceChunk_WithUpdatedTokens_ReplacesPhonemes()
+    public void SameSentenceChunk_WithEqualOrGreaterCoverage_ReplacesPhonemes()
     {
-        // Arrange: first chunk has estimate, later chunk has refined timing
+        // Arrange: first chunk covers 0-1.0s, third chunk covers 0-1.2s (more coverage)
         var sentenceId = Guid.NewGuid();
         var initialTokens = MakeTokens(("hello", "hɛloʊ", 0.0, 1.0));
-        var refinedTokens = MakeTokens(("hello", "hɛloʊ", 0.0, 0.6));
+        var refinedTokens = MakeTokens(
+            ("hello", "hɛloʊ", 0.0, 0.5),
+            ("world", "wɜːld", 0.5, 1.2)
+        );
         var chunk1 = MakeSegment(sentenceId, 0.3f, tokens: initialTokens);
         var chunk2 = MakeSegment(sentenceId, 0.3f);
         var chunk3 = MakeSegment(sentenceId, 0.3f, tokens: refinedTokens);
@@ -171,17 +174,43 @@ public class VBridgerLipSyncSentenceTrackingTests
 
         // Act
         RaiseChunkStarted(chunk1);
-        var phonemesAfterChunk1 = service._activePhonemes.ToList();
+        var phonemesAfterChunk1 = service._activePhonemes.Count;
 
         RaiseChunkEnded(chunk1);
         RaiseChunkStarted(chunk2); // no tokens, preserves
 
         RaiseChunkEnded(chunk2);
-        RaiseChunkStarted(chunk3); // has tokens, replaces
+        RaiseChunkStarted(chunk3); // more coverage, replaces
 
-        // Assert: phonemes should be refreshed with refined timing
-        Assert.Equal(phonemesAfterChunk1.Count, service._activePhonemes.Count);
-        // End times should differ due to refined timing
-        Assert.NotEqual(phonemesAfterChunk1[^1].EndTime, service._activePhonemes[^1].EndTime);
+        // Assert: phonemes replaced because new timing covers more
+        Assert.NotEqual(phonemesAfterChunk1, service._activePhonemes.Count);
+    }
+
+    [Fact]
+    public void SameSentenceChunk_WithShorterTimeCoverage_PreservesPhonemes()
+    {
+        // Arrange: first chunk covers 0-1.0s, second chunk only covers 0-0.4s (partial CTC)
+        var sentenceId = Guid.NewGuid();
+        var initialTokens = MakeTokens(
+            ("hello", "hɛloʊ", 0.0, 0.5),
+            ("world", "wɜːld", 0.5, 1.0)
+        );
+        var partialCtcTokens = MakeTokens(("hello", "hɛloʊ", 0.0, 0.4));
+        var chunk1 = MakeSegment(sentenceId, 0.5f, tokens: initialTokens);
+        var chunk2 = MakeSegment(sentenceId, 0.3f, tokens: partialCtcTokens);
+
+        var service = CreateService();
+
+        // Act
+        RaiseChunkStarted(chunk1);
+        var phonemesAfterChunk1 = service._activePhonemes.Count;
+        var maxTimeAfterChunk1 = service._activePhonemes[^1].EndTime;
+
+        RaiseChunkEnded(chunk1);
+        RaiseChunkStarted(chunk2); // shorter coverage — should NOT replace
+
+        // Assert: phonemes preserved because new timing covers less
+        Assert.Equal(phonemesAfterChunk1, service._activePhonemes.Count);
+        Assert.Equal(maxTimeAfterChunk1, service._activePhonemes[^1].EndTime);
     }
 }
