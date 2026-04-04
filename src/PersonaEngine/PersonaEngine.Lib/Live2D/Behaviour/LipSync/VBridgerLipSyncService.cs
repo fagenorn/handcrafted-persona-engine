@@ -87,11 +87,11 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
 
     private readonly IAudioProgressNotifier _audioProgressNotifier;
 
-    private readonly List<TimedPhoneme> _activePhonemes = new();
+    internal readonly List<TimedPhoneme> _activePhonemes = new();
 
     private int _currentPhonemeIndex = -1;
 
-    private bool _isPlaying = false;
+    internal bool _isPlaying = false;
 
     private bool _isStarted = false;
 
@@ -784,7 +784,7 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
         }
     }
 
-    private struct TimedPhoneme
+    internal struct TimedPhoneme
     {
         public string Phoneme;
 

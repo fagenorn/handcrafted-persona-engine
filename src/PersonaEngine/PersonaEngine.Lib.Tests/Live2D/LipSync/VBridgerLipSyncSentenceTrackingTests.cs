@@ -20,6 +20,32 @@ public class VBridgerLipSyncSentenceTrackingTests
         return new VBridgerLipSyncService(_logger, _notifier);
     }
 
+    private void RaiseChunkStarted(AudioSegment chunk)
+    {
+        _notifier.ChunkPlaybackStarted += Raise.Event<EventHandler<AudioChunkPlaybackStartedEvent>>(
+            this,
+            new AudioChunkPlaybackStartedEvent(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                DateTimeOffset.UtcNow,
+                chunk
+            )
+        );
+    }
+
+    private void RaiseChunkEnded(AudioSegment chunk)
+    {
+        _notifier.ChunkPlaybackEnded += Raise.Event<EventHandler<AudioChunkPlaybackEndedEvent>>(
+            this,
+            new AudioChunkPlaybackEndedEvent(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                DateTimeOffset.UtcNow,
+                chunk
+            )
+        );
+    }
+
     private static AudioSegment MakeSegment(
         Guid sentenceId,
         float durationSeconds,
@@ -55,9 +81,33 @@ public class VBridgerLipSyncSentenceTrackingTests
     }
 
     [Fact]
-    public void SameSentenceChunk_WithoutTokens_DoesNotThrow()
+    public void SameSentenceChunk_WithoutTokens_PreservesActivePhonemes()
     {
         // Arrange: first chunk has tokens, second chunk (same sentence) has none
+        var sentenceId = Guid.NewGuid();
+        var tokens = MakeTokens(("hello", "hɛloʊ", 0.0, 0.5));
+        var chunk1 = MakeSegment(sentenceId, 0.3f, tokens: tokens);
+        var chunk2 = MakeSegment(sentenceId, 0.3f); // no tokens
+
+        var service = CreateService();
+
+        // Act: chunk1 populates phonemes
+        RaiseChunkStarted(chunk1);
+        var phonemesAfterChunk1 = service._activePhonemes.Count;
+
+        // chunk1 ends, chunk2 starts (same sentence, no tokens)
+        RaiseChunkEnded(chunk1);
+        RaiseChunkStarted(chunk2);
+
+        // Assert: phonemes should be preserved across same-sentence empty chunks
+        Assert.True(phonemesAfterChunk1 > 0, "Chunk1 should have populated phonemes");
+        Assert.Equal(phonemesAfterChunk1, service._activePhonemes.Count);
+    }
+
+    [Fact]
+    public void SameSentenceChunk_WithoutTokens_KeepsPlaying()
+    {
+        // Arrange
         var sentenceId = Guid.NewGuid();
         var tokens = MakeTokens(("hello", "hɛloʊ", 0.0, 0.5));
         var chunk1 = MakeSegment(sentenceId, 0.3f, tokens: tokens);
@@ -65,50 +115,19 @@ public class VBridgerLipSyncSentenceTrackingTests
 
         var service = CreateService();
 
-        // Act: simulate chunk1 start → end → chunk2 start → progress during chunk2
-        _notifier.ChunkPlaybackStarted += Raise.Event<EventHandler<AudioChunkPlaybackStartedEvent>>(
-            this,
-            new AudioChunkPlaybackStartedEvent(
-                Guid.NewGuid(),
-                Guid.NewGuid(),
-                DateTimeOffset.UtcNow,
-                chunk1
-            )
-        );
-        _notifier.ChunkPlaybackEnded += Raise.Event<EventHandler<AudioChunkPlaybackEndedEvent>>(
-            this,
-            new AudioChunkPlaybackEndedEvent(
-                Guid.NewGuid(),
-                Guid.NewGuid(),
-                DateTimeOffset.UtcNow,
-                chunk1
-            )
-        );
-        _notifier.ChunkPlaybackStarted += Raise.Event<EventHandler<AudioChunkPlaybackStartedEvent>>(
-            this,
-            new AudioChunkPlaybackStartedEvent(
-                Guid.NewGuid(),
-                Guid.NewGuid(),
-                DateTimeOffset.UtcNow,
-                chunk2
-            )
-        );
-        _notifier.PlaybackProgress += Raise.Event<EventHandler<AudioPlaybackProgressEvent>>(
-            this,
-            new AudioPlaybackProgressEvent(
-                Guid.NewGuid(),
-                Guid.NewGuid(),
-                DateTimeOffset.UtcNow,
-                TimeSpan.FromSeconds(0.1)
-            )
-        );
+        // Act
+        RaiseChunkStarted(chunk1);
+        RaiseChunkEnded(chunk1);
 
-        // Assert: service handled multi-chunk sentence without errors
-        // Full visual verification requires Live2D native deps (integration test)
+        // Assert: _isPlaying should remain true between same-sentence chunks
+        Assert.True(service._isPlaying, "Should stay playing between same-sentence chunks");
+
+        RaiseChunkStarted(chunk2);
+        Assert.True(service._isPlaying, "Should be playing during chunk2");
     }
 
     [Fact]
-    public void NewSentence_DoesNotThrow()
+    public void NewSentence_ClearsAndReplacesPhonemes()
     {
         // Arrange: two chunks from different sentences
         var sentence1 = Guid.NewGuid();
@@ -121,34 +140,49 @@ public class VBridgerLipSyncSentenceTrackingTests
         var service = CreateService();
 
         // Act
-        _notifier.ChunkPlaybackStarted += Raise.Event<EventHandler<AudioChunkPlaybackStartedEvent>>(
-            this,
-            new AudioChunkPlaybackStartedEvent(
-                Guid.NewGuid(),
-                Guid.NewGuid(),
-                DateTimeOffset.UtcNow,
-                chunk1
-            )
-        );
-        _notifier.ChunkPlaybackEnded += Raise.Event<EventHandler<AudioChunkPlaybackEndedEvent>>(
-            this,
-            new AudioChunkPlaybackEndedEvent(
-                Guid.NewGuid(),
-                Guid.NewGuid(),
-                DateTimeOffset.UtcNow,
-                chunk1
-            )
-        );
-        _notifier.ChunkPlaybackStarted += Raise.Event<EventHandler<AudioChunkPlaybackStartedEvent>>(
-            this,
-            new AudioChunkPlaybackStartedEvent(
-                Guid.NewGuid(),
-                Guid.NewGuid(),
-                DateTimeOffset.UtcNow,
-                chunk2
-            )
-        );
+        RaiseChunkStarted(chunk1);
+        var phonemesAfterChunk1 = service._activePhonemes.Count;
 
-        // Assert: no errors on sentence transition
+        RaiseChunkEnded(chunk1);
+        RaiseChunkStarted(chunk2);
+        var phonemesAfterChunk2 = service._activePhonemes.Count;
+
+        // Assert: new sentence should have replaced phonemes (not accumulated)
+        Assert.True(phonemesAfterChunk1 > 0);
+        Assert.True(phonemesAfterChunk2 > 0);
+        // "world"/"wɜld" has fewer phoneme chars than "hello"/"hɛloʊ"
+        Assert.NotEqual(phonemesAfterChunk1, phonemesAfterChunk2);
+    }
+
+    [Fact]
+    public void SameSentenceChunk_WithUpdatedTokens_ReplacesPhonemes()
+    {
+        // Arrange: first chunk has estimate, later chunk has refined timing
+        var sentenceId = Guid.NewGuid();
+        var initialTokens = MakeTokens(("hello", "hɛloʊ", 0.0, 1.0));
+        var refinedTokens = MakeTokens(("hello", "hɛloʊ", 0.0, 0.6));
+        var chunk1 = MakeSegment(sentenceId, 0.3f, tokens: initialTokens);
+        var chunk2 = MakeSegment(sentenceId, 0.3f);
+        var chunk3 = MakeSegment(sentenceId, 0.3f, tokens: refinedTokens);
+
+        var service = CreateService();
+
+        // Act
+        RaiseChunkStarted(chunk1);
+        var phonemesAfterChunk1 = service._activePhonemes.ToList();
+
+        RaiseChunkEnded(chunk1);
+        RaiseChunkStarted(chunk2); // no tokens, preserves
+
+        RaiseChunkEnded(chunk2);
+        RaiseChunkStarted(chunk3); // has tokens, replaces
+
+        // Assert: phonemes should be refreshed with refined timing
+        Assert.Equal(phonemesAfterChunk1.Count, service._activePhonemes.Count);
+        // End times should differ due to refined timing
+        Assert.NotEqual(
+            phonemesAfterChunk1[^1].EndTime,
+            service._activePhonemes[^1].EndTime
+        );
     }
 }
