@@ -531,9 +531,7 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
             // as much time as existing, so partial CTC updates don't destroy
             // phonemes for words not yet spoken.
             var newMaxTime = chunk.Tokens[^1].EndTs ?? 0.0;
-            var existingMaxTime = _activePhonemes.Count > 0
-                ? _activePhonemes[^1].EndTime
-                : 0.0;
+            var existingMaxTime = _activePhonemes.Count > 0 ? _activePhonemes[^1].EndTime : 0.0;
 
             if (newMaxTime >= existingMaxTime)
             {

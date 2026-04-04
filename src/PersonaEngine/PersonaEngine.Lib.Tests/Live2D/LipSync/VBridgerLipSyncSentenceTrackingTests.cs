@@ -162,10 +162,7 @@ public class VBridgerLipSyncSentenceTrackingTests
         // Arrange: first chunk covers 0-1.0s, third chunk covers 0-1.2s (more coverage)
         var sentenceId = Guid.NewGuid();
         var initialTokens = MakeTokens(("hello", "hɛloʊ", 0.0, 1.0));
-        var refinedTokens = MakeTokens(
-            ("hello", "hɛloʊ", 0.0, 0.5),
-            ("world", "wɜːld", 0.5, 1.2)
-        );
+        var refinedTokens = MakeTokens(("hello", "hɛloʊ", 0.0, 0.5), ("world", "wɜːld", 0.5, 1.2));
         var chunk1 = MakeSegment(sentenceId, 0.3f, tokens: initialTokens);
         var chunk2 = MakeSegment(sentenceId, 0.3f);
         var chunk3 = MakeSegment(sentenceId, 0.3f, tokens: refinedTokens);
@@ -191,10 +188,7 @@ public class VBridgerLipSyncSentenceTrackingTests
     {
         // Arrange: first chunk covers 0-1.0s, second chunk only covers 0-0.4s (partial CTC)
         var sentenceId = Guid.NewGuid();
-        var initialTokens = MakeTokens(
-            ("hello", "hɛloʊ", 0.0, 0.5),
-            ("world", "wɜːld", 0.5, 1.0)
-        );
+        var initialTokens = MakeTokens(("hello", "hɛloʊ", 0.0, 0.5), ("world", "wɜːld", 0.5, 1.0));
         var partialCtcTokens = MakeTokens(("hello", "hɛloʊ", 0.0, 0.4));
         var chunk1 = MakeSegment(sentenceId, 0.5f, tokens: initialTokens);
         var chunk2 = MakeSegment(sentenceId, 0.3f, tokens: partialCtcTokens);
