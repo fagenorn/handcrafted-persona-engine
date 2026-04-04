@@ -392,7 +392,10 @@ public sealed class TtsOrchestrator : ITtsEngine
             }
 
             // Stamp sentence ID and submit to audio filter pipeline
-            var stamped = segment with { SentenceId = sentenceId };
+            var stamped = segment with
+            {
+                SentenceId = sentenceId,
+            };
             foreach (var processed in pipeline.Submit(stamped))
             {
                 yield return processed;

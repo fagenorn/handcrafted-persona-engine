@@ -117,12 +117,10 @@ internal sealed class AudioFilterPipeline
         }
 
         // 3. Run all filters on the window
-        var windowSegment = new AudioSegment(
-            windowAudio.AsMemory(),
-            windowSampleRate,
-            windowTokens
-        )
-        { SentenceId = sentenceId };
+        var windowSegment = new AudioSegment(windowAudio.AsMemory(), windowSampleRate, windowTokens)
+        {
+            SentenceId = sentenceId,
+        };
         ApplyAllFilters(windowSegment);
 
         var processedAudio = windowSegment.AudioData;
@@ -231,7 +229,9 @@ internal sealed class AudioFilterPipeline
         }
 
         return new AudioSegment(yieldAudio, windowSampleRate, yieldTokens)
-        { SentenceId = sentenceId };
+        {
+            SentenceId = sentenceId,
+        };
     }
 
     /// <summary>

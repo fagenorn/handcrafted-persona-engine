@@ -182,9 +182,6 @@ public class VBridgerLipSyncSentenceTrackingTests
         // Assert: phonemes should be refreshed with refined timing
         Assert.Equal(phonemesAfterChunk1.Count, service._activePhonemes.Count);
         // End times should differ due to refined timing
-        Assert.NotEqual(
-            phonemesAfterChunk1[^1].EndTime,
-            service._activePhonemes[^1].EndTime
-        );
+        Assert.NotEqual(phonemesAfterChunk1[^1].EndTime, service._activePhonemes[^1].EndTime);
     }
 }
