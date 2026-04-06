@@ -24,7 +24,7 @@ public sealed class TtsOrchestrator : ITtsEngine
         RegexOptions.Compiled
     );
 
-    private readonly IList<IAudioFilter> _audioFilters;
+    private readonly List<IAudioFilter> _audioFilters;
     private readonly ITtsEngineProvider _engineProvider;
     private readonly ILogger<TtsOrchestrator> _logger;
     private readonly IPhonemizer _phonemizer;
