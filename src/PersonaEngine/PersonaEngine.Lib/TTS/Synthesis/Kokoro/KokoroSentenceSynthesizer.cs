@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Configuration;
+using PersonaEngine.Lib.IO;
 using PersonaEngine.Lib.TTS.Synthesis;
 using PersonaEngine.Lib.TTS.Synthesis.Engine;
 
@@ -16,22 +17,28 @@ internal sealed class KokoroSentenceSynthesizer : ISentenceSynthesizer
     private readonly ILogger<KokoroSentenceSynthesizer> _logger;
     private readonly IOptionsMonitor<KokoroVoiceOptions> _options;
     private readonly IPhonemizer _phonemizer;
-    private readonly IAudioSynthesizer _synthesizer;
+    private readonly KokoroAudioSynthesizer _synthesizer;
     private readonly SemaphoreSlim _throttle;
 
     private bool _disposed;
 
     public KokoroSentenceSynthesizer(
         IPhonemizer phonemizer,
-        IAudioSynthesizer synthesizer,
+        IModelProvider modelProvider,
+        IKokoroVoiceProvider voiceProvider,
         IOptionsMonitor<KokoroVoiceOptions> options,
-        ILogger<KokoroSentenceSynthesizer> logger
+        ILoggerFactory loggerFactory
     )
     {
         _phonemizer = phonemizer ?? throw new ArgumentNullException(nameof(phonemizer));
-        _synthesizer = synthesizer ?? throw new ArgumentNullException(nameof(synthesizer));
         _options = options;
-        _logger = logger;
+        _logger = loggerFactory.CreateLogger<KokoroSentenceSynthesizer>();
+        _synthesizer = new KokoroAudioSynthesizer(
+            modelProvider,
+            voiceProvider,
+            options,
+            loggerFactory.CreateLogger<KokoroAudioSynthesizer>()
+        );
         _throttle = new SemaphoreSlim(Environment.ProcessorCount, Environment.ProcessorCount);
     }
 
@@ -48,6 +55,7 @@ internal sealed class KokoroSentenceSynthesizer : ISentenceSynthesizer
     {
         if (!_disposed)
         {
+            await _synthesizer.DisposeAsync();
             _throttle.Dispose();
             _disposed = true;
         }
@@ -73,16 +81,16 @@ internal sealed class KokoroSentenceSynthesizer : ISentenceSynthesizer
 
             foreach (var phonemeChunk in SplitPhonemes(phonemeResult.Phonemes, 510))
             {
-                var audioData = await _synthesizer.SynthesizeAsync(
+                var result = await _synthesizer.SynthesizeAsync(
                     phonemeChunk,
                     currentOptions,
                     cancellationToken
                 );
 
-                ApplyTokenTimings(phonemeResult.Tokens, currentOptions, audioData.PhonemeTimings);
+                ApplyTokenTimings(phonemeResult.Tokens, currentOptions, result.PhonemeTimings);
 
                 var segment = new AudioSegment(
-                    audioData.Samples,
+                    result.Samples,
                     currentOptions.SampleRate,
                     phonemeResult.Tokens
                 );

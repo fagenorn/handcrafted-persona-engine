@@ -1,9 +1,9 @@
-﻿namespace PersonaEngine.Lib.TTS.Synthesis.Kokoro;
+namespace PersonaEngine.Lib.TTS.Synthesis.Kokoro;
 
 /// <summary>
-///     Result of audio synthesis
+///     Result of Kokoro ONNX audio synthesis (waveform + phoneme duration tensor).
 /// </summary>
-public class AudioData(Memory<float> samples, ReadOnlyMemory<long> phonemeTimings)
+public class KokoroSynthesisResult(Memory<float> samples, ReadOnlyMemory<long> phonemeTimings)
 {
     /// <summary>
     ///     Audio samples

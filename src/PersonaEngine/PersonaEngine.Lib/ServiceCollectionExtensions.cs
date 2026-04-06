@@ -306,7 +306,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IFallbackPhonemizer, EspeakFallbackPhonemizer>();
 
         // Kokoro-specific
-        services.AddSingleton<IAudioSynthesizer, KokoroAudioSynthesizer>();
         services.AddSingleton<IKokoroVoiceProvider, KokoroVoiceProvider>();
         services.AddSingleton<IQwen3VoiceProvider, Qwen3VoiceProvider>();
 

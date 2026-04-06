@@ -31,7 +31,7 @@ public class KokoroVoiceProvider : IKokoroVoiceProvider
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<VoiceData> GetVoiceAsync(string voiceId, CancellationToken ct = default)
+    public async Task<KokoroVoiceEmbedding> GetVoiceAsync(string voiceId, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(voiceId))
         {
@@ -63,7 +63,7 @@ public class KokoroVoiceProvider : IKokoroVoiceProvider
                         embedding.Length
                     );
 
-                    return new VoiceData(voiceId, embedding);
+                    return new KokoroVoiceEmbedding(voiceId, embedding);
                 },
                 ct
             );

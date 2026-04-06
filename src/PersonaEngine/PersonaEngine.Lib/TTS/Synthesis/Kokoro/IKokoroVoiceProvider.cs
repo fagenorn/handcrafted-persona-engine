@@ -2,7 +2,7 @@
 
 public interface IKokoroVoiceProvider : IAsyncDisposable
 {
-    Task<VoiceData> GetVoiceAsync(string voiceId, CancellationToken ct);
+    Task<KokoroVoiceEmbedding> GetVoiceAsync(string voiceId, CancellationToken ct);
 
     /// <summary>
     ///     Gets all available voice IDs

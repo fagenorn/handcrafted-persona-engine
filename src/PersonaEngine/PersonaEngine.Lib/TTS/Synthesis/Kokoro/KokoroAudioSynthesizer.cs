@@ -7,7 +7,7 @@ using PersonaEngine.Lib.IO;
 
 namespace PersonaEngine.Lib.TTS.Synthesis.Kokoro;
 
-public class KokoroAudioSynthesizer : IAudioSynthesizer
+internal class KokoroAudioSynthesizer : IAsyncDisposable
 {
     private const string InputIdsName = "input_ids";
 
@@ -55,7 +55,7 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
         InitializeSession();
     }
 
-    public async Task<AudioData> SynthesizeAsync(
+    public async Task<KokoroSynthesisResult> SynthesizeAsync(
         string phonemes,
         KokoroVoiceOptions? options = null,
         CancellationToken cancellationToken = default
@@ -65,7 +65,7 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
         {
             _logger.LogInformation("SynthesizeAsync called with empty or null phonemes.");
 
-            return new AudioData(Memory<float>.Empty, Memory<long>.Empty);
+            return new KokoroSynthesisResult(Memory<float>.Empty, Memory<long>.Empty);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -153,7 +153,7 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
 
             inputIdsOrtValue?.Dispose();
 
-            return new AudioData(waveform, durations);
+            return new KokoroSynthesisResult(waveform, durations);
         }
         catch (Exception ex)
         {

@@ -1,6 +1,6 @@
-﻿namespace PersonaEngine.Lib.TTS.Synthesis.Kokoro;
+namespace PersonaEngine.Lib.TTS.Synthesis.Kokoro;
 
-public class VoiceData(string id, Memory<float> rawEmbedding)
+public class KokoroVoiceEmbedding(string id, Memory<float> rawEmbedding)
 {
     private const int StyleDim = 256;
 
