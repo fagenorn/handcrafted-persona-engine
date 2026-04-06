@@ -9,6 +9,7 @@ using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
 using PersonaEngine.Lib.LLM;
 using PersonaEngine.Lib.TTS.Synthesis.Audio;
 using PersonaEngine.Lib.TTS.Synthesis.TextProcessing;
+using PersonaEngine.Lib.Utils;
 
 namespace PersonaEngine.Lib.TTS.Synthesis.Engine;
 
@@ -431,7 +432,7 @@ public sealed class TtsOrchestrator : ITtsEngine
             {
                 phonemeLookup.TryAdd(pt.Text, pt);
 
-                var stripped = StripPunctuation(pt.Text);
+                var stripped = pt.Text.TrimPunctuation();
                 if (stripped.Length > 0 && stripped != pt.Text)
                 {
                     phonemeLookup.TryAdd(stripped, pt);
@@ -454,7 +455,7 @@ public sealed class TtsOrchestrator : ITtsEngine
             }
             else
             {
-                var stripped = StripPunctuation(token.Text);
+                var stripped = token.Text.TrimPunctuation();
                 if (
                     stripped.Length > 0
                     && stripped != token.Text
@@ -469,26 +470,4 @@ public sealed class TtsOrchestrator : ITtsEngine
         }
     }
 
-    private static string StripPunctuation(string text)
-    {
-        var start = 0;
-        var end = text.Length - 1;
-
-        while (start <= end && char.IsPunctuation(text[start]))
-        {
-            start++;
-        }
-
-        while (end >= start && char.IsPunctuation(text[end]))
-        {
-            end--;
-        }
-
-        if (start == 0 && end == text.Length - 1)
-        {
-            return text;
-        }
-
-        return start > end ? string.Empty : text[start..(end + 1)];
-    }
 }

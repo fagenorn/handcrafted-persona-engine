@@ -1,5 +1,7 @@
 using System.Runtime.CompilerServices;
 
+using PersonaEngine.Lib.Utils;
+
 namespace PersonaEngine.Lib.TTS.Synthesis.Qwen3;
 
 /// <summary>
@@ -110,7 +112,7 @@ internal static class Qwen3Sampler
 
         if (greedy)
         {
-            return Argmax(slice);
+            return slice.ArgMax();
         }
 
         Span<float> processed = stackalloc float[vocabSize];
@@ -134,23 +136,6 @@ internal static class Qwen3Sampler
         Softmax(processed);
 
         return MultinomialSample(processed);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int Argmax(ReadOnlySpan<float> values)
-    {
-        var bestIdx = 0;
-        var bestVal = values[0];
-        for (var i = 1; i < values.Length; i++)
-        {
-            if (values[i] > bestVal)
-            {
-                bestVal = values[i];
-                bestIdx = i;
-            }
-        }
-
-        return bestIdx;
     }
 
     /// <summary>
