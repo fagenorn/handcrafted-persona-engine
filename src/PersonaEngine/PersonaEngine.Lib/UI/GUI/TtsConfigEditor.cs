@@ -9,6 +9,9 @@ using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
 using PersonaEngine.Lib.TTS.RVC;
 using PersonaEngine.Lib.TTS.Synthesis;
+using PersonaEngine.Lib.TTS.Synthesis.Engine;
+using PersonaEngine.Lib.TTS.Synthesis.Kokoro;
+using PersonaEngine.Lib.TTS.Synthesis.Qwen3;
 
 namespace PersonaEngine.Lib.UI.GUI;
 
@@ -19,6 +22,8 @@ public class TtsConfigEditor : ConfigSectionEditorBase
 {
     private readonly IAudioOutputAdapter _audioPlayer;
 
+    private readonly ITtsEngineProvider _engineProvider;
+
     private readonly IRVCVoiceProvider _rvcProvider;
 
     private readonly IUiThemeManager _themeManager;
@@ -27,11 +32,20 @@ public class TtsConfigEditor : ConfigSectionEditorBase
 
     private readonly IKokoroVoiceProvider _voiceProvider;
 
+    private readonly IQwen3VoiceProvider _qwen3VoiceProvider;
+
+    // Engine selection
+    private string _activeEngine;
+
+    private List<string> _availableQwen3Speakers = new();
+
     private List<string> _availableRVCs = new();
 
     private List<string> _availableVoices = new();
 
     private TtsConfiguration _currentConfig;
+
+    private Qwen3TtsOptions _currentQwen3Options;
 
     private RVCFilterOptions _currentRvcFilterOptions;
 
@@ -45,6 +59,8 @@ public class TtsConfigEditor : ConfigSectionEditorBase
 
     private bool _isPlaying = false;
 
+    private bool _loadingQwen3Speakers = false;
+
     private bool _loadingRvcs = false;
 
     private bool _loadingVoices = false;
@@ -54,6 +70,27 @@ public class TtsConfigEditor : ConfigSectionEditorBase
     private string _modelDir;
 
     private ActiveOperation? _playbackOperation = null;
+
+    // Qwen3 fields
+    private string _qwen3Instruct = "";
+
+    private string _qwen3Language;
+
+    private int _qwen3MaxNewTokens;
+
+    private float _qwen3RepetitionPenalty;
+
+    private string _qwen3Speaker;
+
+    private float _qwen3Temperature;
+
+    private int _qwen3TopK;
+
+    private float _qwen3TopP;
+
+    private bool _qwen3CodePredictorGreedy;
+
+    private bool _qwen3SilencePenaltyEnabled;
 
     private bool _rvcEnabled;
 
@@ -75,16 +112,20 @@ public class TtsConfigEditor : ConfigSectionEditorBase
         IUiConfigurationManager configManager,
         IEditorStateManager stateManager,
         ITtsEngine ttsEngine,
+        ITtsEngineProvider engineProvider,
         IOutputAdapter audioPlayer,
         IKokoroVoiceProvider voiceProvider,
+        IQwen3VoiceProvider qwen3VoiceProvider,
         IUiThemeManager themeManager,
         IRVCVoiceProvider rvcProvider
     )
         : base(configManager, stateManager)
     {
         _ttsEngine = ttsEngine;
+        _engineProvider = engineProvider;
         _audioPlayer = (IAudioOutputAdapter)audioPlayer;
         _voiceProvider = voiceProvider;
+        _qwen3VoiceProvider = qwen3VoiceProvider;
         _themeManager = themeManager;
         _rvcProvider = rvcProvider;
 
@@ -103,6 +144,7 @@ public class TtsConfigEditor : ConfigSectionEditorBase
         // Load available voices
         LoadAvailableVoicesAsync();
         LoadAvailableRVCAsync();
+        LoadAvailableQwen3SpeakersAsync();
     }
 
     public override void Render()
@@ -201,10 +243,14 @@ public class TtsConfigEditor : ConfigSectionEditorBase
     private void LoadConfiguration()
     {
         _currentConfig = ConfigManager.GetConfiguration<TtsConfiguration>("TTS");
-        _currentVoiceOptions = _currentConfig.Voice;
+        _currentVoiceOptions = _currentConfig.Kokoro;
         _currentRvcFilterOptions = _currentConfig.Rvc;
+        _currentQwen3Options = _currentConfig.Qwen3;
 
-        // Update local fields from configuration
+        // Engine selection
+        _activeEngine = _currentConfig.ActiveEngine;
+
+        // Kokoro fields
         _modelDir = _currentConfig.ModelDirectory;
         _espeakPath = _currentConfig.EspeakPath;
         _speechRate = _currentVoiceOptions.DefaultSpeed;
@@ -213,6 +259,18 @@ public class TtsConfigEditor : ConfigSectionEditorBase
         _useBritishEnglish = _currentVoiceOptions.UseBritishEnglish;
         _defaultVoice = _currentVoiceOptions.DefaultVoice;
         _maxPhonemeLength = _currentVoiceOptions.MaxPhonemeLength;
+
+        // Qwen3 fields
+        _qwen3Speaker = _currentQwen3Options.Speaker;
+        _qwen3Language = _currentQwen3Options.Language;
+        _qwen3Instruct = _currentQwen3Options.Instruct ?? "";
+        _qwen3Temperature = _currentQwen3Options.Temperature;
+        _qwen3TopK = _currentQwen3Options.TopK;
+        _qwen3TopP = _currentQwen3Options.TopP;
+        _qwen3RepetitionPenalty = _currentQwen3Options.RepetitionPenalty;
+        _qwen3MaxNewTokens = _currentQwen3Options.MaxNewTokens;
+        _qwen3CodePredictorGreedy = _currentQwen3Options.CodePredictorGreedy;
+        _qwen3SilencePenaltyEnabled = _currentQwen3Options.SilencePenaltyEnabled;
 
         // RVC
         _defaultRVC = _currentRvcFilterOptions.DefaultVoice;
@@ -232,7 +290,7 @@ public class TtsConfigEditor : ConfigSectionEditorBase
             StateManager.RegisterActiveOperation(operation);
 
             // Load voices asynchronously
-            var voices = await _voiceProvider.GetAvailableVoicesAsync();
+            var voices = _voiceProvider.GetAvailableVoices();
             _availableVoices = voices.ToList();
 
             // Clear operation
@@ -260,7 +318,7 @@ public class TtsConfigEditor : ConfigSectionEditorBase
             StateManager.RegisterActiveOperation(operation);
 
             // Load voices asynchronously
-            var voices = await _rvcProvider.GetAvailableVoicesAsync();
+            var voices = _rvcProvider.GetAvailableVoices();
             _availableRVCs = voices.ToList();
 
             // Clear operation
@@ -274,6 +332,31 @@ public class TtsConfigEditor : ConfigSectionEditorBase
         finally
         {
             _loadingRvcs = false;
+        }
+    }
+
+    private async void LoadAvailableQwen3SpeakersAsync()
+    {
+        try
+        {
+            _loadingQwen3Speakers = true;
+
+            var operation = new ActiveOperation("load-qwen3-speakers", "Loading Qwen3 Speakers");
+            StateManager.RegisterActiveOperation(operation);
+
+            var speakers = _qwen3VoiceProvider.GetAvailableSpeakers();
+            _availableQwen3Speakers = speakers.ToList();
+
+            StateManager.ClearActiveOperation(operation.Id);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Error loading Qwen3 speakers: {ex.Message}");
+            _availableQwen3Speakers = [];
+        }
+        finally
+        {
+            _loadingQwen3Speakers = false;
         }
     }
 
@@ -297,16 +380,34 @@ public class TtsConfigEditor : ConfigSectionEditorBase
             F0UpKey = _rvcF0UpKey,
         };
 
+        var updatedQwen3Options = new Qwen3TtsOptions
+        {
+            Speaker = _qwen3Speaker,
+            Language = _qwen3Language,
+            Instruct = string.IsNullOrWhiteSpace(_qwen3Instruct) ? null : _qwen3Instruct,
+            Temperature = _qwen3Temperature,
+            TopK = _qwen3TopK,
+            TopP = _qwen3TopP,
+            RepetitionPenalty = _qwen3RepetitionPenalty,
+            MaxNewTokens = _qwen3MaxNewTokens,
+            EmitEveryFrames = _currentQwen3Options.EmitEveryFrames,
+            CodePredictorGreedy = _qwen3CodePredictorGreedy,
+            SilencePenaltyEnabled = _qwen3SilencePenaltyEnabled,
+        };
+
         var updatedConfig = new TtsConfiguration
         {
+            ActiveEngine = _activeEngine,
             ModelDirectory = _modelDir,
             EspeakPath = _espeakPath,
-            Voice = updatedVoiceOptions,
+            Kokoro = updatedVoiceOptions,
             Rvc = updatedRVCOptions,
+            Qwen3 = updatedQwen3Options,
         };
 
         _currentRvcFilterOptions = updatedRVCOptions;
         _currentVoiceOptions = updatedVoiceOptions;
+        _currentQwen3Options = updatedQwen3Options;
         _currentConfig = updatedConfig;
         ConfigManager.UpdateConfiguration(updatedConfig, SectionKey);
 
@@ -321,15 +422,19 @@ public class TtsConfigEditor : ConfigSectionEditorBase
 
     private void ResetToDefaults()
     {
-        // Create default configuration
-        var defaultVoiceOptions = new KokoroVoiceOptions();
         var defaultConfig = new TtsConfiguration();
+        var defaultVoiceOptions = defaultConfig.Kokoro;
+        var defaultQwen3Options = defaultConfig.Qwen3;
 
         // Update local state
-        _currentVoiceOptions = defaultVoiceOptions;
         _currentConfig = defaultConfig;
+        _currentVoiceOptions = defaultVoiceOptions;
+        _currentQwen3Options = defaultQwen3Options;
 
-        // Update UI fields
+        // Engine
+        _activeEngine = defaultConfig.ActiveEngine;
+
+        // Kokoro fields
         _modelDir = defaultConfig.ModelDirectory;
         _espeakPath = defaultConfig.EspeakPath;
         _speechRate = defaultVoiceOptions.DefaultSpeed;
@@ -338,6 +443,18 @@ public class TtsConfigEditor : ConfigSectionEditorBase
         _useBritishEnglish = defaultVoiceOptions.UseBritishEnglish;
         _defaultVoice = defaultVoiceOptions.DefaultVoice;
         _maxPhonemeLength = defaultVoiceOptions.MaxPhonemeLength;
+
+        // Qwen3 fields
+        _qwen3Speaker = defaultQwen3Options.Speaker;
+        _qwen3Language = defaultQwen3Options.Language;
+        _qwen3Instruct = defaultQwen3Options.Instruct ?? "";
+        _qwen3Temperature = defaultQwen3Options.Temperature;
+        _qwen3TopK = defaultQwen3Options.TopK;
+        _qwen3TopP = defaultQwen3Options.TopP;
+        _qwen3RepetitionPenalty = defaultQwen3Options.RepetitionPenalty;
+        _qwen3MaxNewTokens = defaultQwen3Options.MaxNewTokens;
+        _qwen3CodePredictorGreedy = defaultQwen3Options.CodePredictorGreedy;
+        _qwen3SilencePenaltyEnabled = defaultQwen3Options.SilencePenaltyEnabled;
 
         // Update configuration
         ConfigManager.UpdateConfiguration(defaultConfig, "TTS");
@@ -362,8 +479,6 @@ public class TtsConfigEditor : ConfigSectionEditorBase
             StateManager.RegisterActiveOperation(_playbackOperation);
 
             _isPlaying = true;
-
-            var options = _currentVoiceOptions;
 
             var llmInput = Channel.CreateUnbounded<LlmChunkEvent>(
                 new UnboundedChannelOptions { SingleReader = true, SingleWriter = true }
@@ -407,7 +522,6 @@ public class TtsConfigEditor : ConfigSectionEditorBase
                 ttsOutput,
                 Guid.Empty,
                 Guid.Empty,
-                options,
                 _playbackOperation.CancellationSource.Token
             );
 
@@ -584,128 +698,51 @@ public class TtsConfigEditor : ConfigSectionEditorBase
     {
         var availWidth = ImGui.GetContentRegionAvail().X;
 
-        // === Voice Selection Section ===
+        // === Engine Selection ===
         ImGui.Spacing();
-        ImGui.SeparatorText("Voice Settings");
+        ImGui.SeparatorText("TTS Engine");
         ImGui.Spacing();
 
         ImGui.BeginGroup();
         {
+            var engines = _engineProvider.AvailableEngines;
+            ImGui.AlignTextToFramePadding();
+            ImGui.Text("Engine:");
+            ImGui.SameLine(120);
             ImGui.SetNextItemWidth(availWidth - 120);
 
-            if (_loadingVoices)
+            if (ImGui.BeginCombo("##EngineSelector", _activeEngine))
             {
-                ImGui.BeginDisabled();
-                var loadingText = "Loading voices...";
-                ImGui.InputText(
-                    "##VoiceLoading",
-                    ref loadingText,
-                    100,
-                    ImGuiInputTextFlags.ReadOnly
-                );
-                ImGui.EndDisabled();
-            }
-            else
-            {
-                if (
-                    ImGui.BeginCombo(
-                        "##VoiceSelector",
-                        string.IsNullOrEmpty(_defaultVoice) ? "<Select voice>" : _defaultVoice
-                    )
-                )
+                foreach (var engine in engines)
                 {
-                    if (_availableVoices.Count == 0)
+                    var isSelected = engine.EngineId == _activeEngine;
+                    if (ImGui.Selectable(engine.EngineId, isSelected))
                     {
-                        ImGui.TextColored(
-                            new Vector4(0.7f, 0.7f, 0.7f, 1.0f),
-                            "No voices available"
-                        );
-                    }
-                    else
-                    {
-                        foreach (var voice in _availableVoices)
-                        {
-                            var isSelected = voice == _defaultVoice;
-                            if (ImGui.Selectable(voice, isSelected))
-                            {
-                                _defaultVoice = voice;
-                                UpdateConfiguration();
-                            }
-
-                            if (isSelected)
-                            {
-                                ImGui.SetItemDefaultFocus();
-                            }
-                        }
+                        _activeEngine = engine.EngineId;
+                        UpdateConfiguration();
                     }
 
-                    ImGui.EndCombo();
+                    if (isSelected)
+                    {
+                        ImGui.SetItemDefaultFocus();
+                    }
                 }
-            }
 
-            ImGui.SameLine(0, 10);
-
-            if (ImGui.Button("Refresh##VoiceRefresh", new Vector2(-1, 0)))
-            {
-                LoadAvailableVoicesAsync();
-            }
-
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip("Refresh available voices list");
-            }
-
-            // Speech rate slider with better styling
-            ImGui.AlignTextToFramePadding();
-            ImGui.Text("Speech Rate:");
-            ImGui.SameLine(120);
-
-            ImGui.SetNextItemWidth(availWidth - 120 - 120);
-            var rateChanged = ImGui.SliderFloat(
-                "##SpeechRate",
-                ref _speechRate,
-                0.5f,
-                2.0f,
-                "%.2f"
-            );
-
-            ImGui.SameLine(0, 10);
-
-            if (ImGui.Button("Reset##Rate", new Vector2(-1, 0)))
-            {
-                _speechRate = 1.0f;
-                rateChanged = true;
-            }
-
-            // Voice options with checkboxes in a consistent layout
-            ImGui.AlignTextToFramePadding();
-            ImGui.Text("Options:");
-            ImGui.SameLine(120);
-
-            // Trim silence
-            var trimChanged = ImGui.Checkbox("Trim Silence", ref _trimSilence);
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip("Remove silence from beginning and end of speech");
-            }
-
-            ImGui.SameLine(0, 50);
-
-            // British English
-            var britishChanged = ImGui.Checkbox("Use British English", ref _useBritishEnglish);
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip("Use British English pronunciation instead of American English");
-            }
-
-            // Apply changes if needed
-            if (rateChanged || trimChanged || britishChanged)
-            {
-                UpdateConfiguration();
+                ImGui.EndCombo();
             }
         }
 
         ImGui.EndGroup();
+
+        // === Engine-specific settings ===
+        if (string.Equals(_activeEngine, "kokoro", StringComparison.OrdinalIgnoreCase))
+        {
+            RenderKokoroSettings(availWidth);
+        }
+        else if (string.Equals(_activeEngine, "qwen3", StringComparison.OrdinalIgnoreCase))
+        {
+            RenderQwen3Settings(availWidth);
+        }
 
         // === RVC Selection Section ===
         ImGui.Spacing();
@@ -827,6 +864,390 @@ public class TtsConfigEditor : ConfigSectionEditorBase
         }
 
         ImGui.EndGroup();
+    }
+
+    private void RenderKokoroSettings(float availWidth)
+    {
+        ImGui.Spacing();
+        ImGui.SeparatorText("Kokoro Voice Settings");
+        ImGui.Spacing();
+
+        ImGui.BeginGroup();
+        {
+            ImGui.SetNextItemWidth(availWidth - 120);
+
+            if (_loadingVoices)
+            {
+                ImGui.BeginDisabled();
+                var loadingText = "Loading voices...";
+                ImGui.InputText(
+                    "##VoiceLoading",
+                    ref loadingText,
+                    100,
+                    ImGuiInputTextFlags.ReadOnly
+                );
+                ImGui.EndDisabled();
+            }
+            else
+            {
+                if (
+                    ImGui.BeginCombo(
+                        "##VoiceSelector",
+                        string.IsNullOrEmpty(_defaultVoice) ? "<Select voice>" : _defaultVoice
+                    )
+                )
+                {
+                    if (_availableVoices.Count == 0)
+                    {
+                        ImGui.TextColored(
+                            new Vector4(0.7f, 0.7f, 0.7f, 1.0f),
+                            "No voices available"
+                        );
+                    }
+                    else
+                    {
+                        foreach (var voice in _availableVoices)
+                        {
+                            var isSelected = voice == _defaultVoice;
+                            if (ImGui.Selectable(voice, isSelected))
+                            {
+                                _defaultVoice = voice;
+                                UpdateConfiguration();
+                            }
+
+                            if (isSelected)
+                            {
+                                ImGui.SetItemDefaultFocus();
+                            }
+                        }
+                    }
+
+                    ImGui.EndCombo();
+                }
+            }
+
+            ImGui.SameLine(0, 10);
+
+            if (ImGui.Button("Refresh##VoiceRefresh", new Vector2(-1, 0)))
+            {
+                LoadAvailableVoicesAsync();
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Refresh available voices list");
+            }
+
+            // Speech rate slider
+            ImGui.AlignTextToFramePadding();
+            ImGui.Text("Speech Rate:");
+            ImGui.SameLine(120);
+
+            ImGui.SetNextItemWidth(availWidth - 120 - 120);
+            var rateChanged = ImGui.SliderFloat(
+                "##SpeechRate",
+                ref _speechRate,
+                0.5f,
+                2.0f,
+                "%.2f"
+            );
+
+            ImGui.SameLine(0, 10);
+
+            if (ImGui.Button("Reset##Rate", new Vector2(-1, 0)))
+            {
+                _speechRate = 1.0f;
+                rateChanged = true;
+            }
+
+            // Voice options
+            ImGui.AlignTextToFramePadding();
+            ImGui.Text("Options:");
+            ImGui.SameLine(120);
+
+            var trimChanged = ImGui.Checkbox("Trim Silence", ref _trimSilence);
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Remove silence from beginning and end of speech");
+            }
+
+            ImGui.SameLine(0, 50);
+
+            var britishChanged = ImGui.Checkbox("Use British English", ref _useBritishEnglish);
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Use British English pronunciation instead of American English");
+            }
+
+            if (rateChanged || trimChanged || britishChanged)
+            {
+                UpdateConfiguration();
+            }
+        }
+
+        ImGui.EndGroup();
+    }
+
+    private void RenderQwen3Settings(float availWidth)
+    {
+        ImGui.Spacing();
+        ImGui.SeparatorText("Qwen3 Voice Settings");
+        ImGui.Spacing();
+
+        var changed = false;
+
+        ImGui.BeginGroup();
+        {
+            // Speaker dropdown
+            ImGui.AlignTextToFramePadding();
+            ImGui.Text("Speaker:");
+            ImGui.SameLine(120);
+            ImGui.SetNextItemWidth(availWidth - 120 - 80);
+
+            if (_loadingQwen3Speakers)
+            {
+                ImGui.BeginDisabled();
+                var loadingText = "Loading speakers...";
+                ImGui.InputText(
+                    "##Qwen3SpeakerLoading",
+                    ref loadingText,
+                    100,
+                    ImGuiInputTextFlags.ReadOnly
+                );
+                ImGui.EndDisabled();
+            }
+            else
+            {
+                if (
+                    ImGui.BeginCombo(
+                        "##Qwen3SpeakerSelector",
+                        string.IsNullOrEmpty(_qwen3Speaker) ? "<Select speaker>" : _qwen3Speaker
+                    )
+                )
+                {
+                    if (_availableQwen3Speakers.Count == 0)
+                    {
+                        ImGui.TextColored(
+                            new Vector4(0.7f, 0.7f, 0.7f, 1.0f),
+                            "No speakers available"
+                        );
+                    }
+                    else
+                    {
+                        foreach (var speaker in _availableQwen3Speakers)
+                        {
+                            var isSelected = speaker == _qwen3Speaker;
+                            if (ImGui.Selectable(speaker, isSelected))
+                            {
+                                _qwen3Speaker = speaker;
+                                changed = true;
+                            }
+
+                            if (isSelected)
+                            {
+                                ImGui.SetItemDefaultFocus();
+                            }
+                        }
+                    }
+
+                    ImGui.EndCombo();
+                }
+            }
+
+            ImGui.SameLine(0, 10);
+
+            if (ImGui.Button("Refresh##Qwen3SpeakerRefresh", new Vector2(-1, 0)))
+            {
+                LoadAvailableQwen3SpeakersAsync();
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Refresh available speakers list");
+            }
+
+            // Language
+            ImGui.AlignTextToFramePadding();
+            ImGui.Text("Language:");
+            ImGui.SameLine(120);
+            ImGui.SetNextItemWidth(availWidth - 120);
+            if (ImGui.InputText("##Qwen3Language", ref _qwen3Language, 256))
+            {
+                changed = true;
+            }
+
+            // Voice instruct
+            ImGui.AlignTextToFramePadding();
+            ImGui.Text("Voice Instruct:");
+            ImGui.SameLine(120);
+            ImGui.SetNextItemWidth(availWidth - 120);
+            if (
+                ImGui.InputTextMultiline(
+                    "##Qwen3Instruct",
+                    ref _qwen3Instruct,
+                    2048,
+                    new Vector2(availWidth - 120, 60)
+                )
+            )
+            {
+                changed = true;
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(
+                    "Describe the desired voice style (e.g., \"warm and breathy\"). Leave empty for default."
+                );
+            }
+        }
+
+        ImGui.EndGroup();
+
+        // Talker sampling parameters
+        ImGui.Spacing();
+        ImGui.SeparatorText("Talker Sampling (Group 0)");
+        ImGui.Spacing();
+
+        ImGui.BeginGroup();
+        {
+            // Temperature
+            ImGui.AlignTextToFramePadding();
+            ImGui.Text("Temperature:");
+            ImGui.SameLine(160);
+            ImGui.SetNextItemWidth(availWidth - 160);
+            if (ImGui.SliderFloat("##Qwen3Temp", ref _qwen3Temperature, 0.1f, 2.0f, "%.2f"))
+            {
+                changed = true;
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(
+                    "Controls randomness. Lower = more deterministic, higher = more varied."
+                );
+            }
+
+            // Top K
+            ImGui.AlignTextToFramePadding();
+            ImGui.Text("Top K:");
+            ImGui.SameLine(160);
+            ImGui.SetNextItemWidth(availWidth - 160);
+            if (ImGui.SliderInt("##Qwen3TopK", ref _qwen3TopK, 1, 200))
+            {
+                changed = true;
+            }
+
+            // Top P
+            ImGui.AlignTextToFramePadding();
+            ImGui.Text("Top P:");
+            ImGui.SameLine(160);
+            ImGui.SetNextItemWidth(availWidth - 160);
+            if (ImGui.SliderFloat("##Qwen3TopP", ref _qwen3TopP, 0.1f, 1.0f, "%.2f"))
+            {
+                changed = true;
+            }
+
+            // Repetition Penalty
+            ImGui.AlignTextToFramePadding();
+            ImGui.Text("Repetition Penalty:");
+            ImGui.SameLine(160);
+            ImGui.SetNextItemWidth(availWidth - 160);
+            if (
+                ImGui.SliderFloat(
+                    "##Qwen3RepPenalty",
+                    ref _qwen3RepetitionPenalty,
+                    1.0f,
+                    2.0f,
+                    "%.2f"
+                )
+            )
+            {
+                changed = true;
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Penalizes repeated tokens. 1.0 = no penalty.");
+            }
+
+            // Silence penalty toggle
+            ImGui.AlignTextToFramePadding();
+            ImGui.Text("Silence Penalty:");
+            ImGui.SameLine(160);
+            if (ImGui.Checkbox("##Qwen3SilencePenalty", ref _qwen3SilencePenaltyEnabled))
+            {
+                changed = true;
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(
+                    "Penalizes consecutive silent frames to prevent long silent tails.\n"
+                        + "Custom heuristic, not in the official implementation."
+                );
+            }
+
+            // Max New Tokens
+            ImGui.AlignTextToFramePadding();
+            ImGui.Text("Max New Tokens:");
+            ImGui.SameLine(160);
+            ImGui.SetNextItemWidth(availWidth - 160);
+            if (ImGui.SliderInt("##Qwen3MaxTokens", ref _qwen3MaxNewTokens, 256, 8192))
+            {
+                changed = true;
+            }
+        }
+
+        ImGui.EndGroup();
+
+        // Code Predictor sampling
+        ImGui.Spacing();
+        ImGui.SeparatorText("Code Predictor Sampling (Groups 1-15)");
+        ImGui.Spacing();
+
+        ImGui.BeginGroup();
+        {
+            // Greedy toggle
+            ImGui.AlignTextToFramePadding();
+            ImGui.Text("Greedy (Argmax):");
+            ImGui.SameLine(160);
+            if (ImGui.Checkbox("##Qwen3CPGreedy", ref _qwen3CodePredictorGreedy))
+            {
+                changed = true;
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(
+                    "OFF (default): Uses temperature + top-K sampling (matches official repo).\n"
+                        + "ON: Uses argmax/greedy decoding (matches some Rust implementations).\n"
+                        + "Greedy may produce cleaner spectral output but less natural variation."
+                );
+            }
+
+            // Show sampling params only when not greedy
+            if (!_qwen3CodePredictorGreedy)
+            {
+                ImGui.TextColored(
+                    new Vector4(0.6f, 0.6f, 0.6f, 1.0f),
+                    "Uses Talker temperature and Top K settings above."
+                );
+            }
+            else
+            {
+                ImGui.TextColored(
+                    new Vector4(0.6f, 0.6f, 0.6f, 1.0f),
+                    "Always picks the highest-probability token."
+                );
+            }
+        }
+
+        ImGui.EndGroup();
+
+        if (changed)
+        {
+            UpdateConfiguration();
+        }
     }
 
     private void RenderAdvancedSettings()
