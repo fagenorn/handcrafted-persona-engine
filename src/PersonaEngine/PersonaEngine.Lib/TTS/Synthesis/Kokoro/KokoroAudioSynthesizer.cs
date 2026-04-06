@@ -20,6 +20,10 @@ internal class KokoroAudioSynthesizer : IAsyncDisposable
 
     private const string DurationsOutputName = "duration";
 
+    private const float SpeedEpsilon = 0.001f;
+
+    private static readonly long[] SpeedShape = [1];
+
     private readonly ILogger<KokoroAudioSynthesizer> _logger;
 
     private readonly IModelProvider _modelProvider;
@@ -34,9 +38,11 @@ internal class KokoroAudioSynthesizer : IAsyncDisposable
 
     private bool _disposed;
 
-    private Dictionary<char, long> _phonemeMap = null!;
+    private readonly Dictionary<char, long> _phonemeMap;
 
     private InferenceSession? _session;
+
+    private float[]? _speedData;
 
     private OrtValue? _speedOrtValue;
 
@@ -52,7 +58,7 @@ internal class KokoroAudioSynthesizer : IAsyncDisposable
         _optionsMonitor = options;
         _logger = logger;
 
-        LoadPhonemeMap();
+        _phonemeMap = LoadPhonemeMap();
         InitializeSession();
     }
 
@@ -178,6 +184,7 @@ internal class KokoroAudioSynthesizer : IAsyncDisposable
 
             _session = null;
             _speedOrtValue = null;
+            _speedData = null;
         }
 
         return ValueTask.CompletedTask;
@@ -185,65 +192,48 @@ internal class KokoroAudioSynthesizer : IAsyncDisposable
 
     private void UpdateAndBindCachedInputs(OrtIoBinding ioBinding, float speed)
     {
-        if (
-            _currentSpeed == null
-            || speed - _currentSpeed > 0.001f
-            || speed - _currentSpeed < -0.001f
-        )
+        if (_currentSpeed is null || MathF.Abs(speed - _currentSpeed.Value) > SpeedEpsilon)
         {
             _speedOrtValue?.Dispose();
 
-            var speedData = new[] { speed };
-            var speedShape = new long[] { 1 };
-
+            _speedData = [speed];
             _speedOrtValue = OrtValue.CreateTensorValueFromMemory(
                 OrtMemoryInfo.DefaultInstance,
-                speedData.AsMemory(),
-                speedShape
+                _speedData.AsMemory(),
+                SpeedShape
             );
             _currentSpeed = speed;
         }
 
-        if (_speedOrtValue != null)
-        {
-            ioBinding.BindInput(SpeedName, _speedOrtValue);
-        }
+        ioBinding.BindInput(SpeedName, _speedOrtValue!);
     }
 
-    private void LoadPhonemeMap()
+    private Dictionary<char, long> LoadPhonemeMap()
     {
         var mapPath = _modelProvider.GetModelPath(IO.ModelType.Kokoro.PhonemeMappings);
 
-        try
+        var lines = File.ReadAllLines(mapPath);
+        var mapping = new Dictionary<char, long>(lines.Length);
+
+        foreach (var line in lines)
         {
-            var lines = File.ReadAllLines(mapPath);
-            var mapping = new Dictionary<char, long>(lines.Length);
-
-            foreach (var line in lines)
+            if (string.IsNullOrWhiteSpace(line) || line.Length < 3)
             {
-                if (string.IsNullOrWhiteSpace(line) || line.Length < 3)
-                {
-                    _logger.LogWarning("Skipping invalid line in phoneme map: '{Line}'", line);
+                _logger.LogWarning("Skipping invalid line in phoneme map: '{Line}'", line);
 
-                    continue;
-                }
-
-                mapping[line[0]] = long.Parse(line[2..]);
+                continue;
             }
 
-            _phonemeMap = mapping;
-            _logger.LogInformation(
-                "Loaded {Count} phoneme mappings from {Path}.",
-                mapping.Count,
-                mapPath
-            );
+            mapping[line[0]] = long.Parse(line[2..]);
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error reading or parsing phoneme map file: {MapPath}", mapPath);
 
-            throw;
-        }
+        _logger.LogInformation(
+            "Loaded {Count} phoneme mappings from {Path}.",
+            mapping.Count,
+            mapPath
+        );
+
+        return mapping;
     }
 
     private void InitializeSession()
