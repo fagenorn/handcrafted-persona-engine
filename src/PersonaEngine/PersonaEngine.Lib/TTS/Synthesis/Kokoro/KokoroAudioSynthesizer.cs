@@ -19,10 +19,6 @@ internal class KokoroAudioSynthesizer : IAsyncDisposable
 
     private const string DurationsOutputName = "duration";
 
-    private const long BosTokenId = 0;
-
-    private const long EosTokenId = 0;
-
     private readonly ILogger<KokoroAudioSynthesizer> _logger;
 
     private readonly IModelProvider _modelProvider;
@@ -98,7 +94,7 @@ internal class KokoroAudioSynthesizer : IAsyncDisposable
             int inputSize;
             try
             {
-                inputSize = ConvertPhonemesToTokens(phonemes, tokenBuffer);
+                inputSize = KokoroTokenConverter.Convert(phonemes, _phonemeMap, tokenBuffer);
 
                 var tokenData = tokenBuffer.AsMemory(0, inputSize);
                 var tokenShape = new long[] { 1, tokenData.Length };
@@ -266,31 +262,6 @@ internal class KokoroAudioSynthesizer : IAsyncDisposable
 
             throw;
         }
-    }
-
-    private int ConvertPhonemesToTokens(string phonemes, long[] buffer)
-    {
-        buffer[0] = BosTokenId;
-
-        for (var i = 0; i < phonemes.Length; i++)
-        {
-            var phonemeChar = phonemes[i];
-            if (_phonemeMap.TryGetValue(phonemeChar, out var id))
-            {
-                buffer[i + 1] = id;
-            }
-            else
-            {
-                _logger.LogWarning(
-                    "Unrecognized phoneme character '{PhonemeChar}' encountered. Skipping.",
-                    phonemeChar
-                );
-            }
-        }
-
-        buffer[phonemes.Length + 1] = EosTokenId;
-
-        return phonemes.Length + 1;
     }
 
     private Memory<float> TrimSilence(
