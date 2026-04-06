@@ -26,9 +26,13 @@ internal class KokoroAudioSynthesizer : IAsyncDisposable
 
     private readonly IOptionsMonitor<KokoroVoiceOptions> _optionsMonitor;
 
+    private readonly object _sessionLock = new();
+
     private readonly IKokoroVoiceProvider _voiceProvider;
 
     private float? _currentSpeed;
+
+    private bool _disposed;
 
     private Dictionary<char, long> _phonemeMap = null!;
 
@@ -65,6 +69,7 @@ internal class KokoroAudioSynthesizer : IAsyncDisposable
             return new KokoroSynthesisResult(Memory<float>.Empty, Memory<long>.Empty);
         }
 
+        ObjectDisposedException.ThrowIf(_disposed, this);
         cancellationToken.ThrowIfCancellationRequested();
 
         var currentOptions = options ?? _optionsMonitor.CurrentValue;
@@ -87,70 +92,63 @@ internal class KokoroAudioSynthesizer : IAsyncDisposable
                 cancellationToken
             );
 
-            using var ioBinding = _session!.CreateIoBinding();
+            var session =
+                _session ?? throw new ObjectDisposedException(nameof(KokoroAudioSynthesizer));
+            using var ioBinding = session.CreateIoBinding();
 
             var sequenceLength = phonemes.Length;
             var tokenBuffer = ArrayPool<long>.Shared.Rent(sequenceLength + 2);
-            OrtValue? inputIdsOrtValue;
-            int inputSize;
             try
             {
-                inputSize = KokoroTokenConverter.Convert(phonemes, _phonemeMap, tokenBuffer);
-
+                var inputSize = KokoroTokenConverter.Convert(phonemes, _phonemeMap, tokenBuffer);
                 var tokenData = tokenBuffer.AsMemory(0, inputSize);
                 var tokenShape = new long[] { 1, tokenData.Length };
 
-                inputIdsOrtValue = OrtValue.CreateTensorValueFromMemory(
+                using var inputIdsOrtValue = OrtValue.CreateTensorValueFromMemory(
                     OrtMemoryInfo.DefaultInstance,
                     tokenData,
                     tokenShape
                 );
                 ioBinding.BindInput(InputIdsName, inputIdsOrtValue);
+
+                var styleEmbeddingData = voice.GetEmbedding([1, inputSize]);
+                var styleEmbeddingShape = new long[] { 1, styleEmbeddingData.Length };
+
+                using var styleOrtValue = OrtValue.CreateTensorValueFromMemory(
+                    OrtMemoryInfo.DefaultInstance,
+                    styleEmbeddingData,
+                    styleEmbeddingShape
+                );
+                ioBinding.BindInput(StyleEmbeddingName, styleOrtValue);
+
+                UpdateAndBindCachedInputs(ioBinding, currentOptions.DefaultSpeed);
+
+                ioBinding.BindOutputToDevice(WaveformOutputName, OrtMemoryInfo.DefaultInstance);
+                ioBinding.BindOutputToDevice(DurationsOutputName, OrtMemoryInfo.DefaultInstance);
+
+                Memory<float> waveform;
+                Memory<long> durations;
+
+                lock (_sessionLock)
+                {
+                    using var runOptions = new RunOptions();
+                    using var results = session.RunWithBoundResults(runOptions, ioBinding);
+
+                    waveform = results[0].GetTensorDataAsSpan<float>().ToArray().AsMemory();
+                    durations = results[1].GetTensorDataAsSpan<long>().ToArray().AsMemory();
+                }
+
+                if (currentOptions.TrimSilence)
+                {
+                    waveform = AudioSilenceTrimmer.Trim(waveform);
+                }
+
+                return new KokoroSynthesisResult(waveform, durations);
             }
             finally
             {
                 ArrayPool<long>.Shared.Return(tokenBuffer);
             }
-
-            var styleEmbeddingData = voice.GetEmbedding([1, inputSize]);
-            var styleEmbeddingShape = new long[] { 1, styleEmbeddingData.Length };
-
-            var styleOrtValue = OrtValue.CreateTensorValueFromMemory(
-                OrtMemoryInfo.DefaultInstance,
-                styleEmbeddingData,
-                styleEmbeddingShape
-            );
-
-            ioBinding.BindInput(StyleEmbeddingName, styleOrtValue);
-
-            UpdateAndBindCachedInputs(ioBinding, currentOptions.DefaultSpeed);
-
-            ioBinding.BindOutputToDevice(WaveformOutputName, OrtMemoryInfo.DefaultInstance);
-            ioBinding.BindOutputToDevice(DurationsOutputName, OrtMemoryInfo.DefaultInstance);
-
-            Memory<float> waveform;
-            Memory<long> durations;
-
-            lock (_session)
-            {
-                using var runOptions = new RunOptions();
-                using var results = _session.RunWithBoundResults(runOptions, ioBinding);
-
-                var waveformTensor = results[0].GetTensorDataAsSpan<float>();
-                var durationTensor = results[1].GetTensorDataAsSpan<long>();
-
-                waveform = waveformTensor.ToArray().AsMemory();
-                durations = durationTensor.ToArray().AsMemory();
-            }
-
-            if (currentOptions.TrimSilence)
-            {
-                waveform = AudioSilenceTrimmer.Trim(waveform);
-            }
-
-            inputIdsOrtValue?.Dispose();
-
-            return new KokoroSynthesisResult(waveform, durations);
         }
         catch (Exception ex)
         {
@@ -166,11 +164,21 @@ internal class KokoroAudioSynthesizer : IAsyncDisposable
 
     public ValueTask DisposeAsync()
     {
-        _session?.Dispose();
-        _speedOrtValue?.Dispose();
+        if (_disposed)
+        {
+            return ValueTask.CompletedTask;
+        }
 
-        _session = null;
-        _speedOrtValue = null;
+        _disposed = true;
+
+        lock (_sessionLock)
+        {
+            _session?.Dispose();
+            _speedOrtValue?.Dispose();
+
+            _session = null;
+            _speedOrtValue = null;
+        }
 
         return ValueTask.CompletedTask;
     }
