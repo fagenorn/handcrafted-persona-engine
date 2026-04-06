@@ -7,8 +7,10 @@ using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Common;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
 using PersonaEngine.Lib.LLM;
+using PersonaEngine.Lib.TTS.Synthesis.Audio;
+using PersonaEngine.Lib.TTS.Synthesis.TextProcessing;
 
-namespace PersonaEngine.Lib.TTS.Synthesis;
+namespace PersonaEngine.Lib.TTS.Synthesis.Engine;
 
 /// <summary>
 ///     Engine-agnostic TTS orchestrator. Reads LLM chunks, segments sentences,
@@ -29,8 +31,6 @@ public sealed class TtsOrchestrator : ITtsEngine
     private readonly IList<ITextFilter> _textFilters;
     private readonly ITextProcessor _textProcessor;
 
-    private bool _disposed;
-
     public TtsOrchestrator(
         ITextProcessor textProcessor,
         ITtsEngineProvider engineProvider,
@@ -46,14 +46,11 @@ public sealed class TtsOrchestrator : ITtsEngine
         _audioFilters = audioFilters.OrderByDescending(x => x.Priority).ToList();
         _textFilters = textFilters.OrderByDescending(x => x.Priority).ToList();
         _logger =
-            loggerFactory?.CreateLogger<TtsOrchestrator>()
+            loggerFactory.CreateLogger<TtsOrchestrator>()
             ?? throw new ArgumentNullException(nameof(loggerFactory));
     }
 
-    public void Dispose()
-    {
-        _disposed = true;
-    }
+    public void Dispose() { }
 
     public async Task<CompletionReason> SynthesizeStreamingAsync(
         ChannelReader<LlmChunkEvent> inputReader,
@@ -419,9 +416,12 @@ public sealed class TtsOrchestrator : ITtsEngine
         IReadOnlyList<Token> phonemizerTokens
     )
     {
-        // Build a lookup from word text → phoneme data (first match wins)
+        // Build lookups from word text → phoneme data (first match wins).
+        // We index by both raw text and punctuation-stripped text because the
+        // engine (Qwen3) splits by whitespace ("Hello,", "you?") while the
+        // phonemizer tokenizes words without trailing punctuation ("Hello", "you").
         var phonemeLookup = new Dictionary<string, Token>(
-            phonemizerTokens.Count,
+            phonemizerTokens.Count * 2,
             StringComparer.OrdinalIgnoreCase
         );
 
@@ -430,6 +430,12 @@ public sealed class TtsOrchestrator : ITtsEngine
             if (!string.IsNullOrEmpty(pt.Text) && !string.IsNullOrEmpty(pt.Phonemes))
             {
                 phonemeLookup.TryAdd(pt.Text, pt);
+
+                var stripped = StripPunctuation(pt.Text);
+                if (stripped.Length > 0 && stripped != pt.Text)
+                {
+                    phonemeLookup.TryAdd(stripped, pt);
+                }
             }
         }
 
@@ -446,6 +452,43 @@ public sealed class TtsOrchestrator : ITtsEngine
                 token.Tag = match.Tag;
                 token.Stress = match.Stress;
             }
+            else
+            {
+                var stripped = StripPunctuation(token.Text);
+                if (
+                    stripped.Length > 0
+                    && stripped != token.Text
+                    && phonemeLookup.TryGetValue(stripped, out match)
+                )
+                {
+                    token.Phonemes = match.Phonemes;
+                    token.Tag = match.Tag;
+                    token.Stress = match.Stress;
+                }
+            }
         }
+    }
+
+    private static string StripPunctuation(string text)
+    {
+        var start = 0;
+        var end = text.Length - 1;
+
+        while (start <= end && char.IsPunctuation(text[start]))
+        {
+            start++;
+        }
+
+        while (end >= start && char.IsPunctuation(text[end]))
+        {
+            end--;
+        }
+
+        if (start == 0 && end == text.Length - 1)
+        {
+            return text;
+        }
+
+        return start > end ? string.Empty : text[start..(end + 1)];
     }
 }
