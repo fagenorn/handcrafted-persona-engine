@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Numerics;
 using FontStashSharp;
 
@@ -6,11 +6,12 @@ namespace PersonaEngine.Lib.UI.Text.Subtitles;
 
 /// <summary>
 ///     Measures text dimensions using a specific font and caches the results.
-///     Provides information about available rendering width and line height.
 ///     Thread-safe for use in concurrent processing.
 /// </summary>
 public class TextMeasurer
 {
+    private const int MaxCacheSize = 4096;
+
     private readonly ConcurrentDictionary<string, Vector2> _cache = new();
 
     private readonly float _sideMargin;
@@ -57,6 +58,19 @@ public class TextMeasurer
             return Vector2.Zero;
         }
 
-        return _cache.GetOrAdd(text, t => Font.MeasureString(t));
+        if (_cache.TryGetValue(text, out var cached))
+        {
+            return cached;
+        }
+
+        var measured = Font.MeasureString(text);
+
+        if (_cache.Count >= MaxCacheSize)
+        {
+            _cache.Clear();
+        }
+
+        _cache[text] = measured;
+        return measured;
     }
 }

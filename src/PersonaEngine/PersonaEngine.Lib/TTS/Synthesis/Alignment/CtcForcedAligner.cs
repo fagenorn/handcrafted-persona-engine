@@ -22,6 +22,7 @@ public sealed class CtcForcedAligner : IForcedAligner
 
     private readonly InferenceSession _session;
     private readonly Dictionary<char, int> _charToIdx;
+    private readonly Dictionary<int, char> _idxToChar;
     private readonly ILogger? _logger;
     private bool _disposed;
 
@@ -51,6 +52,14 @@ public sealed class CtcForcedAligner : IForcedAligner
             }
         }
 
+        _idxToChar = new Dictionary<int, char>();
+        foreach (var (key, value) in _charToIdx)
+        {
+            _idxToChar[value] = key;
+        }
+
+        _idxToChar[SeparatorIdx] = '|';
+
         _logger = logger;
     }
 
@@ -58,51 +67,91 @@ public sealed class CtcForcedAligner : IForcedAligner
     public AlignmentResult Align(ReadOnlySpan<float> audio, string text, int sampleRate)
     {
         var audioDurationSec = audio.Length / (double)sampleRate;
-
-        // Resample to 16kHz if needed
-        float[]? resampledRent = null;
-        ReadOnlySpan<float> audio16Khz;
-
-        if ((uint)sampleRate == Wav2VecSampleRate)
-        {
-            audio16Khz = audio;
-        }
-        else
-        {
-            var targetFrames = AudioConverter.CalculateResampledFrameCount(
-                audio.Length,
-                (uint)sampleRate,
-                Wav2VecSampleRate
-            );
-            resampledRent = ArrayPool<float>.Shared.Rent(targetFrames);
-            AudioConverter.ResampleFloat(
-                audio.ToArray().AsMemory(),
-                resampledRent.AsMemory(0, targetFrames),
-                channels: 1,
-                (uint)sampleRate,
-                Wav2VecSampleRate
-            );
-            audio16Khz = resampledRent.AsSpan(0, targetFrames);
-        }
+        var audio16Khz = ResampleTo16Khz(audio, sampleRate, out var resampledRent);
 
         try
         {
-            // Run wav2vec2 forward pass → log probabilities [1, T, 32]
             var logProbs = RunWav2Vec(audio16Khz);
             var numFrames = logProbs.Length / VocabSize;
             var frameDuration = audioDurationSec / numFrames;
 
-            // Prepare text for CTC: uppercase, replace space with |
             var ctcText = text.ToUpperInvariant().Replace(' ', '|');
-
-            // Build CTC label sequence with interleaved blanks
             var labels = BuildCtcLabels(ctcText);
-
-            // Run Viterbi forced alignment
             var path = ViterbiAlign(logProbs, numFrames, labels);
 
-            // Extract character boundaries and group into words
             return ExtractWordTimings(path, labels, ctcText, frameDuration, logProbs);
+        }
+        finally
+        {
+            if (resampledRent is not null)
+            {
+                ArrayPool<float>.Shared.Return(resampledRent);
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public AlignmentResult AlignSpokenWindowed(
+        ReadOnlySpan<float> audioWindow,
+        string remainingText,
+        int sampleRate,
+        double windowStartTime
+    )
+    {
+        var windowDurationSec = audioWindow.Length / (double)sampleRate;
+        var audio16Khz = ResampleTo16Khz(audioWindow, sampleRate, out var resampledRent);
+
+        try
+        {
+            var logProbs = RunWav2Vec(audio16Khz);
+            var numFrames = logProbs.Length / VocabSize;
+            var frameDuration = windowDurationSec / numFrames;
+
+            // Greedy decode on the window to see which remaining words are present
+            var greedyText = GreedyDecode(logProbs, numFrames);
+            var spokenCount = CountSpokenWords(greedyText, remainingText);
+
+            _logger?.LogDebug(
+                "AlignSpokenWindowed: window={WindowStart:F2}s-{WindowEnd:F2}s, greedy=\"{Greedy}\", spoken={Spoken}",
+                windowStartTime,
+                windowStartTime + windowDurationSec,
+                greedyText.Replace('|', ' ').Trim(),
+                spokenCount
+            );
+
+            if (spokenCount == 0)
+            {
+                var emptyBuffer = ArrayPool<WordTiming>.Shared.Rent(1);
+                return new AlignmentResult(emptyBuffer, 0);
+            }
+
+            // Viterbi-align only the confirmed words within this window
+            var words = remainingText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var prefixText = string.Join(' ', words.Take(spokenCount));
+            var ctcText = prefixText.ToUpperInvariant().Replace(' ', '|');
+            var labels = BuildCtcLabels(ctcText);
+            var path = ViterbiAlign(logProbs, numFrames, labels);
+
+            // Extract timings relative to window, then offset to absolute time
+            var windowResult = ExtractWordTimings(path, labels, ctcText, frameDuration, logProbs);
+
+            // Offset all timings by windowStartTime to get absolute times
+            var buffer = ArrayPool<WordTiming>.Shared.Rent(windowResult.Count);
+            for (var i = 0; i < windowResult.Count; i++)
+            {
+                var wt = windowResult.Timings[i];
+                buffer[i] = new WordTiming(
+                    wt.Word,
+                    wt.StartTime + TimeSpan.FromSeconds(windowStartTime),
+                    wt.EndTime + TimeSpan.FromSeconds(windowStartTime),
+                    wt.Confidence
+                );
+            }
+
+            var count = windowResult.Count;
+            windowResult.Dispose(); // return the inner buffer
+
+            return new AlignmentResult(buffer, count);
         }
         finally
         {
@@ -122,6 +171,214 @@ public sealed class CtcForcedAligner : IForcedAligner
 
         _session.Dispose();
         _disposed = true;
+    }
+
+    /// <summary>
+    ///     Resamples audio to 16kHz for wav2vec2. Returns the 16kHz span via the return value
+    ///     and optionally a rented buffer via <paramref name="rentedBuffer" /> that the caller
+    ///     must return to the pool when done.
+    /// </summary>
+    private static ReadOnlySpan<float> ResampleTo16Khz(
+        ReadOnlySpan<float> audio,
+        int sampleRate,
+        out float[]? rentedBuffer
+    )
+    {
+        if ((uint)sampleRate == Wav2VecSampleRate)
+        {
+            rentedBuffer = null;
+
+            return audio;
+        }
+
+        var targetFrames = AudioConverter.CalculateResampledFrameCount(
+            audio.Length,
+            (uint)sampleRate,
+            Wav2VecSampleRate
+        );
+        rentedBuffer = ArrayPool<float>.Shared.Rent(targetFrames);
+        AudioConverter.ResampleFloat(
+            audio.ToArray().AsMemory(),
+            rentedBuffer.AsMemory(0, targetFrames),
+            channels: 1,
+            (uint)sampleRate,
+            Wav2VecSampleRate
+        );
+
+        return rentedBuffer.AsSpan(0, targetFrames);
+    }
+
+    /// <summary>
+    ///     Greedy CTC decode: argmax each frame, collapse consecutive duplicates, remove blanks.
+    ///     Returns recognized text with '|' as word separators.
+    /// </summary>
+    private string GreedyDecode(float[] logProbs, int numFrames)
+    {
+        var sb = new System.Text.StringBuilder();
+        var prevIdx = -1;
+
+        for (var t = 0; t < numFrames; t++)
+        {
+            var offset = t * VocabSize;
+            var bestIdx = 0;
+            var bestScore = logProbs[offset];
+            for (var v = 1; v < VocabSize; v++)
+            {
+                if (logProbs[offset + v] > bestScore)
+                {
+                    bestScore = logProbs[offset + v];
+                    bestIdx = v;
+                }
+            }
+
+            if (bestIdx == prevIdx)
+            {
+                prevIdx = bestIdx;
+                continue;
+            }
+
+            prevIdx = bestIdx;
+
+            if (bestIdx == BlankIdx)
+            {
+                continue;
+            }
+
+            if (_idxToChar.TryGetValue(bestIdx, out var c))
+            {
+                sb.Append(c);
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    ///     Counts how many consecutive words from the transcript were recognized
+    ///     in the greedy CTC output. Uses Levenshtein similarity for fuzzy matching.
+    ///     Skips leading greedy words that don't match (fragments from window overlap).
+    /// </summary>
+    private static int CountSpokenWords(string greedyText, string transcript)
+    {
+        var greedyWords = greedyText
+            .ToUpperInvariant()
+            .Split('|', StringSplitOptions.RemoveEmptyEntries);
+
+        var transcriptWords = transcript
+            .ToUpperInvariant()
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        if (greedyWords.Length == 0 || transcriptWords.Length == 0)
+        {
+            return 0;
+        }
+
+        // Try starting from greedy positions 0-2 (skip overlap fragments)
+        var bestMatchedWords = 0;
+
+        var maxSkip = Math.Min(3, greedyWords.Length);
+        for (var startIdx = 0; startIdx < maxSkip; startIdx++)
+        {
+            var matchedWords = 0;
+            var greedyIdx = startIdx;
+
+            foreach (var tWordRaw in transcriptWords)
+            {
+                if (greedyIdx >= greedyWords.Length)
+                {
+                    break;
+                }
+
+                var tWord = StripPunctuation(tWordRaw);
+                if (tWord.Length == 0)
+                {
+                    continue;
+                }
+
+                var gWord = greedyWords[greedyIdx];
+                var similarity = WordSimilarity(gWord, tWord);
+
+                if (similarity >= 0.5f)
+                {
+                    matchedWords++;
+                    greedyIdx++;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            if (matchedWords > bestMatchedWords)
+            {
+                bestMatchedWords = matchedWords;
+            }
+        }
+
+        return bestMatchedWords;
+    }
+
+    private static string StripPunctuation(string word)
+    {
+        var sb = new System.Text.StringBuilder(word.Length);
+        foreach (var c in word)
+        {
+            if (char.IsLetter(c))
+            {
+                sb.Append(c);
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private static float WordSimilarity(string a, string b)
+    {
+        if (a == b)
+        {
+            return 1.0f;
+        }
+
+        var maxLen = Math.Max(a.Length, b.Length);
+        if (maxLen == 0)
+        {
+            return 1.0f;
+        }
+
+        var dist = LevenshteinDistance(a, b);
+
+        return 1.0f - (float)dist / maxLen;
+    }
+
+    private static int LevenshteinDistance(string s, string t)
+    {
+        var n = s.Length;
+        var m = t.Length;
+        var d = new int[n + 1, m + 1];
+
+        for (var i = 0; i <= n; i++)
+        {
+            d[i, 0] = i;
+        }
+
+        for (var j = 0; j <= m; j++)
+        {
+            d[0, j] = j;
+        }
+
+        for (var i = 1; i <= n; i++)
+        {
+            for (var j = 1; j <= m; j++)
+            {
+                var cost = s[i - 1] == t[j - 1] ? 0 : 1;
+                d[i, j] = Math.Min(
+                    Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1),
+                    d[i - 1, j - 1] + cost
+                );
+            }
+        }
+
+        return d[n, m];
     }
 
     private float[] RunWav2Vec(ReadOnlySpan<float> audio16Khz)

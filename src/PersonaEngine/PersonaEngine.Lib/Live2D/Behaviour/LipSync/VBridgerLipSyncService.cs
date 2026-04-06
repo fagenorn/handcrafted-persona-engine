@@ -522,39 +522,15 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
             _logger.LogTrace("New sentence started: {SentenceId}", chunk.SentenceId);
             _currentSentenceId = chunk.SentenceId;
             _cumulativeTimeOffset = 0.0;
-            ProcessAudioSegment(chunk);
+            _activePhonemes.Clear();
             _currentPhonemeIndex = -1;
+            AppendPhonemes(chunk, 0.0);
         }
         else if (chunk.Tokens.Count > 0)
         {
-            // Same sentence — only replace phonemes if new timing covers at least
-            // as much time as existing, so partial CTC updates don't destroy
-            // phonemes for words not yet spoken.
-            var newMaxTime = chunk.Tokens[^1].EndTs ?? 0.0;
-            var existingMaxTime = _activePhonemes.Count > 0 ? _activePhonemes[^1].EndTime : 0.0;
-
-            if (newMaxTime >= existingMaxTime)
-            {
-                _logger.LogTrace(
-                    "Sentence {SentenceId}: replacing timing ({TokenCount} tokens, covers {NewMax:F3}s >= {ExistingMax:F3}s)",
-                    chunk.SentenceId,
-                    chunk.Tokens.Count,
-                    newMaxTime,
-                    existingMaxTime
-                );
-                ProcessAudioSegment(chunk);
-                _currentPhonemeIndex = -1;
-            }
-            else
-            {
-                _logger.LogTrace(
-                    "Sentence {SentenceId}: skipping timing update ({TokenCount} tokens, covers {NewMax:F3}s < {ExistingMax:F3}s)",
-                    chunk.SentenceId,
-                    chunk.Tokens.Count,
-                    newMaxTime,
-                    existingMaxTime
-                );
-            }
+            // Same sentence — append phonemes from the new word token(s).
+            // Timings are slice-relative, so offset by cumulative time.
+            AppendPhonemes(chunk, _cumulativeTimeOffset);
         }
         else
         {
@@ -624,11 +600,15 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
 
     #region Phoneme Processing
 
-    private void ProcessAudioSegment(AudioSegment segment)
+    /// <summary>
+    ///     Appends phonemes from a segment's tokens to the active phoneme list.
+    ///     Token timings are slice-relative, so <paramref name="timeOffset"/> is added
+    ///     to convert them to absolute sentence time.
+    /// </summary>
+    private void AppendPhonemes(AudioSegment segment, double timeOffset)
     {
-        _activePhonemes.Clear();
-
-        var lastEndTime = 0.0;
+        var lastEndTime = _activePhonemes.Count > 0 ? _activePhonemes[^1].EndTime : 0.0;
+        var beforeCount = _activePhonemes.Count;
 
         foreach (var token in segment.Tokens)
         {
@@ -649,8 +629,8 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
                 continue;
             }
 
-            var tokenStartTime = Math.Max(lastEndTime, token.StartTs.Value);
-            var tokenEndTime = Math.Max(tokenStartTime + 0.001, token.EndTs.Value);
+            var tokenStartTime = Math.Max(lastEndTime, token.StartTs.Value + timeOffset);
+            var tokenEndTime = Math.Max(tokenStartTime + 0.001, token.EndTs.Value + timeOffset);
 
             var phonemeChars = SplitPhonemes(token.Phonemes);
             if (phonemeChars.Count == 0)
@@ -684,8 +664,14 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
             lastEndTime = currentPhonemeStartTime;
         }
 
-        _activePhonemes.Sort((a, b) => a.StartTime.CompareTo(b.StartTime));
-        _logger.LogDebug("Processed segment into {Count} timed phonemes.", _activePhonemes.Count);
+        if (_activePhonemes.Count > beforeCount)
+        {
+            _logger.LogDebug(
+                "Appended {Count} timed phonemes (total: {Total}).",
+                _activePhonemes.Count - beforeCount,
+                _activePhonemes.Count
+            );
+        }
     }
 
     private List<string> SplitPhonemes(string phonemeString)

@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using FontStashSharp;
 
 namespace PersonaEngine.Lib.UI.Text.Subtitles;
@@ -30,6 +30,11 @@ public class PopAnimator : IWordAnimator
     }
 
     public FSColor CalculateColor(FSColor startColor, FSColor endColor, float progress)
+    {
+        return LerpColor(startColor, endColor, progress);
+    }
+
+    public static FSColor LerpColor(FSColor startColor, FSColor endColor, float progress)
     {
         progress = Math.Clamp(progress, 0.0f, 1.0f);
 

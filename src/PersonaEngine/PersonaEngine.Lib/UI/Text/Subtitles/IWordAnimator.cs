@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using FontStashSharp;
 
 namespace PersonaEngine.Lib.UI.Text.Subtitles;
@@ -10,5 +10,8 @@ public interface IWordAnimator
 {
     Vector2 CalculateScale(float progress);
 
-    FSColor CalculateColor(FSColor startColor, FSColor endColor, float progress);
+    FSColor CalculateColor(FSColor startColor, FSColor endColor, float progress)
+    {
+        return PopAnimator.LerpColor(startColor, endColor, progress);
+    }
 }
