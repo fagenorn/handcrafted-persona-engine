@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -7,7 +6,6 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
 using PersonaEngine.Lib.IO;
-using PersonaEngine.Lib.TTS.Synthesis;
 using PersonaEngine.Lib.TTS.Synthesis.Alignment;
 
 namespace PersonaEngine.Lib.TTS.Synthesis.Qwen3;
@@ -18,10 +16,9 @@ namespace PersonaEngine.Lib.TTS.Synthesis.Qwen3;
 ///     Audio decoder uses ONNX Runtime (streaming stateful decoder).
 ///     Output: 24 kHz mono float32 PCM.
 /// </summary>
-internal sealed class Qwen3TtsGgufEngine : IDisposable
+public sealed class Qwen3TtsGgufEngine : IDisposable
 {
     public const int OutputSampleRate = 24000;
-
     private const int DefaultMaxNewTokens = 2048;
     private const int SamplesPerFrame = 1920;
     private const int TalkerDim = 2048;
@@ -148,21 +145,13 @@ internal sealed class Qwen3TtsGgufEngine : IDisposable
     ///     <see cref="GenerateStreaming" /> calls for cross-sentence continuity.
     ///     The caller owns the decoder's lifetime.
     /// </summary>
-    public StreamingAudioDecoder CreateAudioDecoder() => new(_decoderSession, _logger);
+    public Qwen3StreamingAudioDecoder CreateAudioDecoder() => new(_decoderSession, _logger);
 
     /// <summary>
     ///     Generates speech audio in streaming chunks.
     /// </summary>
-    /// <param name="decoder">
-    ///     Caller-owned streaming decoder. State is preserved across calls for
-    ///     cross-sentence audio continuity.
-    /// </param>
-    /// <param name="isLastSegment">
-    ///     True if this is the final segment in the turn. When true, the decoder's
-    ///     conv buffers are flushed and a fade-out is applied.
-    /// </param>
     public async IAsyncEnumerable<float[]> GenerateStreaming(
-        StreamingAudioDecoder decoder,
+        Qwen3StreamingAudioDecoder decoder,
         string text,
         bool isLastSegment,
         string speaker = "ryan",
@@ -170,13 +159,14 @@ internal sealed class Qwen3TtsGgufEngine : IDisposable
         string? instruct = null,
         Qwen3GenerationOptions? options = null,
         int emitEveryFrames = 4,
+        List<float>? entropyAccumulator = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
         options ??= new Qwen3GenerationOptions();
         var sw = Stopwatch.StartNew();
 
-        var (prefix, textBody, _) = _tokenizer.BuildCustomVoicePrompt(text);
+        var (prefix, textBody) = _tokenizer.BuildCustomVoicePrompt(text);
         var codecPrefix = _embeddings.BuildCodecPrefix(language);
         var speakerEmb = _embeddings.GetSpeakerEmbedding(speaker);
         var instructTokens = instruct != null ? _tokenizer.Encode(instruct) : null;
@@ -215,7 +205,15 @@ internal sealed class Qwen3TtsGgufEngine : IDisposable
 
                 try
                 {
-                    foreach (var codes in GenerateCodeFrames(logits, hidden, prefillLen, options))
+                    foreach (
+                        var codes in GenerateCodeFrames(
+                            logits,
+                            hidden,
+                            prefillLen,
+                            options,
+                            entropyAccumulator
+                        )
+                    )
                     {
                         cancellationToken.ThrowIfCancellationRequested();
                         allCodes.Add(codes);
@@ -403,14 +401,16 @@ internal sealed class Qwen3TtsGgufEngine : IDisposable
     }
 
     /// <summary>
-    ///     Generates speech audio in streaming chunks with word-level timing.
+    ///     Generates audio with real-time progressive word timing for subtitle highlighting.
     ///     Strategy:
-    ///       1. After ~1s accumulated audio: CTC forced alignment
-    ///       2. Subsequent CTC refinements every ~1s of new audio
-    ///     Before enough audio accumulates for the first CTC run, chunks get empty tokens.
+    ///       1. Every audio chunk carries the full sentence's tokens with best-known timing
+    ///       2. Every ~0.5s, AlignSpoken updates timing for confirmed words
+    ///       3. Token timing is adjusted to chunk-relative so SubtitleProcessor computes
+    ///          correct absolute times (segmentStart + relativeOffset = absoluteTime)
+    ///       4. No empty-audio timing segments — every segment has audio
     /// </summary>
     public async IAsyncEnumerable<AudioSegment> GenerateStreamingWithTimings(
-        StreamingAudioDecoder decoder,
+        Qwen3StreamingAudioDecoder decoder,
         string text,
         bool isLastSegment,
         string speaker = "ryan",
@@ -422,10 +422,27 @@ internal sealed class Qwen3TtsGgufEngine : IDisposable
     )
     {
         var words = SplitIntoWords(text);
+
+        // Latest absolute word timings (null = untimed). Updated by AlignSpoken.
+        var absoluteTimings = new (double Start, double End)?[words.Count];
+
         var accumulatedAudio = new List<float[]>();
         var totalSamplesEmitted = 0;
-        var lastCtcAlignAt = 0;
-        const int ctcIntervalSamples = OutputSampleRate; // re-align every ~1s
+        var lastAlignAt = 0;
+        var confirmedWordCount = 0;
+        var windowStartSample = 0; // sample offset for windowed alignment
+        const int alignInterval = OutputSampleRate / 2; // 0.5s
+        const int windowOverlapSamples = OutputSampleRate / 5; // 200ms overlap for word boundaries
+
+        // No seeding — let the first CTC at 0.5s provide real timing.
+        // Qwen3 typically has ~0.3-0.5s warmup silence before speech starts,
+        // so no subtitles during that period is correct behavior.
+
+        // Buffer audio until CTC confirms complete words, then emit the audio
+        // together with precisely timed tokens — like mini-Kokoro segments.
+        // Each emitted segment has audio + words that are fully spoken in that audio.
+        var lastEmittedSample = 0;
+        var lastEmittedWordCount = 0;
 
         await foreach (
             var audioChunk in GenerateStreaming(
@@ -437,40 +454,141 @@ internal sealed class Qwen3TtsGgufEngine : IDisposable
                 instruct,
                 options,
                 emitEveryFrames,
-                cancellationToken
+                cancellationToken: cancellationToken
             )
         )
         {
             accumulatedAudio.Add(audioChunk);
             totalSamplesEmitted += audioChunk.Length;
 
-            IReadOnlyList<Token> tokens;
-
-            if (totalSamplesEmitted - lastCtcAlignAt >= ctcIntervalSamples)
+            // Run windowed CTC alignment every 0.5s
+            if (totalSamplesEmitted - lastAlignAt < alignInterval)
             {
-                // Run CTC alignment on accumulated audio
+                continue;
+            }
+
+            var allWords = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (confirmedWordCount < allWords.Length)
+            {
+                var remainingText = string.Join(' ', allWords.Skip(confirmedWordCount));
+
+                // Small overlap before window start to capture word boundaries
+                var winStart = Math.Max(0, windowStartSample - windowOverlapSamples);
+                var winLength = totalSamplesEmitted - winStart;
+                var windowStartTimeSec = winStart / (double)OutputSampleRate;
+
                 var allAudio = ConcatAudio(accumulatedAudio, totalSamplesEmitted);
-                using var ctcResult = _aligner.Align(allAudio, text, OutputSampleRate);
-                tokens = ConvertCtcToTokens(ctcResult.Timings, words);
-                lastCtcAlignAt = totalSamplesEmitted;
-            }
-            else
-            {
-                tokens = Array.Empty<Token>();
+                var audioWindow = allAudio.AsSpan(winStart, winLength);
+
+                using var result = _aligner.AlignSpokenWindowed(
+                    audioWindow,
+                    remainingText,
+                    OutputSampleRate,
+                    windowStartTimeSec
+                );
+
+                if (result.Count > 0)
+                {
+                    for (var i = 0; i < result.Count; i++)
+                    {
+                        var wordIdx = confirmedWordCount + i;
+                        if (wordIdx < words.Count)
+                        {
+                            absoluteTimings[wordIdx] = (
+                                result.Timings[i].StartTime.TotalSeconds,
+                                result.Timings[i].EndTime.TotalSeconds
+                            );
+                        }
+                    }
+
+                    confirmedWordCount += result.Count;
+
+                    var lastConfirmedEnd = absoluteTimings[confirmedWordCount - 1]!.Value.End;
+                    windowStartSample = (int)(lastConfirmedEnd * OutputSampleRate);
+                }
             }
 
-            yield return new AudioSegment(audioChunk.AsMemory(), OutputSampleRate, tokens);
+            lastAlignAt = totalSamplesEmitted;
+
+            // Emit one segment PER newly confirmed word. This ensures subtitles
+            // grow one word at a time (no jumps when CTC confirms multiple words).
+            // Each segment contains audio up to that word's end, with only the new
+            // word token(s) and slice-relative timing so downstream filters work correctly.
+            var fullAudio = ConcatAudio(accumulatedAudio, totalSamplesEmitted);
+
+            for (var w = lastEmittedWordCount; w < confirmedWordCount; w++)
+            {
+                var wordEndSample = Math.Min(
+                    (int)(absoluteTimings[w]!.Value.End * OutputSampleRate),
+                    totalSamplesEmitted
+                );
+
+                if (wordEndSample > lastEmittedSample)
+                {
+                    var sliceStartSec = lastEmittedSample / (double)OutputSampleRate;
+                    var emitLength = wordEndSample - lastEmittedSample;
+                    var audioToEmit = fullAudio.AsSpan(lastEmittedSample, emitLength).ToArray();
+
+                    var tokens = BuildSliceTokens(words, absoluteTimings, w, w + 1, sliceStartSec);
+
+                    yield return new AudioSegment(audioToEmit.AsMemory(), OutputSampleRate, tokens);
+
+                    lastEmittedSample = wordEndSample;
+                }
+            }
+
+            lastEmittedWordCount = confirmedWordCount;
         }
 
-        // Final CTC alignment on complete audio for best accuracy
-        if (totalSamplesEmitted > lastCtcAlignAt)
+        // Final: run full CTC on complete audio for best accuracy,
+        // then emit any remaining audio/words that weren't caught during streaming.
+        if (totalSamplesEmitted > 0)
         {
             var finalAudio = ConcatAudio(accumulatedAudio, totalSamplesEmitted);
-            using var finalResult = _aligner.Align(finalAudio, text, OutputSampleRate);
-            var finalTokens = ConvertCtcToTokens(finalResult.Timings, words);
 
-            // Emit a zero-length audio segment carrying final refined timings
-            yield return new AudioSegment(Memory<float>.Empty, OutputSampleRate, finalTokens);
+            using var finalResult = _aligner.Align(finalAudio, text, OutputSampleRate);
+            for (var i = 0; i < finalResult.Count && i < words.Count; i++)
+            {
+                absoluteTimings[i] = (
+                    finalResult.Timings[i].StartTime.TotalSeconds,
+                    finalResult.Timings[i].EndTime.TotalSeconds
+                );
+            }
+
+            // Emit any words that weren't emitted during streaming (one at a time)
+            for (var w = lastEmittedWordCount; w < finalResult.Count; w++)
+            {
+                var wordEndSample = Math.Min(
+                    (int)(absoluteTimings[w]!.Value.End * OutputSampleRate),
+                    totalSamplesEmitted
+                );
+
+                if (wordEndSample > lastEmittedSample)
+                {
+                    var sliceStartSec = lastEmittedSample / (double)OutputSampleRate;
+                    var emitLen = wordEndSample - lastEmittedSample;
+                    var audioSlice = finalAudio.AsSpan(lastEmittedSample, emitLen).ToArray();
+
+                    var tokens = BuildSliceTokens(words, absoluteTimings, w, w + 1, sliceStartSec);
+
+                    yield return new AudioSegment(audioSlice.AsMemory(), OutputSampleRate, tokens);
+
+                    lastEmittedSample = wordEndSample;
+                }
+            }
+
+            // Trailing audio after the last word (silence, reverb tail, etc.)
+            if (totalSamplesEmitted > lastEmittedSample)
+            {
+                var tailLength = totalSamplesEmitted - lastEmittedSample;
+                var tailAudio = finalAudio.AsSpan(lastEmittedSample, tailLength).ToArray();
+
+                yield return new AudioSegment(
+                    tailAudio.AsMemory(),
+                    OutputSampleRate,
+                    Array.Empty<Token>()
+                );
+            }
         }
     }
 
@@ -513,74 +631,56 @@ internal sealed class Qwen3TtsGgufEngine : IDisposable
     }
 
     /// <summary>
-    ///     Converts CTC word timings to Token objects, truncating at the
-    ///     spoken/unspoken boundary detected via confidence cliff.
+    ///     Builds tokens for a range of words with timing relative to the audio slice.
     /// </summary>
-    private static IReadOnlyList<Token> ConvertCtcToTokens(
-        ReadOnlySpan<WordTiming> ctcTimings,
-        List<(string Word, string Whitespace)> words
+    private static IReadOnlyList<Token> BuildSliceTokens(
+        List<(string Word, string Whitespace)> words,
+        (double Start, double End)?[] absoluteTimings,
+        int startWord,
+        int endWordExclusive,
+        double sliceStartSec
     )
     {
-        var spokenCount = FindSpokenWordCount(ctcTimings);
-        var tokenCount = Math.Min(spokenCount, words.Count);
+        var count = Math.Min(endWordExclusive, words.Count) - startWord;
 
-        if (tokenCount == 0)
+        if (count <= 0)
         {
             return Array.Empty<Token>();
         }
 
-        var tokens = new Token[tokenCount];
+        var tokens = new Token[count];
 
-        for (var i = 0; i < tokenCount; i++)
+        for (var i = 0; i < count; i++)
         {
-            var (word, ws) = words[i];
-            tokens[i] = new Token
+            var wordIdx = startWord + i;
+            var (word, ws) = words[wordIdx];
+            var timing = absoluteTimings[wordIdx];
+
+            if (timing.HasValue)
             {
-                Text = word,
-                Whitespace = ws,
-                StartTs = ctcTimings[i].StartTime.TotalSeconds,
-                EndTs = ctcTimings[i].EndTime.TotalSeconds,
-            };
-        }
-
-        return tokens;
-    }
-
-    /// <summary>
-    ///     Determines how many words were actually spoken by finding the largest
-    ///     confidence drop between consecutive words. A drop exceeding the minimum
-    ///     cliff gap indicates the transition from spoken to unspoken.
-    /// </summary>
-    private static int FindSpokenWordCount(ReadOnlySpan<WordTiming> timings)
-    {
-        const float minCliffGap = 5.0f;
-
-        if (timings.Length <= 1)
-        {
-            return timings.Length;
-        }
-
-        var maxDrop = 0f;
-        var cliffIndex = timings.Length;
-
-        for (var i = 0; i < timings.Length - 1; i++)
-        {
-            var drop = timings[i].Confidence - timings[i + 1].Confidence;
-            if (drop > maxDrop)
+                tokens[i] = new Token
+                {
+                    Text = word,
+                    Whitespace = ws,
+                    StartTs = timing.Value.Start - sliceStartSec,
+                    EndTs = timing.Value.End - sliceStartSec,
+                };
+            }
+            else
             {
-                maxDrop = drop;
-                cliffIndex = i + 1;
+                tokens[i] = new Token { Text = word, Whitespace = ws };
             }
         }
 
-        return maxDrop > minCliffGap ? cliffIndex : timings.Length;
+        return tokens;
     }
 
     private IEnumerable<int[]> GenerateCodeFrames(
         float[] initialLogits,
         float[] initialHidden,
         int prefillLen,
-        Qwen3GenerationOptions options
+        Qwen3GenerationOptions options,
+        List<float>? entropyAccumulator = null
     )
     {
         var numCodeGroups = _config.CodecNumCodebooks;
@@ -621,6 +721,9 @@ internal sealed class Qwen3TtsGgufEngine : IDisposable
         for (var step = 0; step < maxSteps; step++)
         {
             stepSw.Restart();
+
+            // Capture entropy for word timing estimation
+            entropyAccumulator?.Add(ComputeLogitEntropy(currentLogits));
 
             // Silence penalty (optional, not in official Python implementation)
             var silencePenalty = 0f;
@@ -769,5 +872,41 @@ internal sealed class Qwen3TtsGgufEngine : IDisposable
         {
             audio[fadeStart + i] *= (fadeLen - i) / (float)fadeLen;
         }
+    }
+
+    /// <summary>
+    ///     Computes Shannon entropy of a logit distribution (via numerically stable log-softmax).
+    ///     Used for word timing estimation — entropy peaks correlate with word transitions.
+    /// </summary>
+    private static float ComputeLogitEntropy(float[] logits)
+    {
+        var max = float.MinValue;
+        for (var i = 0; i < logits.Length; i++)
+        {
+            if (logits[i] > max)
+            {
+                max = logits[i];
+            }
+        }
+
+        var sumExp = 0.0;
+        for (var i = 0; i < logits.Length; i++)
+        {
+            sumExp += Math.Exp(logits[i] - max);
+        }
+
+        var logSumExp = max + Math.Log(sumExp);
+        var entropy = 0.0;
+        for (var i = 0; i < logits.Length; i++)
+        {
+            var logP = logits[i] - logSumExp;
+            var p = Math.Exp(logP);
+            if (p > 1e-10)
+            {
+                entropy -= p * logP;
+            }
+        }
+
+        return (float)entropy;
     }
 }
