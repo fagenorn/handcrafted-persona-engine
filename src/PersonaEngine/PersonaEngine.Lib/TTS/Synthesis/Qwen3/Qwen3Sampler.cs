@@ -79,6 +79,12 @@ internal static class Qwen3Sampler
             ApplyTopK(processed, options.TopK);
         }
 
+        // Top-P (nucleus sampling)
+        if (options.TopP > 0f && options.TopP < 1.0f)
+        {
+            ApplyTopP(processed, options.TopP);
+        }
+
         // Softmax + sample
         Softmax(processed);
 
@@ -96,7 +102,8 @@ internal static class Qwen3Sampler
         int vocabSize,
         float temperature,
         int topK,
-        bool greedy = false
+        bool greedy = false,
+        float topP = 1.0f
     )
     {
         var slice = logits.Slice(logits.Length - vocabSize, vocabSize);
@@ -117,6 +124,11 @@ internal static class Qwen3Sampler
         if (topK > 0 && topK < vocabSize)
         {
             ApplyTopK(processed, topK);
+        }
+
+        if (topP > 0f && topP < 1.0f)
+        {
+            ApplyTopP(processed, topP);
         }
 
         Softmax(processed);
@@ -171,6 +183,69 @@ internal static class Qwen3Sampler
         for (var i = 0; i < logits.Length; i++)
         {
             logits[i] /= temperature;
+        }
+    }
+
+    private static void ApplyTopP(Span<float> logits, float p)
+    {
+        // Compute softmax probabilities into a temporary buffer
+        var length = logits.Length;
+        Span<float> probs = stackalloc float[length];
+        logits.CopyTo(probs);
+        Softmax(probs);
+
+        // Build index array and sort by probability descending
+        Span<int> indices = stackalloc int[length];
+        for (var i = 0; i < length; i++)
+        {
+            indices[i] = i;
+        }
+
+        // Insertion sort by descending probability — vocab is small (~2048/3072)
+        for (var i = 1; i < length; i++)
+        {
+            var key = indices[i];
+            var keyProb = probs[key];
+            var j = i - 1;
+            while (j >= 0 && probs[indices[j]] < keyProb)
+            {
+                indices[j + 1] = indices[j];
+                j--;
+            }
+
+            indices[j + 1] = key;
+        }
+
+        // Walk sorted tokens until cumulative probability exceeds p, mask the rest
+        var cumulative = 0f;
+        var cutoff = -1;
+        for (var i = 0; i < length; i++)
+        {
+            cumulative += probs[indices[i]];
+            if (cumulative > p)
+            {
+                cutoff = i;
+
+                break;
+            }
+        }
+
+        // If all tokens fit within p, nothing to mask
+        if (cutoff < 0)
+        {
+            return;
+        }
+
+        // Keep at least one token (the most probable)
+        if (cutoff == 0)
+        {
+            cutoff = 1;
+        }
+
+        // Mask everything after the cutoff
+        for (var i = cutoff; i < length; i++)
+        {
+            logits[indices[i]] = float.NegativeInfinity;
         }
     }
 
