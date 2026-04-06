@@ -1,14 +1,12 @@
-﻿namespace PersonaEngine.Lib.TTS.Synthesis;
+﻿namespace PersonaEngine.Lib.TTS.Synthesis.Kokoro;
 
 public interface IKokoroVoiceProvider : IAsyncDisposable
 {
-    Task<VoiceData> GetVoiceAsync(string voiceId, CancellationToken cancellationToken = default);
+    Task<VoiceData> GetVoiceAsync(string voiceId, CancellationToken ct);
 
     /// <summary>
     ///     Gets all available voice IDs
     /// </summary>
     /// <returns>List of voice IDs</returns>
-    Task<IReadOnlyList<string>> GetAvailableVoicesAsync(
-        CancellationToken cancellationToken = default
-    );
+    IReadOnlyList<string> GetAvailableVoices();
 }

@@ -5,7 +5,7 @@ using Microsoft.ML.OnnxRuntime;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.IO;
 
-namespace PersonaEngine.Lib.TTS.Synthesis;
+namespace PersonaEngine.Lib.TTS.Synthesis.Kokoro;
 
 public class KokoroAudioSynthesizer : IAudioSynthesizer
 {
@@ -207,7 +207,7 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
 
     private void LoadPhonemeMap()
     {
-        var mapPath = _modelProvider.GetModelPath(IO.ModelType.KokoroPhonemeMappings);
+        var mapPath = _modelProvider.GetModelPath(IO.ModelType.Kokoro.PhonemeMappings);
 
         try
         {
@@ -255,7 +255,7 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
 
         try
         {
-            var modelPath = _modelProvider.GetModelPath(IO.ModelType.KokoroSynthesis);
+            var modelPath = _modelProvider.GetModelPath(IO.ModelType.Kokoro.Synthesis);
 
             _session = new InferenceSession(modelPath, sessionOptions);
         }
@@ -270,15 +270,6 @@ public class KokoroAudioSynthesizer : IAudioSynthesizer
 
     private int ConvertPhonemesToTokens(string phonemes, long[] buffer)
     {
-        if (_phonemeMap == null)
-        {
-            _logger.LogError("Phoneme map accessed before initialization.");
-
-            throw new InvalidOperationException(
-                "Phoneme map is not initialized. Ensure EnsureInitializedAsync() was called and completed successfully."
-            );
-        }
-
         buffer[0] = BosTokenId;
 
         for (var i = 0; i < phonemes.Length; i++)

@@ -1,27 +1,19 @@
-﻿namespace PersonaEngine.Lib.TTS.Synthesis;
+﻿namespace PersonaEngine.Lib.TTS.Synthesis.Kokoro;
 
-public class VoiceData
+public class VoiceData(string id, Memory<float> rawEmbedding)
 {
     private const int StyleDim = 256;
 
-    private readonly Memory<float> _rawEmbedding;
-
-    public VoiceData(string id, Memory<float> rawEmbedding)
-    {
-        Id = id;
-        _rawEmbedding = rawEmbedding;
-    }
-
-    public string Id { get; }
+    public string Id { get; } = id;
 
     public Memory<float> GetEmbedding(ReadOnlySpan<int> inputDimensions)
     {
         var numTokens = GetNumTokens(inputDimensions);
         var offset = numTokens * StyleDim;
 
-        return offset + StyleDim > _rawEmbedding.Length
+        return offset + StyleDim > rawEmbedding.Length
             ? new float[StyleDim]
-            : _rawEmbedding.Slice(offset, StyleDim);
+            : rawEmbedding.Slice(offset, StyleDim);
     }
 
     private int GetNumTokens(ReadOnlySpan<int> inputDimensions)

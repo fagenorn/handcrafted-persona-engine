@@ -1,6 +1,6 @@
 ﻿using PersonaEngine.Lib.Configuration;
 
-namespace PersonaEngine.Lib.TTS.Synthesis;
+namespace PersonaEngine.Lib.TTS.Synthesis.Kokoro;
 
 /// <summary>
 ///     Interface for audio synthesis from phonemes
@@ -11,7 +11,6 @@ public interface IAudioSynthesizer : IAsyncDisposable
     ///     Synthesizes audio from phonemes
     /// </summary>
     /// <param name="phonemes">Phoneme string</param>
-    /// <param name="voiceId">Voice identifier</param>
     /// <param name="options">Synthesis options</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Audio data with timing information</returns>

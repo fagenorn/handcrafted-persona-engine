@@ -1,23 +1,17 @@
-﻿namespace PersonaEngine.Lib.TTS.Synthesis;
+﻿namespace PersonaEngine.Lib.TTS.Synthesis.Kokoro;
 
 /// <summary>
 ///     Result of audio synthesis
 /// </summary>
-public class AudioData
+public class AudioData(Memory<float> samples, ReadOnlyMemory<long> phonemeTimings)
 {
-    public AudioData(Memory<float> samples, ReadOnlyMemory<long> phonemeTimings)
-    {
-        Samples = samples;
-        PhonemeTimings = phonemeTimings;
-    }
-
     /// <summary>
     ///     Audio samples
     /// </summary>
-    public Memory<float> Samples { get; }
+    public Memory<float> Samples { get; } = samples;
 
     /// <summary>
     ///     Durations for phoneme timing
     /// </summary>
-    public ReadOnlyMemory<long> PhonemeTimings { get; }
+    public ReadOnlyMemory<long> PhonemeTimings { get; } = phonemeTimings;
 }
