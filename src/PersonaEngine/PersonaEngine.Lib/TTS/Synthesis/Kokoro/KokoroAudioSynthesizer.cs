@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.ML.OnnxRuntime;
+using PersonaEngine.Lib.Audio;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.IO;
 
@@ -144,7 +145,7 @@ internal class KokoroAudioSynthesizer : IAsyncDisposable
 
             if (currentOptions.TrimSilence)
             {
-                waveform = TrimSilence(waveform);
+                waveform = AudioSilenceTrimmer.Trim(waveform);
             }
 
             inputIdsOrtValue?.Dispose();
@@ -262,90 +263,5 @@ internal class KokoroAudioSynthesizer : IAsyncDisposable
 
             throw;
         }
-    }
-
-    private Memory<float> TrimSilence(
-        Memory<float> audioData,
-        float threshold = 0.01f,
-        int minSamplesPadding = 512
-    )
-    {
-        if (audioData.IsEmpty || audioData.Length <= minSamplesPadding * 2)
-        {
-            return audioData;
-        }
-
-        var span = audioData.Span;
-        var startIndex = -1;
-        var endIndex = -1;
-
-        for (var i = 0; i < span.Length; i++)
-        {
-            if (Math.Abs(span[i]) > threshold)
-            {
-                startIndex = Math.Max(0, i - minSamplesPadding);
-
-                break;
-            }
-        }
-
-        if (startIndex == -1)
-        {
-            _logger.LogDebug(
-                "Audio appears entirely below silence threshold. Returning original or empty."
-            );
-
-            return audioData;
-        }
-
-        for (var i = span.Length - 1; i >= 0; i--) // Iterate down to 0
-        {
-            if (Math.Abs(span[i]) > threshold)
-            {
-                endIndex = Math.Min(span.Length - 1, i + minSamplesPadding);
-
-                break;
-            }
-        }
-
-        if (endIndex == -1)
-        {
-            endIndex = span.Length - 1;
-            _logger.LogWarning(
-                "Could not find end index for silence trimming after finding start index. Using full length from start."
-            );
-        }
-
-        if (startIndex >= endIndex)
-        {
-            _logger.LogDebug(
-                "Silence trimming resulted in invalid range (Start: {StartIndex}, End: {EndIndex}). Returning original audio.",
-                startIndex,
-                endIndex
-            );
-
-            return audioData;
-        }
-
-        var length = endIndex - startIndex + 1;
-        if (length == audioData.Length)
-        {
-            _logger.LogDebug(
-                "No silence trimmed. Original length: {OriginalLength}",
-                audioData.Length
-            );
-
-            return audioData;
-        }
-
-        _logger.LogDebug(
-            "Trimming silence: Original length {OriginalLength}, New length {NewLength} (Start: {StartIndex}, End: {EndIndex})",
-            audioData.Length,
-            length,
-            startIndex,
-            endIndex
-        );
-
-        return audioData.Slice(startIndex, length);
     }
 }
