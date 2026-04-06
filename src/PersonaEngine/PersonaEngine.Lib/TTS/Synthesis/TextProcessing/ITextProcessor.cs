@@ -1,4 +1,4 @@
-﻿namespace PersonaEngine.Lib.TTS.Synthesis;
+﻿namespace PersonaEngine.Lib.TTS.Synthesis.TextProcessing;
 
 /// <summary>
 ///     Interface for text preprocessing

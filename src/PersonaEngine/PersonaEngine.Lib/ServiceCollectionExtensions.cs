@@ -32,6 +32,12 @@ using PersonaEngine.Lib.TTS.Audio;
 using PersonaEngine.Lib.TTS.Profanity;
 using PersonaEngine.Lib.TTS.RVC;
 using PersonaEngine.Lib.TTS.Synthesis;
+using PersonaEngine.Lib.TTS.Synthesis.Alignment;
+using PersonaEngine.Lib.TTS.Synthesis.Audio;
+using PersonaEngine.Lib.TTS.Synthesis.Engine;
+using PersonaEngine.Lib.TTS.Synthesis.Kokoro;
+using PersonaEngine.Lib.TTS.Synthesis.Qwen3;
+using PersonaEngine.Lib.TTS.Synthesis.TextProcessing;
 using PersonaEngine.Lib.UI;
 using PersonaEngine.Lib.UI.Common;
 using PersonaEngine.Lib.UI.GUI;
@@ -41,6 +47,7 @@ using PersonaEngine.Lib.Vision;
 using Polly;
 using Polly.Retry;
 using Polly.Timeout;
+using SentenceSegmenter = PersonaEngine.Lib.TTS.Synthesis.TextProcessing.SentenceSegmenter;
 
 namespace PersonaEngine.Lib;
 
@@ -238,14 +245,30 @@ public static class ServiceCollectionExtensions
         IConfiguration configuration
     )
     {
-        // Add configuration
+        // Configuration
         services.Configure<TtsConfiguration>(configuration.GetSection("Config:Tts"));
-        services.Configure<KokoroVoiceOptions>(configuration.GetSection("Config:Tts:Voice"));
+        services.Configure<KokoroVoiceOptions>(configuration.GetSection("Config:Tts:Kokoro"));
+        services.Configure<Qwen3TtsOptions>(configuration.GetSection("Config:Tts:Qwen3"));
 
-        // Add core TTS components
-        services.AddSingleton<ITtsEngine, TtsEngine>();
+        // Shared model provider
+        services.AddSingleton<IModelProvider>(provider =>
+        {
+            var config = provider.GetRequiredService<IOptions<TtsConfiguration>>().Value;
+            var logger = provider.GetRequiredService<ILogger<FileModelProvider>>();
 
-        // Add text processing components
+            return new FileModelProvider(config.ModelDirectory, logger);
+        });
+
+        // Shared forced aligner (CTC) — engine-agnostic word-level timing
+        services.AddSingleton<IForcedAligner>(provider =>
+        {
+            var modelProvider = provider.GetRequiredService<IModelProvider>();
+            var logger = provider.GetRequiredService<ILogger<CtcForcedAligner>>();
+
+            return new CtcForcedAligner(modelProvider, logger);
+        });
+
+        // Shared text processing
         services.AddSingleton<ITextProcessor, TextProcessor>();
         services.AddSingleton<ITextNormalizer, TextNormalizer>();
         services.AddSingleton<ISentenceSegmenter, SentenceSegmenter>();
@@ -253,17 +276,13 @@ public static class ServiceCollectionExtensions
         {
             var logger = provider.GetRequiredService<ILogger<OpenNlpSentenceDetector>>();
             var modelProvider = provider.GetRequiredService<IModelProvider>();
-            var basePath = modelProvider
-                .GetModelAsync(IO.ModelType.OpenNLPDir)
-                .GetAwaiter()
-                .GetResult()
-                .Path;
+            var basePath = modelProvider.GetModelPath(IO.ModelType.OpenNlp.Directory);
             var modelPath = Path.Combine(basePath, "EnglishSD.nbin");
 
             return new OpenNlpSentenceDetector(modelPath, logger);
         });
 
-        // Add phoneme processing components
+        // Shared phoneme infrastructure (used by Kokoro directly + orchestrator enrichment)
         services.AddSingleton<IPhonemizer>(provider =>
         {
             var posTagger = provider.GetRequiredService<IPosTagger>();
@@ -277,12 +296,7 @@ public static class ServiceCollectionExtensions
         {
             var logger = provider.GetRequiredService<ILogger<OpenNlpPosTagger>>();
             var modelProvider = provider.GetRequiredService<IModelProvider>();
-
-            var basePath = modelProvider
-                .GetModelAsync(IO.ModelType.OpenNLPDir)
-                .GetAwaiter()
-                .GetResult()
-                .Path;
+            var basePath = modelProvider.GetModelPath(IO.ModelType.OpenNlp.Directory);
             var modelPath = Path.Combine(basePath, "EnglishPOS.nbin");
 
             return new OpenNlpPosTagger(modelPath, logger);
@@ -291,17 +305,21 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ILexicon, Lexicon>();
         services.AddSingleton<IFallbackPhonemizer, EspeakFallbackPhonemizer>();
 
+        // Kokoro-specific
         services.AddSingleton<IAudioSynthesizer, KokoroAudioSynthesizer>();
-
-        services.AddSingleton<IModelProvider>(provider =>
-        {
-            var config = provider.GetRequiredService<IOptions<TtsConfiguration>>().Value;
-            var logger = provider.GetRequiredService<ILogger<FileModelProvider>>();
-
-            return new FileModelProvider(config.ModelDirectory, logger);
-        });
-
         services.AddSingleton<IKokoroVoiceProvider, KokoroVoiceProvider>();
+        services.AddSingleton<IQwen3VoiceProvider, Qwen3VoiceProvider>();
+
+        // Engine registrations
+        services.AddSingleton<ISentenceSynthesizer, KokoroSentenceSynthesizer>();
+        services.AddSingleton<ISentenceSynthesizer, Qwen3SentenceSynthesizer>();
+
+        // Runtime engine switching
+        services.AddSingleton<ITtsEngineProvider, TtsEngineProvider>();
+
+        // Top-level orchestrator (replaces TtsEngine)
+        services.AddSingleton<ITtsEngine, TtsOrchestrator>();
+
         services.AddSingleton<ITtsCache, TtsMemoryCache>();
         services.AddSingleton<IAudioFilter, BlacklistAudioFilter>();
 

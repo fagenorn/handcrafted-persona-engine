@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using PersonaEngine.Lib.TTS.Profanity;
 using PersonaEngine.Lib.TTS.Synthesis;
+using PersonaEngine.Lib.TTS.Synthesis.Audio;
 
 namespace PersonaEngine.Lib.TTS.Audio;
 

@@ -1,4 +1,4 @@
-namespace PersonaEngine.Lib.TTS.Synthesis;
+namespace PersonaEngine.Lib.TTS.Synthesis.Audio;
 
 /// <summary>
 ///     Applies an ordered list of <see cref="IAudioFilter" /> to a stream of

@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 
-namespace PersonaEngine.Lib.TTS.Synthesis;
+namespace PersonaEngine.Lib.TTS.Synthesis.TextProcessing;
 
 /// <summary>
 ///     Implementation of text processing for TTS
@@ -50,7 +50,7 @@ public class TextProcessor : ITextProcessor
             {
                 _logger.LogWarning("Text normalization resulted in empty text");
 
-                return Task.FromResult(new ProcessedText(string.Empty, Array.Empty<string>()));
+                return Task.FromResult(new ProcessedText(string.Empty, []));
             }
 
             // Segment into sentences

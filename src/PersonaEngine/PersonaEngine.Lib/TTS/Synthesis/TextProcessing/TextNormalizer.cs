@@ -2,7 +2,7 @@
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 
-namespace PersonaEngine.Lib.TTS.Synthesis;
+namespace PersonaEngine.Lib.TTS.Synthesis.TextProcessing;
 
 /// <summary>
 ///     Normalizes text for better TTS pronunciation
@@ -59,12 +59,6 @@ public class TextNormalizer : ITextNormalizer
             "PhD"
         },
     };
-
-    // Number regex for finding numeric patterns
-    private static readonly Regex NumberRegex = new(
-        @"(?<!\w)-?\d+(\.\d+)?%?",
-        RegexOptions.Compiled
-    );
 
     // URLs and email addresses
     private static readonly Regex UrlRegex = new(
@@ -195,28 +189,6 @@ public class TextNormalizer : ITextNormalizer
         }
 
         return sb.ToString();
-    }
-
-    private bool IsValidUtf16(string input)
-    {
-        for (var i = 0; i < input.Length; i++)
-        {
-            if (char.IsHighSurrogate(input[i]))
-            {
-                if (i + 1 >= input.Length || !char.IsLowSurrogate(input[i + 1]))
-                {
-                    return false;
-                }
-
-                i++; // Skip the low surrogate
-            }
-            else if (char.IsLowSurrogate(input[i]))
-            {
-                return false; // Unexpected low surrogate
-            }
-        }
-
-        return true;
     }
 
     private string ProcessUrlsAndEmails(string text)
