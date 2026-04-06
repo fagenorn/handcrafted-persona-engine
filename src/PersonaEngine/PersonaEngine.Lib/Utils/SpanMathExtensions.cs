@@ -20,4 +20,31 @@ public static class SpanMathExtensions
 
         return bestIdx;
     }
+
+    /// <summary>
+    ///     Applies numerically stable log-softmax in-place: logits[i] = log(softmax(logits[i])).
+    /// </summary>
+    public static void LogSoftmaxInPlace(Span<float> logits)
+    {
+        var max = float.NegativeInfinity;
+        for (var i = 0; i < logits.Length; i++)
+        {
+            if (logits[i] > max)
+            {
+                max = logits[i];
+            }
+        }
+
+        var sumExp = 0f;
+        for (var i = 0; i < logits.Length; i++)
+        {
+            sumExp += MathF.Exp(logits[i] - max);
+        }
+
+        var logSumExp = max + MathF.Log(sumExp);
+        for (var i = 0; i < logits.Length; i++)
+        {
+            logits[i] -= logSumExp;
+        }
+    }
 }
