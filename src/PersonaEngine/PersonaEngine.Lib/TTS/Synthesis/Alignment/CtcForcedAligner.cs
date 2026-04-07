@@ -81,10 +81,11 @@ public sealed class CtcForcedAligner : IForcedAligner
 
         var audioDurationSec = audio.Length / (double)sampleRate;
         var audio16Khz = ResampleTo16Khz(audio, sampleRate, out var resampledRent);
-        var logProbs = RunWav2Vec(audio16Khz, out var logProbsLength);
+        float[]? logProbs = null;
 
         try
         {
+            logProbs = RunWav2Vec(audio16Khz, out var logProbsLength);
             var numFrames = logProbsLength / VocabSize;
             var frameDuration = audioDurationSec / numFrames;
 
@@ -96,7 +97,10 @@ public sealed class CtcForcedAligner : IForcedAligner
         }
         finally
         {
-            ArrayPool<float>.Shared.Return(logProbs);
+            if (logProbs is not null)
+            {
+                ArrayPool<float>.Shared.Return(logProbs);
+            }
 
             if (resampledRent is not null)
             {
@@ -117,10 +121,11 @@ public sealed class CtcForcedAligner : IForcedAligner
 
         var windowDurationSec = audioWindow.Length / (double)sampleRate;
         var audio16Khz = ResampleTo16Khz(audioWindow, sampleRate, out var resampledRent);
-        var logProbs = RunWav2Vec(audio16Khz, out var logProbsLength);
+        float[]? logProbs = null;
 
         try
         {
+            logProbs = RunWav2Vec(audio16Khz, out var logProbsLength);
             var numFrames = logProbsLength / VocabSize;
             var frameDuration = windowDurationSec / numFrames;
 
@@ -171,7 +176,10 @@ public sealed class CtcForcedAligner : IForcedAligner
         }
         finally
         {
-            ArrayPool<float>.Shared.Return(logProbs);
+            if (logProbs is not null)
+            {
+                ArrayPool<float>.Shared.Return(logProbs);
+            }
 
             if (resampledRent is not null)
             {
@@ -228,6 +236,12 @@ public sealed class CtcForcedAligner : IForcedAligner
                 (uint)sampleRate,
                 Wav2VecSampleRate
             );
+        }
+        catch
+        {
+            ArrayPool<float>.Shared.Return(rentedBuffer);
+            rentedBuffer = null;
+            throw;
         }
         finally
         {
@@ -350,8 +364,9 @@ public sealed class CtcForcedAligner : IForcedAligner
                 inputShape
             );
 
+            using var runOptions = new RunOptions();
             using var results = _session.Run(
-                new RunOptions(),
+                runOptions,
                 InputNames,
                 [inputOrt],
                 OutputNames
