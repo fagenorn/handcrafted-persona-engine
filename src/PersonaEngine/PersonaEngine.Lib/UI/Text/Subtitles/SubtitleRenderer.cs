@@ -202,25 +202,28 @@ public class SubtitleRenderer : IRenderComponent
 
         var currentTime = GetCurrentAbsoluteTime();
 
-        foreach (var line in _linesToRender)
+        _subtitleTimeline.RunLocked(() =>
         {
-            foreach (var word in line.Words)
+            foreach (var line in _linesToRender)
             {
-                if (word.AnimationProgress > 0 || word.IsActive(currentTime))
+                foreach (var word in line.Words)
                 {
-                    _textMeasurer.Font.DrawText(
-                        _textRenderer,
-                        word.Text,
-                        word.Position,
-                        word.CurrentColor,
-                        scale: word.CurrentScale,
-                        origin: word.Size / 2.0f,
-                        effect: FontSystemEffect.Stroked,
-                        effectAmount: _config.StrokeThickness
-                    );
+                    if (word.AnimationProgress > 0 || word.IsActive(currentTime))
+                    {
+                        _textMeasurer.Font.DrawText(
+                            _textRenderer,
+                            word.Text,
+                            word.Position,
+                            word.CurrentColor,
+                            scale: word.CurrentScale,
+                            origin: word.Size / 2.0f,
+                            effect: FontSystemEffect.Stroked,
+                            effectAmount: _config.StrokeThickness
+                        );
+                    }
                 }
             }
-        }
+        });
 
         _textRenderer.End();
     }
@@ -322,11 +325,16 @@ public class SubtitleRenderer : IRenderComponent
             && _sentenceSegmentMap.TryGetValue(sentenceId, out var existing)
         )
         {
-            // Update existing segment's word timings and add new words
-            _subtitleProcessor.UpdateSegment(
-                existing.Segment,
-                command.AudioSegment,
-                existing.Segment.AbsoluteStartTime
+            // Update existing segment's word timings and add new words.
+            // Must run under the timeline lock because the render thread
+            // iterates the same Words lists during Render/PositionLines.
+            _subtitleTimeline.RunLocked(
+                () =>
+                    _subtitleProcessor.UpdateSegment(
+                        existing.Segment,
+                        command.AudioSegment,
+                        existing.Segment.AbsoluteStartTime
+                    )
             );
 
             _segmentIdMap[command.AudioSegment] = existing.SegmentId;

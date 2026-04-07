@@ -124,6 +124,19 @@ public class SubtitleTimeline
     }
 
     /// <summary>
+    ///     Runs the given action while holding the internal lock.
+    ///     Use this to synchronize external mutations (e.g. UpdateSegment)
+    ///     with render-thread reads.
+    /// </summary>
+    public void RunLocked(Action action)
+    {
+        lock (_lock)
+        {
+            action();
+        }
+    }
+
+    /// <summary>
     ///     Collects visible lines and calculates their screen positions.
     ///     Writes results into the provided output list to avoid allocation.
     /// </summary>
@@ -139,10 +152,9 @@ public class SubtitleTimeline
         lock (_lock)
         {
             CollectVisibleLines(currentTime, output);
+            output.Reverse();
+            PositionLines(output, viewportWidth, viewportHeight);
         }
-
-        output.Reverse();
-        PositionLines(output, viewportWidth, viewportHeight);
     }
 
     private void CollectVisibleLines(float currentTime, List<SubtitleLine> output)
