@@ -12,7 +12,7 @@ namespace PersonaEngine.Lib.TTS.Synthesis.Audio;
 /// </summary>
 internal sealed class AudioFilterPipeline
 {
-    private readonly IList<IAudioFilter> _orderedFilters;
+    private readonly List<IAudioFilter> _orderedFilters;
 
     private readonly int _minSamples;
 
@@ -33,7 +33,7 @@ internal sealed class AudioFilterPipeline
     private float[]? _solaBuffer; // output tail from previous window for crossfade
     private bool _isFirstWindow = true;
 
-    public AudioFilterPipeline(IList<IAudioFilter> orderedFilters)
+    public AudioFilterPipeline(List<IAudioFilter> orderedFilters)
     {
         _orderedFilters = orderedFilters;
 
@@ -97,6 +97,19 @@ internal sealed class AudioFilterPipeline
         {
             yield return result;
         }
+    }
+
+    /// <summary>
+    ///     Resets per-sentence state so the pipeline instance can be reused for
+    ///     the next sentence without reallocating. Fade windows are retained
+    ///     because they depend on sample rate, not sentence identity.
+    /// </summary>
+    internal void Reset()
+    {
+        _pending.Clear();
+        _pendingSamples = 0;
+        _solaBuffer = null;
+        _isFirstWindow = true;
     }
 
     private AudioSegment? ProcessWindow(bool isFinal)

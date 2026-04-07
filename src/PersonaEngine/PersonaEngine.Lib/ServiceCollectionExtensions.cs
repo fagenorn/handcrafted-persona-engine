@@ -269,7 +269,7 @@ public static class ServiceCollectionExtensions
         });
 
         // Shared text processing
-        services.AddSingleton<ITextProcessor, TextProcessor>();
+        services.AddSingleton<SentenceProcessor>();
         services.AddSingleton<ITextNormalizer, TextNormalizer>();
         services.AddSingleton<ISentenceSegmenter, SentenceSegmenter>();
         services.AddSingleton<IMlSentenceDetector>(provider =>
