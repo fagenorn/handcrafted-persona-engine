@@ -423,10 +423,16 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
     {
         var tokens = phonemeResult.Tokens;
 
-        // Build CTC alignment text from phonemizer tokens (matches tokenization exactly)
+        // Build CTC alignment text from phonemizer tokens
         var alignText = string.Concat(tokens.Select(t => t.Text + t.Whitespace)).TrimEnd();
 
-        var absoluteTimings = new (double Start, double End)?[tokens.Length];
+        // CTC aligner operates on space-separated words, which may differ from
+        // phonemizer tokens (e.g. punctuation tokens, contractions split into sub-tokens).
+        // Build a mapping: CTC word index → range of phonemizer token indices.
+        var ctcWords = alignText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var wordToTokenRange = BuildWordToTokenMapping(tokens, ctcWords);
+
+        var absoluteTimings = new (double Start, double End)?[ctcWords.Length];
 
         var accumulatedAudio = new List<float[]>();
         var totalSamplesEmitted = 0;
@@ -461,11 +467,9 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                 continue;
             }
 
-            // Build remaining text from unconfirmed tokens
-            var allWords = alignText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (confirmedWordCount < allWords.Length)
+            if (confirmedWordCount < ctcWords.Length)
             {
-                var remainingText = string.Join(' ', allWords.Skip(confirmedWordCount));
+                var remainingText = string.Join(' ', ctcWords.AsSpan(confirmedWordCount).ToArray());
 
                 var winStart = Math.Max(0, windowStartSample - windowOverlapSamples);
                 var winLength = totalSamplesEmitted - winStart;
@@ -486,7 +490,7 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                     for (var i = 0; i < result.Count; i++)
                     {
                         var wordIdx = confirmedWordCount + i;
-                        if (wordIdx < tokens.Length)
+                        if (wordIdx < ctcWords.Length)
                         {
                             absoluteTimings[wordIdx] = (
                                 result.Timings[i].StartTime.TotalSeconds,
@@ -519,12 +523,16 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                     var emitLength = wordEndSample - lastEmittedSample;
                     var audioToEmit = fullAudio.AsSpan(lastEmittedSample, emitLength).ToArray();
 
-                    // Apply timing in-place to the phonemizer token
-                    tokens[w].StartTs = absoluteTimings[w]!.Value.Start - sliceStartSec;
-                    tokens[w].EndTs = absoluteTimings[w]!.Value.End - sliceStartSec;
+                    var (tokStart, tokCount) = wordToTokenRange[w];
+                    ApplyTimingToTokenRange(
+                        tokens,
+                        tokStart,
+                        tokCount,
+                        absoluteTimings[w]!.Value,
+                        sliceStartSec
+                    );
 
-                    // Zero-alloc slice via ArraySegment<Token>
-                    var tokenSlice = new ArraySegment<Token>(tokens, w, 1);
+                    var tokenSlice = new ArraySegment<Token>(tokens, tokStart, tokCount);
                     yield return new AudioSegment(
                         audioToEmit.AsMemory(),
                         OutputSampleRate,
@@ -544,7 +552,7 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
             var finalAudio = ConcatAudio(accumulatedAudio, totalSamplesEmitted);
 
             using var finalResult = _aligner.Align(finalAudio, alignText, OutputSampleRate);
-            for (var i = 0; i < finalResult.Count && i < tokens.Length; i++)
+            for (var i = 0; i < finalResult.Count && i < ctcWords.Length; i++)
             {
                 absoluteTimings[i] = (
                     finalResult.Timings[i].StartTime.TotalSeconds,
@@ -552,7 +560,7 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                 );
             }
 
-            for (var w = lastEmittedWordCount; w < finalResult.Count; w++)
+            for (var w = lastEmittedWordCount; w < finalResult.Count && w < ctcWords.Length; w++)
             {
                 var wordEndSample = Math.Min(
                     (int)(absoluteTimings[w]!.Value.End * OutputSampleRate),
@@ -565,10 +573,16 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                     var emitLen = wordEndSample - lastEmittedSample;
                     var audioSlice = finalAudio.AsSpan(lastEmittedSample, emitLen).ToArray();
 
-                    tokens[w].StartTs = absoluteTimings[w]!.Value.Start - sliceStartSec;
-                    tokens[w].EndTs = absoluteTimings[w]!.Value.End - sliceStartSec;
+                    var (tokStart, tokCount) = wordToTokenRange[w];
+                    ApplyTimingToTokenRange(
+                        tokens,
+                        tokStart,
+                        tokCount,
+                        absoluteTimings[w]!.Value,
+                        sliceStartSec
+                    );
 
-                    var tokenSlice = new ArraySegment<Token>(tokens, w, 1);
+                    var tokenSlice = new ArraySegment<Token>(tokens, tokStart, tokCount);
                     yield return new AudioSegment(
                         audioSlice.AsMemory(),
                         OutputSampleRate,
@@ -591,6 +605,84 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                     Array.Empty<Token>()
                 );
             }
+        }
+    }
+
+    /// <summary>
+    ///     Maps each CTC word (space-separated) to the range of phonemizer tokens it covers.
+    ///     Walks through tokens, accumulating text+whitespace until each CTC word is matched.
+    /// </summary>
+    private static (int Start, int Count)[] BuildWordToTokenMapping(
+        Token[] tokens,
+        string[] ctcWords
+    )
+    {
+        var mapping = new (int Start, int Count)[ctcWords.Length];
+        var tokenIdx = 0;
+
+        for (var wordIdx = 0; wordIdx < ctcWords.Length; wordIdx++)
+        {
+            var start = tokenIdx;
+            var accumulated = new System.Text.StringBuilder();
+
+            // Accumulate token text until we've covered this CTC word
+            while (tokenIdx < tokens.Length)
+            {
+                accumulated.Append(tokens[tokenIdx].Text);
+                var accStr = accumulated.ToString();
+                tokenIdx++;
+
+                // Check if we've accumulated enough text to cover this CTC word.
+                // CTC word is formed by joining token texts without whitespace between
+                // tokens that are part of the same space-separated word.
+                if (accStr.Length >= ctcWords[wordIdx].Length)
+                {
+                    break;
+                }
+            }
+
+            mapping[wordIdx] = (start, tokenIdx - start);
+        }
+
+        return mapping;
+    }
+
+    /// <summary>
+    ///     Applies CTC word timing to a range of phonemizer tokens by distributing
+    ///     the duration proportionally across the tokens in the range.
+    /// </summary>
+    private static void ApplyTimingToTokenRange(
+        Token[] tokens,
+        int start,
+        int count,
+        (double Start, double End) timing,
+        double sliceOffset
+    )
+    {
+        if (count == 1)
+        {
+            tokens[start].StartTs = timing.Start - sliceOffset;
+            tokens[start].EndTs = timing.End - sliceOffset;
+            return;
+        }
+
+        // Distribute timing proportionally by text length
+        var totalLen = 0;
+        for (var i = start; i < start + count; i++)
+        {
+            totalLen += Math.Max(1, tokens[i].Text.Length);
+        }
+
+        var duration = timing.End - timing.Start;
+        var cursor = timing.Start;
+
+        for (var i = start; i < start + count; i++)
+        {
+            var fraction = (double)Math.Max(1, tokens[i].Text.Length) / totalLen;
+            var tokenDuration = duration * fraction;
+            tokens[i].StartTs = cursor - sliceOffset;
+            tokens[i].EndTs = cursor + tokenDuration - sliceOffset;
+            cursor += tokenDuration;
         }
     }
 
