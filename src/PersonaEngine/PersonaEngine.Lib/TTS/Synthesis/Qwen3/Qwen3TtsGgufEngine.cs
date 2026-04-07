@@ -412,6 +412,7 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
     public async IAsyncEnumerable<AudioSegment> GenerateStreamingWithTimings(
         Qwen3StreamingAudioDecoder decoder,
         string text,
+        PhonemeResult phonemeResult,
         bool isLastSegment,
         string speaker = "ryan",
         string language = "english",

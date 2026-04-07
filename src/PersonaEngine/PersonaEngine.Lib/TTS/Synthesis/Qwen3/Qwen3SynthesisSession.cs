@@ -25,6 +25,7 @@ internal sealed class Qwen3SynthesisSession : ISynthesisSession
 
     public async IAsyncEnumerable<AudioSegment> SynthesizeAsync(
         string sentence,
+        PhonemeResult phonemeResult,
         bool isLastSegment,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
@@ -50,6 +51,7 @@ internal sealed class Qwen3SynthesisSession : ISynthesisSession
                 .GenerateStreamingWithTimings(
                     _decoder,
                     sentence,
+                    phonemeResult,
                     isLastSegment,
                     _options.Speaker,
                     _options.Language,

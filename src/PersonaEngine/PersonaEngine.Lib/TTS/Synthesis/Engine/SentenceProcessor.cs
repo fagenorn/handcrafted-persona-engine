@@ -81,7 +81,7 @@ public sealed partial class SentenceProcessor
         // Synthesize via session, applying audio filters through the pipeline
         await foreach (
             var segment in session
-                .SynthesizeAsync(processedText, isLastSegment, cancellationToken)
+                .SynthesizeAsync(processedText, phonemeResult, isLastSegment, cancellationToken)
                 .ConfigureAwait(false)
         )
         {

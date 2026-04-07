@@ -11,6 +11,11 @@ public interface ISynthesisSession : IAsyncDisposable
     ///     Synthesizes a single sentence within this session.
     /// </summary>
     /// <param name="sentence">Pre-filtered text sentence to synthesize.</param>
+    /// <param name="phonemeResult">
+    ///     Pre-computed phoneme data from the core pipeline phonemizer.
+    ///     Engines must apply timing to <see cref="PhonemeResult.Tokens" /> and
+    ///     include them (or a subset) in yielded <see cref="AudioSegment" /> instances.
+    /// </param>
     /// <param name="isLastSegment">
     ///     True if this is the final sentence in the turn. Implementations should
     ///     flush any buffered state (e.g., decoder conv history) on the last segment.
@@ -19,6 +24,7 @@ public interface ISynthesisSession : IAsyncDisposable
     /// <returns>Stream of audio segments, each carrying token timing data.</returns>
     IAsyncEnumerable<AudioSegment> SynthesizeAsync(
         string sentence,
+        PhonemeResult phonemeResult,
         bool isLastSegment,
         CancellationToken cancellationToken = default
     );

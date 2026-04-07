@@ -60,11 +60,11 @@ internal sealed class KokoroSentenceSynthesizer : ISentenceSynthesizer
     }
 
     internal async IAsyncEnumerable<AudioSegment> SynthesizeCoreAsync(
-        string sentence,
+        PhonemeResult phonemeResult,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
-        if (string.IsNullOrWhiteSpace(sentence))
+        if (phonemeResult.Tokens.Length == 0)
         {
             yield break;
         }
@@ -75,8 +75,6 @@ internal sealed class KokoroSentenceSynthesizer : ISentenceSynthesizer
 
         try
         {
-            var phonemeResult = await _phonemizer.ToPhonemesAsync(sentence, cancellationToken);
-
             foreach (var phonemeChunk in SplitPhonemes(phonemeResult.Phonemes, 510))
             {
                 var result = await _synthesizer.SynthesizeAsync(
@@ -216,9 +214,10 @@ internal sealed class KokoroSentenceSynthesizer : ISentenceSynthesizer
     {
         public IAsyncEnumerable<AudioSegment> SynthesizeAsync(
             string sentence,
+            PhonemeResult phonemeResult,
             bool isLastSegment,
             CancellationToken cancellationToken = default
-        ) => owner.SynthesizeCoreAsync(sentence, cancellationToken);
+        ) => owner.SynthesizeCoreAsync(phonemeResult, cancellationToken);
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }

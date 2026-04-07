@@ -38,7 +38,12 @@ public class SentenceProcessorTests
         var segment = new AudioSegment(new float[] { 1f, 2f, 3f }, 24000, tokens);
 
         _session
-            .SynthesizeAsync("Hello", false, Arg.Any<CancellationToken>())
+            .SynthesizeAsync(
+                Arg.Any<string>(),
+                Arg.Any<PhonemeResult>(),
+                Arg.Any<bool>(),
+                Arg.Any<CancellationToken>()
+            )
             .Returns(ToAsyncEnumerable(segment));
 
         var results = new List<AudioSegment>();
@@ -72,7 +77,12 @@ public class SentenceProcessorTests
         var segment = new AudioSegment(new float[] { 1f }, 24000, new List<Token>());
 
         _session
-            .SynthesizeAsync("Filtered", false, Arg.Any<CancellationToken>())
+            .SynthesizeAsync(
+                "Filtered",
+                Arg.Any<PhonemeResult>(),
+                Arg.Any<bool>(),
+                Arg.Any<CancellationToken>()
+            )
             .Returns(ToAsyncEnumerable(segment));
 
         var results = new List<AudioSegment>();
@@ -117,7 +127,12 @@ public class SentenceProcessorTests
             .Returns(new PhonemeResult("hɛloʊ", [.. phonemeTokens]));
 
         _session
-            .SynthesizeAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .SynthesizeAsync(
+                Arg.Any<string>(),
+                Arg.Any<PhonemeResult>(),
+                Arg.Any<bool>(),
+                Arg.Any<CancellationToken>()
+            )
             .Returns(ToAsyncEnumerable(segment));
 
         var results = new List<AudioSegment>();
@@ -150,7 +165,12 @@ public class SentenceProcessorTests
             .Returns(new PhonemeResult("", []));
 
         _session
-            .SynthesizeAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .SynthesizeAsync(
+                Arg.Any<string>(),
+                Arg.Any<PhonemeResult>(),
+                Arg.Any<bool>(),
+                Arg.Any<CancellationToken>()
+            )
             .Returns(ToAsyncEnumerable(segment));
 
         await foreach (
@@ -167,6 +187,7 @@ public class SentenceProcessorTests
             .Received(1)
             .SynthesizeAsync(
                 Arg.Is<string>(s => !s.Contains("[__EM")),
+                Arg.Any<PhonemeResult>(),
                 false,
                 Arg.Any<CancellationToken>()
             );
@@ -180,7 +201,12 @@ public class SentenceProcessorTests
         var segment2 = new AudioSegment(new float[] { 2f }, 24000, new List<Token>());
 
         _session
-            .SynthesizeAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .SynthesizeAsync(
+                Arg.Any<string>(),
+                Arg.Any<PhonemeResult>(),
+                Arg.Any<bool>(),
+                Arg.Any<CancellationToken>()
+            )
             .Returns(ToAsyncEnumerable(segment1, segment2));
 
         var results = new List<AudioSegment>();
@@ -212,7 +238,12 @@ public class SentenceProcessorTests
         var segment = new AudioSegment(new float[] { 1f }, 24000, new List<Token>());
 
         _session
-            .SynthesizeAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .SynthesizeAsync(
+                Arg.Any<string>(),
+                Arg.Any<PhonemeResult>(),
+                Arg.Any<bool>(),
+                Arg.Any<CancellationToken>()
+            )
             .Returns(ToAsyncEnumerable(segment));
 
         await foreach (
