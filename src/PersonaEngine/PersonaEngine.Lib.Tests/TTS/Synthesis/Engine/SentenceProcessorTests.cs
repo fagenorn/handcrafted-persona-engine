@@ -17,21 +17,13 @@ public class SentenceProcessorTests
 
     public SentenceProcessorTests()
     {
-        _loggerFactory
-            .CreateLogger(Arg.Any<string>())
-            .Returns(Substitute.For<ILogger>());
+        _loggerFactory.CreateLogger(Arg.Any<string>()).Returns(Substitute.For<ILogger>());
     }
 
     private SentenceProcessor CreateProcessor(
         IEnumerable<ITextFilter>? textFilters = null,
         IEnumerable<IAudioFilter>? audioFilters = null
-    ) =>
-        new(
-            textFilters ?? [],
-            audioFilters ?? [],
-            _phonemizer,
-            _loggerFactory
-        );
+    ) => new(textFilters ?? [], audioFilters ?? [], _phonemizer, _loggerFactory);
 
     [Fact]
     public async Task ProcessAsync_NoFilters_YieldsSegmentsFromSession()
@@ -114,9 +106,7 @@ public class SentenceProcessorTests
                 isLastSegment: false,
                 CancellationToken.None
             )
-        )
-        {
-        }
+        ) { }
 
         await _phonemizer
             .DidNotReceive()
@@ -191,9 +181,7 @@ public class SentenceProcessorTests
                 isLastSegment: false,
                 CancellationToken.None
             )
-        )
-        {
-        }
+        ) { }
 
         _session
             .Received(1)
@@ -255,9 +243,7 @@ public class SentenceProcessorTests
                 isLastSegment: false,
                 CancellationToken.None
             )
-        )
-        {
-        }
+        ) { }
 
         audioFilter.Received().Process(Arg.Any<AudioSegment>());
     }

@@ -87,12 +87,7 @@ internal sealed class TtsEventEmitter
 
         await _writer
             .WriteAsync(
-                new TtsStreamEndEvent(
-                    _sessionId,
-                    _turnId,
-                    DateTimeOffset.UtcNow,
-                    CompletionReason
-                ),
+                new TtsStreamEndEvent(_sessionId, _turnId, DateTimeOffset.UtcNow, CompletionReason),
                 CancellationToken.None
             )
             .ConfigureAwait(false);

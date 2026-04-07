@@ -365,12 +365,7 @@ public sealed class CtcForcedAligner : IForcedAligner
             );
 
             using var runOptions = new RunOptions();
-            using var results = _session.Run(
-                runOptions,
-                InputNames,
-                [inputOrt],
-                OutputNames
-            );
+            using var results = _session.Run(runOptions, InputNames, [inputOrt], OutputNames);
 
             // Output shape: [1, T, 32] — apply log_softmax
             var logitsSpan = results[0].GetTensorDataAsSpan<float>();

@@ -14,8 +14,7 @@ public class TtsEventEmitterTests
     private readonly Guid _sessionId = Guid.NewGuid();
     private readonly Guid _turnId = Guid.NewGuid();
 
-    private TtsEventEmitter CreateEmitter() =>
-        new(_channel.Writer, _sessionId, _turnId);
+    private TtsEventEmitter CreateEmitter() => new(_channel.Writer, _sessionId, _turnId);
 
     [Fact]
     public async Task EmitReadyToSynthesizeAsync_FirstCall_WritesEvent()

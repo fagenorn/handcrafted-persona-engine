@@ -22,12 +22,8 @@ public static class StringDistanceExtensions
         }
 
         const int stackAllocThreshold = 128;
-        Span<int> prev = m + 1 <= stackAllocThreshold
-            ? stackalloc int[m + 1]
-            : new int[m + 1];
-        Span<int> curr = m + 1 <= stackAllocThreshold
-            ? stackalloc int[m + 1]
-            : new int[m + 1];
+        Span<int> prev = m + 1 <= stackAllocThreshold ? stackalloc int[m + 1] : new int[m + 1];
+        Span<int> curr = m + 1 <= stackAllocThreshold ? stackalloc int[m + 1] : new int[m + 1];
 
         for (var j = 0; j <= m; j++)
         {
@@ -40,10 +36,7 @@ public static class StringDistanceExtensions
             for (var j = 1; j <= m; j++)
             {
                 var cost = s[i - 1] == t[j - 1] ? 0 : 1;
-                curr[j] = Math.Min(
-                    Math.Min(curr[j - 1] + 1, prev[j] + 1),
-                    prev[j - 1] + cost
-                );
+                curr[j] = Math.Min(Math.Min(curr[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
             }
 
             var tmp = prev;
@@ -98,18 +91,23 @@ public static class StringDistanceExtensions
             return text;
         }
 
-        return string.Create(text.Length, text, static (span, src) =>
-        {
-            var pos = 0;
-            foreach (var c in src)
-            {
-                if (char.IsLetter(c))
+        return string.Create(
+                text.Length,
+                text,
+                static (span, src) =>
                 {
-                    span[pos++] = c;
-                }
-            }
+                    var pos = 0;
+                    foreach (var c in src)
+                    {
+                        if (char.IsLetter(c))
+                        {
+                            span[pos++] = c;
+                        }
+                    }
 
-            span[pos..].Fill('\0');
-        }).TrimEnd('\0');
+                    span[pos..].Fill('\0');
+                }
+            )
+            .TrimEnd('\0');
     }
 }

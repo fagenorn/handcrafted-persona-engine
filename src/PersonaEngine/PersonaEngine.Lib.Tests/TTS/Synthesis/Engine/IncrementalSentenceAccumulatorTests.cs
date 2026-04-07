@@ -10,8 +10,7 @@ public class IncrementalSentenceAccumulatorTests
     private readonly ITextNormalizer _normalizer = Substitute.For<ITextNormalizer>();
     private readonly ISentenceSegmenter _segmenter = Substitute.For<ISentenceSegmenter>();
 
-    private IncrementalSentenceAccumulator CreateAccumulator() =>
-        new(_normalizer, _segmenter);
+    private IncrementalSentenceAccumulator CreateAccumulator() => new(_normalizer, _segmenter);
 
     [Fact]
     public void TakeCompletedSentences_NoPunctuation_ReturnsEmpty()
@@ -31,9 +30,9 @@ public class IncrementalSentenceAccumulatorTests
     {
         var acc = CreateAccumulator();
         _normalizer.Normalize("Hello world. How are").Returns("Hello world. How are");
-        _segmenter.Segment("Hello world. How are").Returns(
-            new List<string> { "Hello world.", "How are" }
-        );
+        _segmenter
+            .Segment("Hello world. How are")
+            .Returns(new List<string> { "Hello world.", "How are" });
 
         acc.Append("Hello world. How are");
         var result = acc.TakeCompletedSentences();
@@ -47,17 +46,15 @@ public class IncrementalSentenceAccumulatorTests
     {
         var acc = CreateAccumulator();
         _normalizer.Normalize("Hello world. How are").Returns("Hello world. How are");
-        _segmenter.Segment("Hello world. How are").Returns(
-            new List<string> { "Hello world.", "How are" }
-        );
+        _segmenter
+            .Segment("Hello world. How are")
+            .Returns(new List<string> { "Hello world.", "How are" });
 
         acc.Append("Hello world. How are");
         acc.TakeCompletedSentences();
 
         _normalizer.Normalize("How are you doing?").Returns("How are you doing?");
-        _segmenter.Segment("How are you doing?").Returns(
-            new List<string> { "How are you doing?" }
-        );
+        _segmenter.Segment("How are you doing?").Returns(new List<string> { "How are you doing?" });
 
         acc.Append(" you doing?");
         var result = acc.TakeCompletedSentences();
@@ -70,9 +67,7 @@ public class IncrementalSentenceAccumulatorTests
     {
         var acc = CreateAccumulator();
         _normalizer.Normalize("A. B. C").Returns("A. B. C");
-        _segmenter.Segment("A. B. C").Returns(
-            new List<string> { "A.", "B.", "C" }
-        );
+        _segmenter.Segment("A. B. C").Returns(new List<string> { "A.", "B.", "C" });
 
         acc.Append("A. B. C");
         var result = acc.TakeCompletedSentences();
@@ -87,9 +82,7 @@ public class IncrementalSentenceAccumulatorTests
     {
         var acc = CreateAccumulator();
         _normalizer.Normalize("Hello world.").Returns("Hello world.");
-        _segmenter.Segment("Hello world.").Returns(
-            new List<string> { "Hello world." }
-        );
+        _segmenter.Segment("Hello world.").Returns(new List<string> { "Hello world." });
 
         acc.Append("Hello world.");
         var result = acc.TakeCompletedSentences();
@@ -102,9 +95,7 @@ public class IncrementalSentenceAccumulatorTests
     {
         var acc = CreateAccumulator();
         _normalizer.Normalize("Hello world").Returns("Hello world");
-        _segmenter.Segment("Hello world").Returns(
-            new List<string> { "Hello world" }
-        );
+        _segmenter.Segment("Hello world").Returns(new List<string> { "Hello world" });
 
         acc.Append("Hello world");
         var result = acc.Flush();
@@ -152,9 +143,7 @@ public class IncrementalSentenceAccumulatorTests
     {
         var acc = CreateAccumulator();
         _normalizer.Normalize("first; second").Returns("first; second");
-        _segmenter.Segment("first; second").Returns(
-            new List<string> { "first;", "second" }
-        );
+        _segmenter.Segment("first; second").Returns(new List<string> { "first;", "second" });
 
         acc.Append("first; second");
         var result = acc.TakeCompletedSentences();
@@ -168,9 +157,7 @@ public class IncrementalSentenceAccumulatorTests
     {
         var acc = CreateAccumulator();
         _normalizer.Normalize("Really? Yes").Returns("Really? Yes");
-        _segmenter.Segment("Really? Yes").Returns(
-            new List<string> { "Really?", "Yes" }
-        );
+        _segmenter.Segment("Really? Yes").Returns(new List<string> { "Really?", "Yes" });
 
         acc.Append("Really? Yes");
         var result = acc.TakeCompletedSentences();
@@ -183,9 +170,7 @@ public class IncrementalSentenceAccumulatorTests
     {
         var acc = CreateAccumulator();
         _normalizer.Normalize("Wow! Cool").Returns("Wow! Cool");
-        _segmenter.Segment("Wow! Cool").Returns(
-            new List<string> { "Wow!", "Cool" }
-        );
+        _segmenter.Segment("Wow! Cool").Returns(new List<string> { "Wow!", "Cool" });
 
         acc.Append("Wow! Cool");
         var result = acc.TakeCompletedSentences();

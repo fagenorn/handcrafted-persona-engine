@@ -479,7 +479,9 @@ public class CrepeOnnxSimd : IF0Predictor, IDisposable
         }
 
         // Find the most likely final state
-        var maxI = ((ReadOnlySpan<float>)_valueBuffer.AsSpan((nSteps - 1) * PITCH_BINS, PITCH_BINS)).ArgMax();
+        var maxI = (
+            (ReadOnlySpan<float>)_valueBuffer.AsSpan((nSteps - 1) * PITCH_BINS, PITCH_BINS)
+        ).ArgMax();
 
         // Backward pass to find optimal path
         _stateBuffer[nSteps - 1] = maxI;

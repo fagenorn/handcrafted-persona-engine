@@ -16,10 +16,7 @@ internal sealed class IncrementalSentenceAccumulator
     private readonly ISentenceSegmenter _segmenter;
     private readonly StringBuilder _buffer = new(4096);
 
-    public IncrementalSentenceAccumulator(
-        ITextNormalizer normalizer,
-        ISentenceSegmenter segmenter
-    )
+    public IncrementalSentenceAccumulator(ITextNormalizer normalizer, ISentenceSegmenter segmenter)
     {
         _normalizer = normalizer;
         _segmenter = segmenter;

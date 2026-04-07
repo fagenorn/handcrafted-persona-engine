@@ -328,13 +328,12 @@ public class SubtitleRenderer : IRenderComponent
             // Update existing segment's word timings and add new words.
             // Must run under the timeline lock because the render thread
             // iterates the same Words lists during Render/PositionLines.
-            _subtitleTimeline.RunLocked(
-                () =>
-                    _subtitleProcessor.UpdateSegment(
-                        existing.Segment,
-                        command.AudioSegment,
-                        existing.Segment.AbsoluteStartTime
-                    )
+            _subtitleTimeline.RunLocked(() =>
+                _subtitleProcessor.UpdateSegment(
+                    existing.Segment,
+                    command.AudioSegment,
+                    existing.Segment.AbsoluteStartTime
+                )
             );
 
             _segmentIdMap[command.AudioSegment] = existing.SegmentId;
