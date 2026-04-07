@@ -169,24 +169,34 @@ public static class TextExtensions
     /// </summary>
     public static string TrimPunctuation(this string text)
     {
-        var start = 0;
-        var end = text.Length - 1;
+        var trimmed = text.AsSpan().TrimPunctuationSpan();
 
-        while (start <= end && char.IsPunctuation(text[start]))
-        {
-            start++;
-        }
-
-        while (end >= start && char.IsPunctuation(text[end]))
-        {
-            end--;
-        }
-
-        if (start == 0 && end == text.Length - 1)
+        if (trimmed.Length == text.Length)
         {
             return text;
         }
 
-        return start > end ? string.Empty : text[start..(end + 1)];
+        return trimmed.Length == 0 ? string.Empty : trimmed.ToString();
+    }
+
+    /// <summary>
+    ///     Strips leading and trailing punctuation, returning a span slice (zero-allocation).
+    /// </summary>
+    public static ReadOnlySpan<char> TrimPunctuationSpan(this ReadOnlySpan<char> span)
+    {
+        var start = 0;
+        var end = span.Length - 1;
+
+        while (start <= end && char.IsPunctuation(span[start]))
+        {
+            start++;
+        }
+
+        while (end >= start && char.IsPunctuation(span[end]))
+        {
+            end--;
+        }
+
+        return start > end ? ReadOnlySpan<char>.Empty : span[start..(end + 1)];
     }
 }

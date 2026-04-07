@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using PersonaEngine.Lib.LLM;
 using PersonaEngine.Lib.TTS.Synthesis.Audio;
+using PersonaEngine.Lib.Utils;
 
 namespace PersonaEngine.Lib.TTS.Synthesis.Engine;
 
@@ -106,7 +107,10 @@ internal sealed partial class SentenceProcessor
             }
 
             // Stamp sentence ID and submit to audio filter pipeline
-            var stamped = segment with { SentenceId = sentenceId };
+            var stamped = segment with
+            {
+                SentenceId = sentenceId,
+            };
             foreach (var processed in _pipeline.Submit(stamped))
             {
                 yield return processed;
@@ -137,7 +141,7 @@ internal sealed partial class SentenceProcessor
             {
                 _phonemeLookup.TryAdd(pt.Text, pt);
 
-                var stripped = StripPunctuation(pt.Text);
+                var stripped = pt.Text.TrimPunctuation();
                 if (stripped.Length > 0 && !stripped.Equals(pt.Text, StringComparison.Ordinal))
                 {
                     _phonemeLookup.TryAdd(stripped, pt);
@@ -162,7 +166,7 @@ internal sealed partial class SentenceProcessor
             }
             else
             {
-                var stripped = StripPunctuationSpan(token.Text);
+                var stripped = token.Text.AsSpan().TrimPunctuationSpan();
                 if (
                     stripped.Length > 0
                     && !stripped.SequenceEqual(token.Text.AsSpan())
@@ -175,47 +179,5 @@ internal sealed partial class SentenceProcessor
                 }
             }
         }
-    }
-
-    private static string StripPunctuation(string text)
-    {
-        var start = 0;
-        var end = text.Length - 1;
-
-        while (start <= end && char.IsPunctuation(text[start]))
-        {
-            start++;
-        }
-
-        while (end >= start && char.IsPunctuation(text[end]))
-        {
-            end--;
-        }
-
-        if (start == 0 && end == text.Length - 1)
-        {
-            return text;
-        }
-
-        return start > end ? string.Empty : text[start..(end + 1)];
-    }
-
-    private static ReadOnlySpan<char> StripPunctuationSpan(string text)
-    {
-        var span = text.AsSpan();
-        var start = 0;
-        var end = span.Length - 1;
-
-        while (start <= end && char.IsPunctuation(span[start]))
-        {
-            start++;
-        }
-
-        while (end >= start && char.IsPunctuation(span[end]))
-        {
-            end--;
-        }
-
-        return start > end ? ReadOnlySpan<char>.Empty : span[start..(end + 1)];
     }
 }
