@@ -134,7 +134,7 @@ public class SentenceProcessorTests
 
         _phonemizer
             .ToPhonemesAsync("Hello", Arg.Any<CancellationToken>())
-            .Returns(new PhonemeResult("hɛloʊ", phonemeTokens));
+            .Returns(new PhonemeResult("hɛloʊ", [.. phonemeTokens]));
 
         _session
             .SynthesizeAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
@@ -167,7 +167,7 @@ public class SentenceProcessorTests
 
         _phonemizer
             .ToPhonemesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new PhonemeResult("", new List<Token>()));
+            .Returns(new PhonemeResult("", []));
 
         _session
             .SynthesizeAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
