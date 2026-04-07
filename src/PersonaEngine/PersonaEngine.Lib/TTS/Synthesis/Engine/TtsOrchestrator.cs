@@ -83,7 +83,6 @@ public sealed class TtsOrchestrator : ITtsEngine
                     await foreach (
                         var segment in _sentenceProcessor.ProcessAsync(
                             session,
-                            synthesizer.Capabilities,
                             sentence,
                             isLastSegment: false,
                             cancellationToken
@@ -103,7 +102,6 @@ public sealed class TtsOrchestrator : ITtsEngine
                 await foreach (
                     var segment in _sentenceProcessor.ProcessAsync(
                         session,
-                        synthesizer.Capabilities,
                         remaining,
                         isLastSegment: true,
                         cancellationToken

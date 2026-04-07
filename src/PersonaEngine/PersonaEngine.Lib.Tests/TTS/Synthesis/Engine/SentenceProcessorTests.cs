@@ -50,7 +50,6 @@ public class SentenceProcessorTests
         await foreach (
             var s in processor.ProcessAsync(
                 _session,
-                TtsEngineCapabilities.None,
                 "Hello",
                 isLastSegment: false,
                 CancellationToken.None
@@ -89,7 +88,6 @@ public class SentenceProcessorTests
         await foreach (
             var s in processor.ProcessAsync(
                 _session,
-                TtsEngineCapabilities.None,
                 "Hello",
                 isLastSegment: false,
                 CancellationToken.None
@@ -139,7 +137,6 @@ public class SentenceProcessorTests
         await foreach (
             var s in processor.ProcessAsync(
                 _session,
-                TtsEngineCapabilities.None,
                 "Hello",
                 isLastSegment: false,
                 CancellationToken.None
@@ -176,7 +173,6 @@ public class SentenceProcessorTests
         await foreach (
             var _ in processor.ProcessAsync(
                 _session,
-                TtsEngineCapabilities.None,
                 "Hello [__EM1__](//)",
                 isLastSegment: false,
                 CancellationToken.None
@@ -213,7 +209,6 @@ public class SentenceProcessorTests
         await foreach (
             var s in processor.ProcessAsync(
                 _session,
-                TtsEngineCapabilities.None,
                 "Hello world",
                 isLastSegment: false,
                 CancellationToken.None
@@ -249,7 +244,6 @@ public class SentenceProcessorTests
         await foreach (
             var _ in processor.ProcessAsync(
                 _session,
-                TtsEngineCapabilities.None,
                 "Hello",
                 isLastSegment: false,
                 CancellationToken.None

@@ -16,21 +16,18 @@ internal sealed class KokoroSentenceSynthesizer : ISentenceSynthesizer
 {
     private readonly ILogger<KokoroSentenceSynthesizer> _logger;
     private readonly IOptionsMonitor<KokoroVoiceOptions> _options;
-    private readonly IPhonemizer _phonemizer;
     private readonly KokoroAudioSynthesizer _synthesizer;
     private readonly SemaphoreSlim _throttle;
 
     private bool _disposed;
 
     public KokoroSentenceSynthesizer(
-        IPhonemizer phonemizer,
         IModelProvider modelProvider,
         IKokoroVoiceProvider voiceProvider,
         IOptionsMonitor<KokoroVoiceOptions> options,
         ILoggerFactory loggerFactory
     )
     {
-        _phonemizer = phonemizer ?? throw new ArgumentNullException(nameof(phonemizer));
         _options = options;
         _logger = loggerFactory.CreateLogger<KokoroSentenceSynthesizer>();
         _synthesizer = new KokoroAudioSynthesizer(
