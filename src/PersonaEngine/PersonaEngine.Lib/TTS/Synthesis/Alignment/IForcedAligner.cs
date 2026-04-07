@@ -53,7 +53,9 @@ public readonly struct AlignmentResult : IDisposable
 {
     private readonly WordTiming[]? _buffer;
 
-    public AlignmentResult(WordTiming[] buffer, int count)
+    public static AlignmentResult Empty => new(null, 0);
+
+    public AlignmentResult(WordTiming[]? buffer, int count)
     {
         _buffer = buffer;
         Count = count;

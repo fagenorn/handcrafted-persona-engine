@@ -163,4 +163,30 @@ public static class TextExtensions
 
         return wordCount;
     }
+
+    /// <summary>
+    ///     Strips leading and trailing punctuation characters, preserving internal punctuation.
+    /// </summary>
+    public static string TrimPunctuation(this string text)
+    {
+        var start = 0;
+        var end = text.Length - 1;
+
+        while (start <= end && char.IsPunctuation(text[start]))
+        {
+            start++;
+        }
+
+        while (end >= start && char.IsPunctuation(text[end]))
+        {
+            end--;
+        }
+
+        if (start == 0 && end == text.Length - 1)
+        {
+            return text;
+        }
+
+        return start > end ? string.Empty : text[start..(end + 1)];
+    }
 }
