@@ -45,9 +45,7 @@ internal sealed class KokoroSentenceSynthesizer : ISentenceSynthesizer
     public string EngineId => "kokoro";
 
     public TtsEngineCapabilities Capabilities =>
-        TtsEngineCapabilities.PhonemeControl
-        | TtsEngineCapabilities.SpeedControl
-        | TtsEngineCapabilities.ProvidesPhonemes;
+        TtsEngineCapabilities.PhonemeControl | TtsEngineCapabilities.SpeedControl;
 
     public ISynthesisSession CreateSession() => new KokoroSynthesisSession(this);
 

@@ -18,6 +18,11 @@ public class SentenceProcessorTests
     public SentenceProcessorTests()
     {
         _loggerFactory.CreateLogger(Arg.Any<string>()).Returns(Substitute.For<ILogger>());
+
+        // Default: phonemizer returns empty result
+        _phonemizer
+            .ToPhonemesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new PhonemeResult("", []));
     }
 
     private SentenceProcessor CreateProcessor(
@@ -40,7 +45,7 @@ public class SentenceProcessorTests
         await foreach (
             var s in processor.ProcessAsync(
                 _session,
-                TtsEngineCapabilities.ProvidesPhonemes,
+                TtsEngineCapabilities.None,
                 "Hello",
                 isLastSegment: false,
                 CancellationToken.None
@@ -74,7 +79,7 @@ public class SentenceProcessorTests
         await foreach (
             var s in processor.ProcessAsync(
                 _session,
-                TtsEngineCapabilities.ProvidesPhonemes,
+                TtsEngineCapabilities.None,
                 "Hello",
                 isLastSegment: false,
                 CancellationToken.None
@@ -86,31 +91,6 @@ public class SentenceProcessorTests
 
         Assert.Single(results);
         await textFilter.Received(1).ProcessAsync("Hello", Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task ProcessAsync_ProvidesPhonemes_DoesNotCallPhonemizer()
-    {
-        var processor = CreateProcessor();
-        var segment = new AudioSegment(new float[] { 1f }, 24000, new List<Token>());
-
-        _session
-            .SynthesizeAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-            .Returns(ToAsyncEnumerable(segment));
-
-        await foreach (
-            var _ in processor.ProcessAsync(
-                _session,
-                TtsEngineCapabilities.ProvidesPhonemes,
-                "Hello",
-                isLastSegment: false,
-                CancellationToken.None
-            )
-        ) { }
-
-        await _phonemizer
-            .DidNotReceive()
-            .ToPhonemesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -207,7 +187,7 @@ public class SentenceProcessorTests
         await foreach (
             var s in processor.ProcessAsync(
                 _session,
-                TtsEngineCapabilities.ProvidesPhonemes,
+                TtsEngineCapabilities.None,
                 "Hello world",
                 isLastSegment: false,
                 CancellationToken.None
@@ -238,7 +218,7 @@ public class SentenceProcessorTests
         await foreach (
             var _ in processor.ProcessAsync(
                 _session,
-                TtsEngineCapabilities.ProvidesPhonemes,
+                TtsEngineCapabilities.None,
                 "Hello",
                 isLastSegment: false,
                 CancellationToken.None

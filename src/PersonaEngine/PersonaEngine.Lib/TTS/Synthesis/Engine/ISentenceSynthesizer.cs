@@ -41,9 +41,6 @@ public enum TtsEngineCapabilities
 
     /// <summary>Supports adjustable speech speed.</summary>
     SpeedControl = 1 << 2,
-
-    /// <summary>Engine populates Token.Phonemes natively (no enrichment needed).</summary>
-    ProvidesPhonemes = 1 << 3,
 }
 
 /// <summary>

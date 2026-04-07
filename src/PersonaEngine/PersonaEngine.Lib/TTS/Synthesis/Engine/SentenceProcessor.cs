@@ -71,19 +71,12 @@ public sealed partial class SentenceProcessor
         }
 
         // Strip emotion markers for engines that don't handle them natively
-        if (!capabilities.HasFlag(TtsEngineCapabilities.ProvidesPhonemes))
-        {
-            processedText = EmotionMarkerRegex().Replace(processedText, string.Empty);
-        }
+        processedText = EmotionMarkerRegex().Replace(processedText, string.Empty);
 
-        // Run phonemizer on the original sentence for enrichment (if engine doesn't provide phonemes)
-        PhonemeResult? phonemeResult = null;
-        if (!capabilities.HasFlag(TtsEngineCapabilities.ProvidesPhonemes))
-        {
-            phonemeResult = await _phonemizer
-                .ToPhonemesAsync(sentence, cancellationToken)
-                .ConfigureAwait(false);
-        }
+        // Run phonemizer on the processed text
+        var phonemeResult = await _phonemizer
+            .ToPhonemesAsync(processedText, cancellationToken)
+            .ConfigureAwait(false);
 
         // Synthesize via session, applying audio filters through the pipeline
         await foreach (
@@ -92,11 +85,8 @@ public sealed partial class SentenceProcessor
                 .ConfigureAwait(false)
         )
         {
-            // Enrich tokens with phoneme data if the engine doesn't provide them
-            if (phonemeResult is not null)
-            {
-                EnrichTokensWithPhonemes(segment.Tokens, phonemeResult.Tokens);
-            }
+            // Enrich tokens with phoneme data
+            EnrichTokensWithPhonemes(segment.Tokens, phonemeResult.Tokens);
 
             // Post-process text filters
             for (var i = 0; i < _textFilters.Count; i++)
