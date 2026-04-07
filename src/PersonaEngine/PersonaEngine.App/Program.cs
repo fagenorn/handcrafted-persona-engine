@@ -65,6 +65,30 @@ internal static class Program
             NativeLibraryConfig.LLama.WithLibrary(llamaDll);
         }
 
+        var llamaLogger = Log.ForContext("SourceContext", "llama.cpp");
+        NativeLibraryConfig.LLama.WithLogCallback((level, message) =>
+        {
+            var msg = message.TrimEnd('\n', '\r');
+            if (string.IsNullOrEmpty(msg))
+                return;
+
+            switch (level)
+            {
+                case LLamaLogLevel.Error:
+                    llamaLogger.Error("{Message}", msg);
+                    break;
+                case LLamaLogLevel.Warning:
+                    llamaLogger.Warning("{Message}", msg);
+                    break;
+                case LLamaLogLevel.Info:
+                    llamaLogger.Information("{Message}", msg);
+                    break;
+                case LLamaLogLevel.Debug:
+                    llamaLogger.Debug("{Message}", msg);
+                    break;
+            }
+        });
+
         CreateLogger();
 
         // Suppress ONNX Runtime warnings globally before any sessions are created
@@ -113,6 +137,7 @@ internal static class Program
                 LogEventLevel.Information
             )
             .MinimumLevel.Override("Startup", LogEventLevel.Information)
+            .MinimumLevel.Override("llama.cpp", LogEventLevel.Error)
             .Enrich.FromLogContext()
             .Enrich.With<GuidToEmojiEnricher>()
             .WriteTo.Console(
