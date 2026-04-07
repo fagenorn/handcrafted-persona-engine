@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
@@ -422,26 +421,21 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
-        var words = SplitIntoWords(text);
+        var tokens = phonemeResult.Tokens;
 
-        // Latest absolute word timings (null = untimed). Updated by AlignSpoken.
-        var absoluteTimings = new (double Start, double End)?[words.Count];
+        // Build CTC alignment text from phonemizer tokens (matches tokenization exactly)
+        var alignText = string.Concat(tokens.Select(t => t.Text + t.Whitespace)).TrimEnd();
+
+        var absoluteTimings = new (double Start, double End)?[tokens.Length];
 
         var accumulatedAudio = new List<float[]>();
         var totalSamplesEmitted = 0;
         var lastAlignAt = 0;
         var confirmedWordCount = 0;
-        var windowStartSample = 0; // sample offset for windowed alignment
-        const int alignInterval = OutputSampleRate / 2; // 0.5s
-        const int windowOverlapSamples = OutputSampleRate / 5; // 200ms overlap for word boundaries
+        var windowStartSample = 0;
+        const int alignInterval = OutputSampleRate / 2;
+        const int windowOverlapSamples = OutputSampleRate / 5;
 
-        // No seeding — let the first CTC at 0.5s provide real timing.
-        // Qwen3 typically has ~0.3-0.5s warmup silence before speech starts,
-        // so no subtitles during that period is correct behavior.
-
-        // Buffer audio until CTC confirms complete words, then emit the audio
-        // together with precisely timed tokens — like mini-Kokoro segments.
-        // Each emitted segment has audio + words that are fully spoken in that audio.
         var lastEmittedSample = 0;
         var lastEmittedWordCount = 0;
 
@@ -462,18 +456,17 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
             accumulatedAudio.Add(audioChunk);
             totalSamplesEmitted += audioChunk.Length;
 
-            // Run windowed CTC alignment every 0.5s
             if (totalSamplesEmitted - lastAlignAt < alignInterval)
             {
                 continue;
             }
 
-            var allWords = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            // Build remaining text from unconfirmed tokens
+            var allWords = alignText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (confirmedWordCount < allWords.Length)
             {
                 var remainingText = string.Join(' ', allWords.Skip(confirmedWordCount));
 
-                // Small overlap before window start to capture word boundaries
                 var winStart = Math.Max(0, windowStartSample - windowOverlapSamples);
                 var winLength = totalSamplesEmitted - winStart;
                 var windowStartTimeSec = winStart / (double)OutputSampleRate;
@@ -493,7 +486,7 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                     for (var i = 0; i < result.Count; i++)
                     {
                         var wordIdx = confirmedWordCount + i;
-                        if (wordIdx < words.Count)
+                        if (wordIdx < tokens.Length)
                         {
                             absoluteTimings[wordIdx] = (
                                 result.Timings[i].StartTime.TotalSeconds,
@@ -511,10 +504,6 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
 
             lastAlignAt = totalSamplesEmitted;
 
-            // Emit one segment PER newly confirmed word. This ensures subtitles
-            // grow one word at a time (no jumps when CTC confirms multiple words).
-            // Each segment contains audio up to that word's end, with only the new
-            // word token(s) and slice-relative timing so downstream filters work correctly.
             var fullAudio = ConcatAudio(accumulatedAudio, totalSamplesEmitted);
 
             for (var w = lastEmittedWordCount; w < confirmedWordCount; w++)
@@ -530,9 +519,17 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                     var emitLength = wordEndSample - lastEmittedSample;
                     var audioToEmit = fullAudio.AsSpan(lastEmittedSample, emitLength).ToArray();
 
-                    var tokens = BuildSliceTokens(words, absoluteTimings, w, w + 1, sliceStartSec);
+                    // Apply timing in-place to the phonemizer token
+                    tokens[w].StartTs = absoluteTimings[w]!.Value.Start - sliceStartSec;
+                    tokens[w].EndTs = absoluteTimings[w]!.Value.End - sliceStartSec;
 
-                    yield return new AudioSegment(audioToEmit.AsMemory(), OutputSampleRate, tokens);
+                    // Zero-alloc slice via ArraySegment<Token>
+                    var tokenSlice = new ArraySegment<Token>(tokens, w, 1);
+                    yield return new AudioSegment(
+                        audioToEmit.AsMemory(),
+                        OutputSampleRate,
+                        tokenSlice
+                    );
 
                     lastEmittedSample = wordEndSample;
                 }
@@ -541,14 +538,13 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
             lastEmittedWordCount = confirmedWordCount;
         }
 
-        // Final: run full CTC on complete audio for best accuracy,
-        // then emit any remaining audio/words that weren't caught during streaming.
+        // Final full CTC alignment for best accuracy
         if (totalSamplesEmitted > 0)
         {
             var finalAudio = ConcatAudio(accumulatedAudio, totalSamplesEmitted);
 
-            using var finalResult = _aligner.Align(finalAudio, text, OutputSampleRate);
-            for (var i = 0; i < finalResult.Count && i < words.Count; i++)
+            using var finalResult = _aligner.Align(finalAudio, alignText, OutputSampleRate);
+            for (var i = 0; i < finalResult.Count && i < tokens.Length; i++)
             {
                 absoluteTimings[i] = (
                     finalResult.Timings[i].StartTime.TotalSeconds,
@@ -556,7 +552,6 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                 );
             }
 
-            // Emit any words that weren't emitted during streaming (one at a time)
             for (var w = lastEmittedWordCount; w < finalResult.Count; w++)
             {
                 var wordEndSample = Math.Min(
@@ -570,15 +565,21 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                     var emitLen = wordEndSample - lastEmittedSample;
                     var audioSlice = finalAudio.AsSpan(lastEmittedSample, emitLen).ToArray();
 
-                    var tokens = BuildSliceTokens(words, absoluteTimings, w, w + 1, sliceStartSec);
+                    tokens[w].StartTs = absoluteTimings[w]!.Value.Start - sliceStartSec;
+                    tokens[w].EndTs = absoluteTimings[w]!.Value.End - sliceStartSec;
 
-                    yield return new AudioSegment(audioSlice.AsMemory(), OutputSampleRate, tokens);
+                    var tokenSlice = new ArraySegment<Token>(tokens, w, 1);
+                    yield return new AudioSegment(
+                        audioSlice.AsMemory(),
+                        OutputSampleRate,
+                        tokenSlice
+                    );
 
                     lastEmittedSample = wordEndSample;
                 }
             }
 
-            // Trailing audio after the last word (silence, reverb tail, etc.)
+            // Trailing audio
             if (totalSamplesEmitted > lastEmittedSample)
             {
                 var tailLength = totalSamplesEmitted - lastEmittedSample;
@@ -605,19 +606,6 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
         _disposed = true;
     }
 
-    private static List<(string Word, string Whitespace)> SplitIntoWords(string text)
-    {
-        var result = new List<(string, string)>();
-        var matches = Regex.Matches(text, @"(\S+)(\s*)");
-
-        foreach (Match m in matches)
-        {
-            result.Add((m.Groups[1].Value, m.Groups[2].Value));
-        }
-
-        return result;
-    }
-
     private static float[] ConcatAudio(List<float[]> chunks, int totalSamples)
     {
         var result = new float[totalSamples];
@@ -629,51 +617,6 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
         }
 
         return result;
-    }
-
-    /// <summary>
-    ///     Builds tokens for a range of words with timing relative to the audio slice.
-    /// </summary>
-    private static IReadOnlyList<Token> BuildSliceTokens(
-        List<(string Word, string Whitespace)> words,
-        (double Start, double End)?[] absoluteTimings,
-        int startWord,
-        int endWordExclusive,
-        double sliceStartSec
-    )
-    {
-        var count = Math.Min(endWordExclusive, words.Count) - startWord;
-
-        if (count <= 0)
-        {
-            return Array.Empty<Token>();
-        }
-
-        var tokens = new Token[count];
-
-        for (var i = 0; i < count; i++)
-        {
-            var wordIdx = startWord + i;
-            var (word, ws) = words[wordIdx];
-            var timing = absoluteTimings[wordIdx];
-
-            if (timing.HasValue)
-            {
-                tokens[i] = new Token
-                {
-                    Text = word,
-                    Whitespace = ws,
-                    StartTs = timing.Value.Start - sliceStartSec,
-                    EndTs = timing.Value.End - sliceStartSec,
-                };
-            }
-            else
-            {
-                tokens[i] = new Token { Text = word, Whitespace = ws };
-            }
-        }
-
-        return tokens;
     }
 
     private IEnumerable<int[]> GenerateCodeFrames(
