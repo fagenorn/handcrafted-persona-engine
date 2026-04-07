@@ -102,64 +102,10 @@ public class SentenceProcessorTests
     }
 
     [Fact]
-    public async Task ProcessAsync_NoProvidesPhonemes_CallsPhonemizerAndEnrichesTokens()
-    {
-        var processor = CreateProcessor();
-
-        var engineTokens = new List<Token> { new() { Text = "Hello" } };
-        var segment = new AudioSegment(new float[] { 1f }, 24000, engineTokens);
-
-        var phonemeTokens = new List<Token>
-        {
-            new()
-            {
-                Text = "Hello",
-                Phonemes = "hɛloʊ",
-                Tag = "UH",
-                Stress = 1.0,
-            },
-        };
-
-        _phonemizer
-            .ToPhonemesAsync("Hello", Arg.Any<CancellationToken>())
-            .Returns(new PhonemeResult("hɛloʊ", [.. phonemeTokens]));
-
-        _session
-            .SynthesizeAsync(
-                Arg.Any<string>(),
-                Arg.Any<PhonemeResult>(),
-                Arg.Any<bool>(),
-                Arg.Any<CancellationToken>()
-            )
-            .Returns(ToAsyncEnumerable(segment));
-
-        var results = new List<AudioSegment>();
-        await foreach (
-            var s in processor.ProcessAsync(
-                _session,
-                "Hello",
-                isLastSegment: false,
-                CancellationToken.None
-            )
-        )
-        {
-            results.Add(s);
-        }
-
-        Assert.Single(results);
-        Assert.Equal("hɛloʊ", results[0].Tokens[0].Phonemes);
-        Assert.Equal("UH", results[0].Tokens[0].Tag);
-    }
-
-    [Fact]
-    public async Task ProcessAsync_EmotionMarkers_StrippedWhenNoProvidesPhonemes()
+    public async Task ProcessAsync_AlwaysCallsPhonemizer()
     {
         var processor = CreateProcessor();
         var segment = new AudioSegment(new float[] { 1f }, 24000, new List<Token>());
-
-        _phonemizer
-            .ToPhonemesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new PhonemeResult("", []));
 
         _session
             .SynthesizeAsync(
@@ -173,20 +119,46 @@ public class SentenceProcessorTests
         await foreach (
             var _ in processor.ProcessAsync(
                 _session,
-                "Hello [__EM1__](//)",
+                "Hello",
                 isLastSegment: false,
                 CancellationToken.None
             )
         ) { }
 
+        await _phonemizer.Received(1).ToPhonemesAsync("Hello", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ProcessAsync_PhonemizerReceivesFilteredText()
+    {
+        var textFilter = Substitute.For<ITextFilter>();
+        textFilter.Priority.Returns(1);
+        textFilter
+            .ProcessAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new TextFilterResult { ProcessedText = "Filtered" });
+
+        var processor = CreateProcessor(textFilters: [textFilter]);
+        var segment = new AudioSegment(new float[] { 1f }, 24000, new List<Token>());
+
         _session
-            .Received(1)
             .SynthesizeAsync(
-                Arg.Is<string>(s => !s.Contains("[__EM")),
+                Arg.Any<string>(),
                 Arg.Any<PhonemeResult>(),
-                false,
+                Arg.Any<bool>(),
                 Arg.Any<CancellationToken>()
-            );
+            )
+            .Returns(ToAsyncEnumerable(segment));
+
+        await foreach (
+            var _ in processor.ProcessAsync(
+                _session,
+                "Hello",
+                isLastSegment: false,
+                CancellationToken.None
+            )
+        ) { }
+
+        await _phonemizer.Received(1).ToPhonemesAsync("Filtered", Arg.Any<CancellationToken>());
     }
 
     [Fact]
