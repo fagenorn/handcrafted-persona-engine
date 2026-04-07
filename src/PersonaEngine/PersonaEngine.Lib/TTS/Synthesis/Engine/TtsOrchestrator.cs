@@ -20,7 +20,7 @@ public sealed class TtsOrchestrator : ITtsEngine
     private readonly ISentenceSegmenter _segmenter;
     private readonly ILogger<TtsOrchestrator> _logger;
 
-    internal TtsOrchestrator(
+    public TtsOrchestrator(
         ITtsEngineProvider engineProvider,
         SentenceProcessor sentenceProcessor,
         ITextNormalizer normalizer,

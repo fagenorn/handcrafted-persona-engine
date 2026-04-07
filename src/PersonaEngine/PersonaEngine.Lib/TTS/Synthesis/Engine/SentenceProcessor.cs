@@ -13,7 +13,7 @@ namespace PersonaEngine.Lib.TTS.Synthesis.Engine;
 ///     Holds reusable state (dictionary, filter results, pipeline) that is cleared
 ///     between sentences to minimize allocations on the hot path.
 /// </summary>
-internal sealed partial class SentenceProcessor
+public sealed partial class SentenceProcessor
 {
     [GeneratedRegex(@"\[__EM\d+__\]\(//\)")]
     private static partial Regex EmotionMarkerRegex();
