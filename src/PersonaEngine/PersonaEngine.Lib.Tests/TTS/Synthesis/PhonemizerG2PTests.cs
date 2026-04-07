@@ -98,7 +98,7 @@ public class PhonemizerG2PTests : IDisposable
         var result = await sut.ToPhonemesAsync("hello world");
 
         Assert.Equal("həˈloʊ wɜːɹld", result.Phonemes);
-        Assert.Equal(2, result.Tokens.Count);
+        Assert.Equal(2, result.Tokens.Length);
         Assert.Equal("hello", result.Tokens[0].Text);
         Assert.Equal(" ", result.Tokens[0].Whitespace);
         Assert.Equal("world", result.Tokens[1].Text);
@@ -147,7 +147,7 @@ public class PhonemizerG2PTests : IDisposable
         var result = await sut.ToPhonemesAsync("I like cats");
 
         Assert.Equal("AY lAYk kæts", result.Phonemes);
-        Assert.Equal(3, result.Tokens.Count);
+        Assert.Equal(3, result.Tokens.Length);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -241,7 +241,7 @@ public class PhonemizerG2PTests : IDisposable
         var result = await sut.ToPhonemesAsync("hello xyzzy");
 
         Assert.Equal("həˈloʊ ˈzɪzi", result.Phonemes);
-        Assert.Equal(2, result.Tokens.Count);
+        Assert.Equal(2, result.Tokens.Length);
         Assert.Equal(5, result.Tokens[0].Rating);
         Assert.Equal(2, result.Tokens[1].Rating);
     }
@@ -285,7 +285,7 @@ public class PhonemizerG2PTests : IDisposable
         var result = await sut.ToPhonemesAsync("hello, world");
 
         // Comma is in Puncts set, so its phoneme is ","
-        Assert.Equal(3, result.Tokens.Count);
+        Assert.Equal(3, result.Tokens.Length);
         Assert.Equal(",", result.Tokens[1].Phonemes);
         Assert.Equal(4, result.Tokens[1].Rating);
     }
@@ -318,7 +318,7 @@ public class PhonemizerG2PTests : IDisposable
         using var sut = CreateSut(withFallback: false);
         var result = await sut.ToPhonemesAsync("hello.");
 
-        Assert.Equal(2, result.Tokens.Count);
+        Assert.Equal(2, result.Tokens.Length);
         Assert.Equal(".", result.Tokens[1].Phonemes);
         Assert.Equal(4, result.Tokens[1].Rating);
     }
@@ -357,7 +357,7 @@ public class PhonemizerG2PTests : IDisposable
         using var sut = CreateSut(withFallback: false);
         var result = await sut.ToPhonemesAsync("(hello)");
 
-        Assert.Equal(3, result.Tokens.Count);
+        Assert.Equal(3, result.Tokens.Length);
         Assert.Equal("(", result.Tokens[0].Phonemes);
         Assert.Equal(")", result.Tokens[2].Phonemes);
     }
@@ -458,7 +458,7 @@ public class PhonemizerG2PTests : IDisposable
         using var sut = CreateSut(withFallback: false);
         var result = await sut.ToPhonemesAsync("word - word");
 
-        Assert.Equal(3, result.Tokens.Count);
+        Assert.Equal(3, result.Tokens.Length);
         Assert.Equal("—", result.Tokens[1].Phonemes);
         Assert.Equal(3, result.Tokens[1].Rating);
     }
@@ -529,7 +529,7 @@ public class PhonemizerG2PTests : IDisposable
         using var sut = CreateSut(withFallback: false);
         var result = await sut.ToPhonemesAsync("hello!");
 
-        Assert.Equal(2, result.Tokens.Count);
+        Assert.Equal(2, result.Tokens.Length);
         // "!" is in Puncts set, so phoneme is "!"
         Assert.Equal("!", result.Tokens[1].Phonemes);
         Assert.Equal(4, result.Tokens[1].Rating);
@@ -580,7 +580,7 @@ public class PhonemizerG2PTests : IDisposable
         var result = await sut.ToPhonemesAsync("$50");
 
         // $ token has empty phonemes, 50 token has currency phonemes
-        Assert.Equal(2, result.Tokens.Count);
+        Assert.Equal(2, result.Tokens.Length);
         Assert.Equal(string.Empty, result.Tokens[0].Phonemes);
         Assert.Equal("$", result.Tokens[1].Currency);
     }
@@ -656,7 +656,7 @@ public class PhonemizerG2PTests : IDisposable
         var result = await sut.ToPhonemesAsync("$ word");
 
         // $ gets empty phonemes, "word" has no currency since tag is not CD
-        Assert.Equal(2, result.Tokens.Count);
+        Assert.Equal(2, result.Tokens.Length);
         Assert.Null(result.Tokens[1].Currency);
     }
 
@@ -872,7 +872,7 @@ public class PhonemizerG2PTests : IDisposable
         var result = await sut.ToPhonemesAsync("[hello](/həˈloʊ/) [world](/wɜːɹld/)");
 
         Assert.Equal("həˈloʊ wɜːɹld", result.Phonemes);
-        Assert.Equal(2, result.Tokens.Count);
+        Assert.Equal(2, result.Tokens.Length);
         Assert.Equal(5, result.Tokens[0].Rating);
         Assert.Equal(5, result.Tokens[1].Rating);
     }
@@ -908,7 +908,7 @@ public class PhonemizerG2PTests : IDisposable
         var result = await sut.ToPhonemesAsync("say [hello](/həˈloʊ/)");
 
         Assert.Equal("seɪ həˈloʊ", result.Phonemes);
-        Assert.Equal(2, result.Tokens.Count);
+        Assert.Equal(2, result.Tokens.Length);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -1191,7 +1191,7 @@ public class PhonemizerG2PTests : IDisposable
         using var sut = CreateSut(withFallback: false);
         var result = await sut.ToPhonemesAsync("the cat sat");
 
-        Assert.Equal(3, result.Tokens.Count);
+        Assert.Equal(3, result.Tokens.Length);
         Assert.Equal("the", result.Tokens[0].Text);
         Assert.Equal("cat", result.Tokens[1].Text);
         Assert.Equal("sat", result.Tokens[2].Text);
@@ -1407,7 +1407,7 @@ public class PhonemizerG2PTests : IDisposable
         using var sut = CreateSut(withFallback: false);
         var result = await sut.ToPhonemesAsync("hello, world!");
 
-        Assert.Equal(4, result.Tokens.Count);
+        Assert.Equal(4, result.Tokens.Length);
         Assert.Equal("həˈloʊ", result.Tokens[0].Phonemes);
         Assert.Equal(",", result.Tokens[1].Phonemes);
         Assert.Equal("wɜːɹld", result.Tokens[2].Phonemes);
@@ -1527,7 +1527,7 @@ public class PhonemizerG2PTests : IDisposable
         // Both POS tags should have been seen
         Assert.Contains("VBP", tagsSeen);
         Assert.Contains("VBD", tagsSeen);
-        Assert.Equal(5, result.Tokens.Count);
+        Assert.Equal(5, result.Tokens.Length);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -1598,7 +1598,7 @@ public class PhonemizerG2PTests : IDisposable
 
         // "..." is subtokenized into [".", ".", "."] which form a token group,
         // then merged back. The dots are in Puncts so phonemes = "..."
-        Assert.Equal(4, result.Tokens.Count);
+        Assert.Equal(4, result.Tokens.Length);
         // All punct tokens should have phonemes set
         Assert.All(result.Tokens.Skip(1), t => Assert.NotNull(t.Phonemes));
     }
@@ -1641,7 +1641,7 @@ public class PhonemizerG2PTests : IDisposable
         using var sut = CreateSut(withFallback: false);
         var result = await sut.ToPhonemesAsync("hello; world");
 
-        Assert.Equal(3, result.Tokens.Count);
+        Assert.Equal(3, result.Tokens.Length);
         // ";" text with ":" POS tag: not "-" or "–", so goes to PunctTags branch
         // ":" is in PunctTags, PunctTagPhonemes doesn't have ":"
         // Chars: ';' is in Puncts → phoneme is ";"
@@ -1680,7 +1680,7 @@ public class PhonemizerG2PTests : IDisposable
         using var sut = CreateSut(withFallback: false);
         var result = await sut.ToPhonemesAsync("#hello");
 
-        Assert.Equal(2, result.Tokens.Count);
+        Assert.Equal(2, result.Tokens.Length);
         // "#" tag is in PunctTags; '#' char is NOT in Puncts → empty phoneme
         Assert.Equal(string.Empty, result.Tokens[0].Phonemes);
     }

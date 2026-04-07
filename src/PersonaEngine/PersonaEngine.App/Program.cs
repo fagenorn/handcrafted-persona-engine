@@ -66,28 +66,30 @@ internal static class Program
         }
 
         var llamaLogger = Log.ForContext("SourceContext", "llama.cpp");
-        NativeLibraryConfig.LLama.WithLogCallback((level, message) =>
-        {
-            var msg = message.TrimEnd('\n', '\r');
-            if (string.IsNullOrEmpty(msg))
-                return;
-
-            switch (level)
+        NativeLibraryConfig.LLama.WithLogCallback(
+            (level, message) =>
             {
-                case LLamaLogLevel.Error:
-                    llamaLogger.Error("{Message}", msg);
-                    break;
-                case LLamaLogLevel.Warning:
-                    llamaLogger.Warning("{Message}", msg);
-                    break;
-                case LLamaLogLevel.Info:
-                    llamaLogger.Information("{Message}", msg);
-                    break;
-                case LLamaLogLevel.Debug:
-                    llamaLogger.Debug("{Message}", msg);
-                    break;
+                var msg = message.TrimEnd('\n', '\r');
+                if (string.IsNullOrEmpty(msg))
+                    return;
+
+                switch (level)
+                {
+                    case LLamaLogLevel.Error:
+                        llamaLogger.Error("{Message}", msg);
+                        break;
+                    case LLamaLogLevel.Warning:
+                        llamaLogger.Warning("{Message}", msg);
+                        break;
+                    case LLamaLogLevel.Info:
+                        llamaLogger.Information("{Message}", msg);
+                        break;
+                    case LLamaLogLevel.Debug:
+                        llamaLogger.Debug("{Message}", msg);
+                        break;
+                }
             }
-        });
+        );
 
         CreateLogger();
 
