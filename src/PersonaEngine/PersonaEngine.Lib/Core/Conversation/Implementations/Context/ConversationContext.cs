@@ -35,7 +35,7 @@ public class ConversationContext : IConversationContext
 
     private ConversationContextOptions _options;
 
-    private bool _turnInterrupted = false;
+    private bool _turnInterrupted;
 
     private DateTimeOffset _turnStartTime;
 
@@ -299,7 +299,7 @@ public class ConversationContext : IConversationContext
             ChatMessageRole.System => AuthorRole.System,
             ChatMessageRole.Assistant => AuthorRole.Assistant,
             ChatMessageRole.User => AuthorRole.User,
-            ChatMessageRole.Developer => AuthorRole.Developer,
+            // ChatMessageRole.Developer => AuthorRole.Developer,
             ChatMessageRole.Tool => AuthorRole.Tool,
             ChatMessageRole.Function => AuthorRole.Tool,
             _ => throw new ArgumentOutOfRangeException(nameof(role), role, null),
@@ -351,8 +351,6 @@ public class ConversationContext : IConversationContext
                 if (messageRemoved || turnRemoved)
                 {
                     OnConversationUpdated();
-
-                    return true;
                 }
 
                 return true;

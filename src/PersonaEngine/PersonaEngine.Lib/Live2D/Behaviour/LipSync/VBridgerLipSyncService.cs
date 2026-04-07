@@ -87,13 +87,17 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
 
     private readonly IAudioProgressNotifier _audioProgressNotifier;
 
-    private readonly List<TimedPhoneme> _activePhonemes = new();
+    internal readonly List<TimedPhoneme> _activePhonemes = new();
 
     private int _currentPhonemeIndex = -1;
 
-    private bool _isPlaying = false;
+    internal bool _isPlaying = false;
 
-    private bool _isStarted = false;
+    internal Guid _currentSentenceId;
+
+    internal double _cumulativeTimeOffset;
+
+    internal bool _isStarted = false;
 
     private bool _disposed = false;
 
@@ -510,14 +514,42 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
             return;
         }
 
-        _logger.LogTrace("Audio Chunk Playback Started.");
-        ProcessAudioSegment(e.Chunk);
-        _isPlaying = true;
-        _currentPhonemeIndex = -1;
+        var chunk = e.Chunk;
+        var isNewSentence = chunk.SentenceId != _currentSentenceId;
 
-        var initialTime =
-            _activePhonemes.Count != 0 ? (float)_activePhonemes.First().StartTime : 0f;
-        UpdateTargetPoses(initialTime);
+        if (isNewSentence)
+        {
+            _logger.LogTrace("New sentence started: {SentenceId}", chunk.SentenceId);
+            _currentSentenceId = chunk.SentenceId;
+            _cumulativeTimeOffset = 0.0;
+            _activePhonemes.Clear();
+            _currentPhonemeIndex = -1;
+            AppendPhonemes(chunk, 0.0);
+        }
+        else if (chunk.Tokens.Count > 0)
+        {
+            // Same sentence — append phonemes from the new word token(s).
+            // Timings are slice-relative, so offset by cumulative time.
+            AppendPhonemes(chunk, _cumulativeTimeOffset);
+        }
+        else
+        {
+            _logger.LogTrace(
+                "Sentence {SentenceId}: continuation chunk at offset {Offset:F3}s",
+                chunk.SentenceId,
+                _cumulativeTimeOffset
+            );
+        }
+
+        _isPlaying = true;
+
+        if (_activePhonemes.Count != 0)
+        {
+            var initialTime = isNewSentence
+                ? (float)_activePhonemes[0].StartTime
+                : (float)(_cumulativeTimeOffset + _activePhonemes[0].StartTime);
+            UpdateTargetPoses(initialTime);
+        }
     }
 
     private void HandleChunkEnded(object? sender, AudioChunkPlaybackEndedEvent e)
@@ -528,7 +560,15 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
         }
 
         _logger.LogTrace("Audio Chunk Playback Ended.");
-        _isPlaying = false;
+
+        if (e.Chunk.SentenceId == _currentSentenceId)
+        {
+            // Accumulate this chunk's duration for the next chunk's time offset
+            _cumulativeTimeOffset += e.Chunk.DurationInSeconds;
+        }
+
+        // Don't set _isPlaying = false — next same-sentence chunk arrives shortly.
+        // When playback truly ends, ResetState() handles cleanup.
     }
 
     private void HandleProgress(object? sender, AudioPlaybackProgressEvent e)
@@ -538,7 +578,8 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
             return;
         }
 
-        UpdateTargetPoses((float)e.CurrentPlaybackTime.TotalSeconds);
+        var effectiveTime = _cumulativeTimeOffset + e.CurrentPlaybackTime.TotalSeconds;
+        UpdateTargetPoses((float)effectiveTime);
     }
 
     private void ResetState()
@@ -546,6 +587,8 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
         _activePhonemes.Clear();
         _currentPhonemeIndex = -1;
         _isPlaying = false;
+        _currentSentenceId = Guid.Empty;
+        _cumulativeTimeOffset = 0.0;
         _currentTargetPose = PhonemePose.Neutral;
         _nextTargetPose = PhonemePose.Neutral;
         _interpolationT = 0f;
@@ -557,11 +600,15 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
 
     #region Phoneme Processing
 
-    private void ProcessAudioSegment(AudioSegment segment)
+    /// <summary>
+    ///     Appends phonemes from a segment's tokens to the active phoneme list.
+    ///     Token timings are slice-relative, so <paramref name="timeOffset"/> is added
+    ///     to convert them to absolute sentence time.
+    /// </summary>
+    private void AppendPhonemes(AudioSegment segment, double timeOffset)
     {
-        _activePhonemes.Clear();
-
-        var lastEndTime = 0.0;
+        var lastEndTime = _activePhonemes.Count > 0 ? _activePhonemes[^1].EndTime : 0.0;
+        var beforeCount = _activePhonemes.Count;
 
         foreach (var token in segment.Tokens)
         {
@@ -582,8 +629,8 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
                 continue;
             }
 
-            var tokenStartTime = Math.Max(lastEndTime, token.StartTs.Value);
-            var tokenEndTime = Math.Max(tokenStartTime + 0.001, token.EndTs.Value);
+            var tokenStartTime = Math.Max(lastEndTime, token.StartTs.Value + timeOffset);
+            var tokenEndTime = Math.Max(tokenStartTime + 0.001, token.EndTs.Value + timeOffset);
 
             var phonemeChars = SplitPhonemes(token.Phonemes);
             if (phonemeChars.Count == 0)
@@ -617,8 +664,14 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
             lastEndTime = currentPhonemeStartTime;
         }
 
-        _activePhonemes.Sort((a, b) => a.StartTime.CompareTo(b.StartTime));
-        _logger.LogDebug("Processed segment into {Count} timed phonemes.", _activePhonemes.Count);
+        if (_activePhonemes.Count > beforeCount)
+        {
+            _logger.LogDebug(
+                "Appended {Count} timed phonemes (total: {Total}).",
+                _activePhonemes.Count - beforeCount,
+                _activePhonemes.Count
+            );
+        }
     }
 
     private List<string> SplitPhonemes(string phonemeString)
@@ -784,7 +837,7 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
         }
     }
 
-    private struct TimedPhoneme
+    internal struct TimedPhoneme
     {
         public string Phoneme;
 

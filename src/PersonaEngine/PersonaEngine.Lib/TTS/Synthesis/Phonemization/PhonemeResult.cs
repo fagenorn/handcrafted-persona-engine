@@ -5,7 +5,7 @@
 /// </summary>
 public class PhonemeResult
 {
-    public PhonemeResult(string phonemes, IReadOnlyList<Token> tokens)
+    public PhonemeResult(string phonemes, Token[] tokens)
     {
         Phonemes = phonemes;
         Tokens = tokens;
@@ -19,5 +19,5 @@ public class PhonemeResult
     /// <summary>
     ///     Tokens with phonetic information
     /// </summary>
-    public IReadOnlyList<Token> Tokens { get; }
+    public Token[] Tokens { get; }
 }

@@ -1,18 +1,12 @@
-﻿using PersonaEngine.Lib.TTS.Synthesis;
-
 namespace PersonaEngine.Lib.UI.Text.Subtitles;
 
 /// <summary>
 ///     Represents a processed audio segment, broken down into lines and words
 ///     with calculated timing and layout information ready for the timeline.
 /// </summary>
-public class SubtitleSegment(
-    AudioSegment originalAudioSegment,
-    float absoluteStartTime,
-    string fullText
-)
+public class SubtitleSegment(float absoluteStartTime, string fullText)
 {
-    public AudioSegment OriginalAudioSegment { get; } = originalAudioSegment;
+    public Guid Id { get; } = Guid.NewGuid();
 
     public float AbsoluteStartTime { get; } = absoluteStartTime;
 
@@ -20,7 +14,7 @@ public class SubtitleSegment(
 
     public List<SubtitleLine> Lines { get; } = new();
 
-    public float EstimatedEndTime { get; private set; } = absoluteStartTime;
+    public float EstimatedEndTime { get; set; } = absoluteStartTime;
 
     public void AddLine(SubtitleLine line)
     {
@@ -35,11 +29,5 @@ public class SubtitleSegment(
             EstimatedEndTime,
             lastWord.AbsoluteStartTime + lastWord.Duration
         );
-    }
-
-    public void Clear()
-    {
-        Lines.Clear();
-        EstimatedEndTime = AbsoluteStartTime;
     }
 }

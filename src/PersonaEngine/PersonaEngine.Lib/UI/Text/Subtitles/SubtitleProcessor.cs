@@ -1,104 +1,69 @@
-﻿using System.Text;
+using System.Text;
 using PersonaEngine.Lib.TTS.Synthesis;
 
 namespace PersonaEngine.Lib.UI.Text.Subtitles;
 
 /// <summary>
-/// Processes raw AudioSegments into structured SubtitleSegments containing lines and words
-/// with calculated timing and layout information.
+///     Processes raw AudioSegments into structured SubtitleSegments containing lines and words
+///     with calculated timing and layout information.
 /// </summary>
 public class SubtitleProcessor(TextMeasurer textMeasurer, float defaultWordDuration = 0.3f)
 {
     private readonly float _defaultWordDuration = Math.Max(0.01f, defaultWordDuration);
 
-    public SubtitleSegment ProcessSegment(AudioSegment audioSegment, float segmentAbsoluteStartTime)
+    private readonly StringBuilder _textBuilder = new();
+
+    public SubtitleSegment ProcessSegment(
+        AudioSegment? audioSegment,
+        float segmentAbsoluteStartTime
+    )
     {
-        if (audioSegment?.Tokens == null || audioSegment.Tokens.Count == 0)
+        if (audioSegment == null)
         {
-            return new SubtitleSegment(audioSegment!, segmentAbsoluteStartTime, string.Empty);
+            return new SubtitleSegment(segmentAbsoluteStartTime, string.Empty);
         }
 
-        // --- 1. Build Full Text ---
+        if (audioSegment.Tokens.Count == 0)
+        {
+            return new SubtitleSegment(segmentAbsoluteStartTime, string.Empty);
+        }
 
-        var textBuilder = new StringBuilder();
+        _textBuilder.Clear();
         foreach (var token in audioSegment.Tokens)
         {
-            textBuilder.Append(token.Text);
-            textBuilder.Append(token.Whitespace);
+            _textBuilder.Append(token.Text);
+            _textBuilder.Append(token.Whitespace);
         }
 
-        var fullText = textBuilder.ToString();
-
         var processedSegment = new SubtitleSegment(
-            audioSegment,
             segmentAbsoluteStartTime,
-            fullText
+            _textBuilder.ToString()
         );
         var currentLine = new SubtitleLine(0, 0);
         var currentLineWidth = 0f;
         var cumulativeTimeOffset = 0f;
 
-        // --- 2. Iterate Tokens, Calculate Timing & Layout ---
         for (var i = 0; i < audioSegment.Tokens.Count; i++)
         {
             var token = audioSegment.Tokens[i];
             var wordText = token.Text + token.Whitespace;
             var wordSize = textMeasurer.MeasureText(wordText);
 
-            // --- 3. Line Breaking ---
             if (currentLineWidth > 0 && currentLineWidth + wordSize.X > textMeasurer.AvailableWidth)
             {
                 processedSegment.AddLine(currentLine);
-                currentLine = new SubtitleLine(processedSegment.Lines.Count, 0); // TODO: Get segment index properly if needed
+                currentLine = new SubtitleLine(processedSegment.Lines.Count, 0);
                 currentLineWidth = 0f;
             }
 
-            // --- 4. Word Timing Calculation ---
-            float wordStartTimeOffset;
-            float wordDuration;
-
-            if (token.StartTs.HasValue)
-            {
-                wordStartTimeOffset = (float)token.StartTs.Value;
-                if (token.EndTs.HasValue)
-                {
-                    // Case 1: Start and End provided
-                    wordDuration = (float)(token.EndTs.Value - token.StartTs.Value);
-                }
-                else
-                {
-                    // Case 2: Only Start provided - Estimate duration until next token or use default
-                    var nextTokenStartOffset = FindNextTokenStartOffset(audioSegment, i);
-                    if (nextTokenStartOffset > wordStartTimeOffset)
-                    {
-                        wordDuration = nextTokenStartOffset - wordStartTimeOffset;
-                    }
-                    else
-                    {
-                        wordDuration = _defaultWordDuration;
-                    }
-                }
-            }
-            else
-            {
-                // Case 3: No Start provided - Estimate start based on previous word's end or cumulative time
-                wordStartTimeOffset = cumulativeTimeOffset;
-                var nextTokenStartOffset = FindNextTokenStartOffset(audioSegment, i);
-                if (nextTokenStartOffset > wordStartTimeOffset)
-                {
-                    wordDuration = nextTokenStartOffset - wordStartTimeOffset;
-                }
-                else
-                {
-                    wordDuration = _defaultWordDuration;
-                }
-            }
-
-            wordDuration = Math.Max(0.01f, wordDuration);
+            var (wordStartTimeOffset, wordDuration) = CalculateWordTiming(
+                audioSegment,
+                i,
+                cumulativeTimeOffset
+            );
 
             cumulativeTimeOffset = wordStartTimeOffset + wordDuration;
 
-            // --- 5. Create Word Info ---
             var wordInfo = new SubtitleWordInfo
             {
                 Text = wordText,
@@ -119,22 +84,153 @@ public class SubtitleProcessor(TextMeasurer textMeasurer, float defaultWordDurat
         return processedSegment;
     }
 
-    private float FindNextTokenStartOffset(AudioSegment segment, int currentTokenIndex)
+    /// <summary>
+    ///     Appends new word tokens from an incremental audio segment to the existing subtitle.
+    ///     Each segment carries only its new word(s) with slice-relative timing.
+    /// </summary>
+    public void UpdateSegment(
+        SubtitleSegment existingSegment,
+        AudioSegment audioSegment,
+        float segmentAbsoluteStartTime
+    )
+    {
+        if (audioSegment.Tokens.Count == 0)
+        {
+            return;
+        }
+
+        // Compute the absolute start time for this slice by looking at the
+        // last existing word's end time, falling back to the segment start.
+        var existingEndTime = segmentAbsoluteStartTime;
+        foreach (var line in existingSegment.Lines)
+        {
+            foreach (var w in line.Words)
+            {
+                var wordEnd = w.AbsoluteStartTime + w.Duration;
+                if (wordEnd > existingEndTime)
+                {
+                    existingEndTime = wordEnd;
+                }
+            }
+        }
+
+        var cumulativeTimeOffset = 0f;
+
+        for (var i = 0; i < audioSegment.Tokens.Count; i++)
+        {
+            var token = audioSegment.Tokens[i];
+            var (wordStartTimeOffset, wordDuration) = CalculateWordTiming(
+                audioSegment,
+                i,
+                cumulativeTimeOffset
+            );
+
+            cumulativeTimeOffset = wordStartTimeOffset + wordDuration;
+
+            var absoluteStart = existingEndTime + wordStartTimeOffset;
+
+            var wordText = token.Text + token.Whitespace;
+            var wordSize = textMeasurer.MeasureText(wordText);
+
+            // Create first line if segment was initially empty
+            if (existingSegment.Lines.Count == 0)
+            {
+                existingSegment.AddLine(new SubtitleLine(0, 0));
+            }
+
+            var lastLine = existingSegment.Lines[^1];
+            var currentLineWidth = 0f;
+            foreach (var w in lastLine.Words)
+            {
+                currentLineWidth += w.Size.X;
+            }
+
+            if (currentLineWidth > 0 && currentLineWidth + wordSize.X > textMeasurer.AvailableWidth)
+            {
+                lastLine = new SubtitleLine(existingSegment.Lines.Count, 0);
+                existingSegment.AddLine(lastLine);
+            }
+
+            var wordInfo = new SubtitleWordInfo
+            {
+                Text = wordText,
+                Size = wordSize,
+                AbsoluteStartTime = absoluteStart,
+                Duration = wordDuration,
+            };
+
+            lastLine.AddWord(wordInfo);
+        }
+
+        // Update estimated end time
+        foreach (var line in existingSegment.Lines)
+        {
+            foreach (var w in line.Words)
+            {
+                var wordEnd = w.AbsoluteStartTime + w.Duration;
+                if (wordEnd > existingSegment.EstimatedEndTime)
+                {
+                    existingSegment.EstimatedEndTime = wordEnd;
+                }
+            }
+        }
+    }
+
+    private (float startOffset, float duration) CalculateWordTiming(
+        AudioSegment segment,
+        int tokenIndex,
+        float cumulativeTimeOffset
+    )
+    {
+        var token = segment.Tokens[tokenIndex];
+        float wordStartTimeOffset;
+        float wordDuration;
+
+        if (token.StartTs.HasValue)
+        {
+            wordStartTimeOffset = (float)token.StartTs.Value;
+            wordDuration = token.EndTs.HasValue
+                ? (float)(token.EndTs.Value - token.StartTs.Value)
+                : EstimateDuration(segment, tokenIndex, wordStartTimeOffset);
+        }
+        else
+        {
+            wordStartTimeOffset = cumulativeTimeOffset;
+            wordDuration = EstimateDuration(segment, tokenIndex, wordStartTimeOffset);
+        }
+
+        return (wordStartTimeOffset, Math.Max(0.01f, wordDuration));
+    }
+
+    private float EstimateDuration(AudioSegment segment, int tokenIndex, float wordStartOffset)
+    {
+        if (
+            TryFindNextTokenStartOffset(segment, tokenIndex, out var nextStart)
+            && nextStart > wordStartOffset
+        )
+        {
+            return nextStart - wordStartOffset;
+        }
+
+        return _defaultWordDuration;
+    }
+
+    private static bool TryFindNextTokenStartOffset(
+        AudioSegment segment,
+        int currentTokenIndex,
+        out float nextStartOffset
+    )
     {
         for (var j = currentTokenIndex + 1; j < segment.Tokens.Count; j++)
         {
             if (segment.Tokens[j].StartTs.HasValue)
             {
-                return (float)segment.Tokens[j].StartTs!.Value;
+                nextStartOffset = (float)segment.Tokens[j].StartTs.Value;
+                return true;
             }
         }
 
-        // Indicate not found or end of segment
-        // Return a value that ensures the calling logic uses the default duration.
-        // Returning -1 or float.MaxValue could work, depending on how it's used.
-        // Let's return a value <= the current offset to trigger default duration.
-        return segment.Tokens[currentTokenIndex].StartTs.HasValue
-            ? (float)segment.Tokens[currentTokenIndex].StartTs!.Value
-            : 0f;
+        nextStartOffset = 0f;
+        return false;
     }
 }

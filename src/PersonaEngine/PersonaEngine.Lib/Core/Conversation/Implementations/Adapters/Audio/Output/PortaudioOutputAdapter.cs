@@ -374,6 +374,7 @@ public class PortaudioOutputAdapter(
             sourceSpan.CopyTo(destinationSpan);
             _currentBuffer.Advance(framesToCopy);
             framesWritten += framesToCopy;
+            _framesOfChunkPlayed += framesToCopy;
 
             if (_currentBuffer.IsFinished)
             {
@@ -391,8 +392,6 @@ public class PortaudioOutputAdapter(
         }
 
         Marshal.Copy(_frameBuffer, 0, output, framesRequested);
-
-        _framesOfChunkPlayed += framesRequested;
         var currentTime = TimeSpan.FromSeconds((double)_framesOfChunkPlayed / DefaultSampleRate);
         progressWriter.TryWrite(
             new AudioPlaybackProgressEvent(_sessionId, turnId, DateTimeOffset.UtcNow, currentTime)
@@ -457,7 +456,7 @@ public class PortaudioOutputAdapter(
 
         public AudioSegment Segment { get; } = segment;
 
-        public int Position { get; private set; } = 0;
+        public int Position { get; private set; }
 
         public int Remaining => Data.Length - Position;
 

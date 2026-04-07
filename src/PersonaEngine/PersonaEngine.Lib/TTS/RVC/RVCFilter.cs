@@ -6,18 +6,23 @@ using PersonaEngine.Lib.Audio;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.IO;
 using PersonaEngine.Lib.TTS.Synthesis;
+using PersonaEngine.Lib.TTS.Synthesis.Audio;
 
 namespace PersonaEngine.Lib.TTS.RVC;
 
-public class RVCFilter : IAudioFilter, IDisposable
+// ReSharper disable once InconsistentNaming
+public class RVCFilter : IBufferedAudioFilter, IDisposable
 {
     private const int ProcessingSampleRate = 16000;
 
-    private const int OutputSampleRate = 40000;
-
-    private const int FinalSampleRate = 24000;
-
     private const int MaxInputDuration = 30; // seconds
+
+    /// <summary>
+    ///     Minimum audio window for reliable voice conversion.
+    ///     1 second at 24 kHz. Reflection padding inside OnnxRVC provides the
+    ///     additional context HuBERT and F0 predictors need at boundaries.
+    /// </summary>
+    private const int MinWindowSamples = 24000;
 
     private readonly SemaphoreSlim _initLock = new(1, 1);
 
@@ -38,6 +43,8 @@ public class RVCFilter : IAudioFilter, IDisposable
     private IF0Predictor? _f0Predictor;
 
     private OnnxRVC? _rvcModel;
+
+    private int _voiceOutputSampleRate;
 
     public RVCFilter(
         IOptionsMonitor<RVCFilterOptions> optionsMonitor,
@@ -92,6 +99,8 @@ public class RVCFilter : IAudioFilter, IDisposable
 
     public int Priority => 100;
 
+    public int MinimumSampleCount => _currentOptions.Enabled ? MinWindowSamples : 0;
+
     public void Dispose()
     {
         Dispose(true);
@@ -107,11 +116,14 @@ public class RVCFilter : IAudioFilter, IDisposable
         var processedBuffer = ProcessChunk(audioSegment.AudioData, originalSampleRate, options);
 
         audioSegment.AudioData = processedBuffer;
-        audioSegment.SampleRate = FinalSampleRate;
 
         // Stop timing after processing is complete
         stopwatch.Stop();
-        LogProcessingTime(audioSegment.AudioData.Length, stopwatch.Elapsed.TotalSeconds);
+        LogProcessingTime(
+            audioSegment.AudioData.Length,
+            originalSampleRate,
+            stopwatch.Elapsed.TotalSeconds
+        );
     }
 
     private void ProcessInChunks(
@@ -157,10 +169,13 @@ public class RVCFilter : IAudioFilter, IDisposable
         var combinedBuffer = CombineChunks(chunks);
 
         audioSegment.AudioData = combinedBuffer;
-        audioSegment.SampleRate = FinalSampleRate;
 
         stopwatch.Stop();
-        LogProcessingTime(audioSegment.AudioData.Length, stopwatch.Elapsed.TotalSeconds);
+        LogProcessingTime(
+            audioSegment.AudioData.Length,
+            originalSampleRate,
+            stopwatch.Elapsed.TotalSeconds
+        );
     }
 
     private Memory<float> ProcessChunk(
@@ -186,7 +201,8 @@ public class RVCFilter : IAudioFilter, IDisposable
             );
 
             // Step 2: Process with RVC model
-            var maxInputSamples = OutputSampleRate * MaxInputDuration;
+            var voiceOutputRate = _voiceOutputSampleRate;
+            var maxInputSamples = voiceOutputRate * MaxInputDuration;
             var outputBufferSize = maxInputSamples + 2 * options.HopSize;
 
             var processingBuffer = ArrayPool<float>.Shared.Rent(outputBufferSize);
@@ -200,9 +216,8 @@ public class RVCFilter : IAudioFilter, IDisposable
                     options.F0UpKey
                 );
 
-                // Step 3: Resample to final sample rate
-                // Use proper floating-point ratio calculation
-                var resampleRatioToFinal = (double)FinalSampleRate / OutputSampleRate;
+                // Step 3: Resample from voice output rate back to original sample rate
+                var resampleRatioToFinal = (double)originalSampleRate / voiceOutputRate;
                 var finalOutputSize = (int)
                     Math.Ceiling(processedSampleCount * resampleRatioToFinal);
 
@@ -213,8 +228,8 @@ public class RVCFilter : IAudioFilter, IDisposable
                         processingBuffer.AsMemory(0, processedSampleCount),
                         resampledOutput,
                         1,
-                        OutputSampleRate,
-                        FinalSampleRate
+                        (uint)voiceOutputRate,
+                        originalSampleRate
                     );
 
                     // Create final buffer for this chunk
@@ -263,9 +278,13 @@ public class RVCFilter : IAudioFilter, IDisposable
         return combined.AsMemory();
     }
 
-    private void LogProcessingTime(int finalSampleCount, double processingTimeSeconds)
+    private void LogProcessingTime(
+        int finalSampleCount,
+        uint sampleRate,
+        double processingTimeSeconds
+    )
     {
-        var finalAudioDuration = finalSampleCount / (double)FinalSampleRate;
+        var finalAudioDuration = finalSampleCount / (double)sampleRate;
         var realTimeFactor = finalAudioDuration / processingTimeSeconds;
 
         _logger.LogInformation(
@@ -315,15 +334,16 @@ public class RVCFilter : IAudioFilter, IDisposable
         await _initLock.WaitAsync();
         try
         {
-            var crepeModel = await _modelProvider.GetModelAsync(IO.ModelType.RVCCrepeTiny);
-            var hubertModel = await _modelProvider.GetModelAsync(IO.ModelType.RVCHubert);
-            var rvcModel = await _rvcVoiceProvider.GetVoiceAsync(options.DefaultVoice);
+            var rmvpePath = _modelProvider.GetModelPath(IO.ModelType.Rvc.Rmvpe);
+            var hubertPath = _modelProvider.GetModelPath(IO.ModelType.Rvc.Hubert);
+            var voiceInfo = _rvcVoiceProvider.GetVoice(options.DefaultVoice);
 
-            // _f0Predictor = new CrepeOnnx(crepeModel.Path);
-            _f0Predictor = new CrepeOnnxSimd(crepeModel.Path);
+            _f0Predictor = new RmvpeOnnx(rmvpePath);
+            // _f0Predictor = new CrepeOnnxSimd(_modelProvider.GetModelPath(IO.ModelType.Rvc.CrepeTiny));
             // _f0Predictor = new ACFMethod(512, 16000);
 
-            _rvcModel = new OnnxRVC(rvcModel, options.HopSize, hubertModel.Path);
+            _rvcModel = new OnnxRVC(voiceInfo.ModelPath, options.HopSize, hubertPath);
+            _voiceOutputSampleRate = voiceInfo.OutputSampleRate;
         }
         finally
         {

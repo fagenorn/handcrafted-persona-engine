@@ -1,13 +1,9 @@
-﻿using PersonaEngine.Lib.TTS.Synthesis;
-
 namespace PersonaEngine.Lib.IO;
 
-public interface IModelProvider : IAsyncDisposable
+/// <summary>
+///     Resolves model resource paths from well-known <see cref="ModelId" /> identifiers.
+/// </summary>
+public interface IModelProvider
 {
-    string GetModelPath(ModelType modelType);
-
-    Task<ModelResource> GetModelAsync(
-        ModelType modelType,
-        CancellationToken cancellationToken = default
-    );
+    string GetModelPath(ModelId modelId);
 }

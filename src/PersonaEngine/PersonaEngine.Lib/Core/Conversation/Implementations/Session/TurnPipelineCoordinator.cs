@@ -1,5 +1,6 @@
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Adapters;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
@@ -146,11 +147,19 @@ internal sealed class TurnPipelineCoordinator : IAsyncDisposable
             new UnboundedChannelOptions { SingleReader = true, SingleWriter = false }
         );
 
+        var settings = new OpenAIPromptExecutionSettings
+        {
+            Temperature = 1.0,
+            TopP = 1.0,
+            MaxTokens = 512,
+        };
+
         _llmTask = _chatEngine.GetStreamingChatResponseAsync(
             context,
             outputWriter,
             turnId.Value,
             sessionId,
+            settings,
             cancellationToken: turnCts.Token
         );
     }

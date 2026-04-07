@@ -60,7 +60,7 @@ public class PhonemizerG2P : IPhonemizer
         // 9. Generate final phoneme string
         var phonemes = string.Concat(mergedTokens.Select(t => (t.Phonemes ?? _unk) + t.Whitespace));
 
-        return new PhonemeResult(phonemes, mergedTokens);
+        return new PhonemeResult(phonemes, mergedTokens.ToArray());
     }
 
     public void Dispose()
