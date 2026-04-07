@@ -6,13 +6,18 @@ namespace PersonaEngine.Lib.TTS.RVC;
 
 public class OnnxRVC : IDisposable
 {
+    /// <summary>
+    ///     Reflection padding added to each side of the input before HuBERT and F0
+    ///     estimation, then trimmed from the output. 0.5 s at 16 kHz = 8000 samples.
+    ///     Mirrors the official RVC Pipeline.py t_pad approach.
+    /// </summary>
+    private const int ReflectionPadSamples = 8000;
+
     private readonly ArrayPool<float> _arrayPool;
 
     private readonly int _hopSize;
 
     private readonly InferenceSession _model;
-
-    private readonly ArrayPool<short> _shortArrayPool;
 
     // Preallocated buffers and tensors
     private readonly DenseTensor<long> _speakerIdTensor;
@@ -40,9 +45,8 @@ public class OnnxRVC : IDisposable
         // Preallocate the speaker ID tensor
         _speakerIdTensor = new DenseTensor<long>(new[] { 1 });
 
-        // Create array pools for temporary buffers
+        // Create array pool for temporary buffers
         _arrayPool = ArrayPool<float>.Shared;
-        _shortArrayPool = ArrayPool<short>.Shared;
     }
 
     public void Dispose()
@@ -96,158 +100,183 @@ public class OnnxRVC : IDisposable
             throw new Exception("Audio segment is too long (>30s)");
         }
 
-        // Calculate original scale for normalization (matching original implementation)
-        var minValue = float.MaxValue;
-        var maxValue = float.MinValue;
-        var inputSpan = input.Span;
-        for (var i = 0; i < input.Length; i++)
-        {
-            minValue = Math.Min(minValue, inputSpan[i]);
-            maxValue = Math.Max(maxValue, inputSpan[i]);
-        }
-
-        var originalScale = maxValue - minValue;
-
-        // Get the hubert features
-        var hubert = _vecModel.Forward(input);
-
-        // Repeat and transpose the features
-        var hubertRepeated = RVCUtils.RepeatTensor(hubert, 2);
-        hubertRepeated = RVCUtils.Transpose(hubertRepeated, 0, 2, 1);
-
-        hubert = null; // Allow for garbage collection
-
-        var hubertLength = hubertRepeated.Dimensions[1];
-        var hubertLengthTensor = new DenseTensor<long>([1]) { [0] = hubertLength };
-
-        // Allocate buffers for F0 calculations
-        var f0Buffer = _arrayPool.Rent(hubertLength);
-        var f0Memory = new Memory<float>(f0Buffer, 0, hubertLength);
+        // --- Reflection-pad the input so HuBERT and F0 get full context at edges ---
+        var padSamples = Math.Min(ReflectionPadSamples, input.Length);
+        var paddedLen = padSamples + input.Length + padSamples;
+        var paddedInput = _arrayPool.Rent(paddedLen);
 
         try
         {
-            // Calculate F0 directly into buffer
-            f0Predictor.ComputeF0(input, f0Memory, hubertLength);
+            var inputSpan = input.Span;
 
-            // Create pitch tensors
-            var pitchBuffer = _arrayPool.Rent(hubertLength);
-            var pitchTensor = new DenseTensor<long>(new[] { 1, hubertLength });
-            var pitchfTensor = new DenseTensor<float>(new[] { 1, hubertLength });
+            // Left reflection: mirror first padSamples of input
+            for (var i = 0; i < padSamples; i++)
+            {
+                paddedInput[padSamples - 1 - i] = inputSpan[Math.Min(i, input.Length - 1)];
+            }
+
+            // Center: copy original input
+            inputSpan.CopyTo(paddedInput.AsSpan(padSamples));
+
+            // Right reflection: mirror last padSamples of input
+            for (var i = 0; i < padSamples; i++)
+            {
+                paddedInput[padSamples + input.Length + i] = inputSpan[
+                    Math.Max(input.Length - 1 - i, 0)
+                ];
+            }
+
+            var paddedSpan = paddedInput.AsSpan(0, paddedLen);
+
+            // --- Audio conditioning (matches official RVC Pipeline.py) ---
+            // 1. High-pass Butterworth at 48 Hz — removes DC offset and sub-bass rumble
+            AudioPreprocessor.ApplyHighPass48Hz(paddedSpan);
+
+            // 2. Peak-normalize to 0.95 — ensures consistent input level for models
+            AudioPreprocessor.PeakNormalize(paddedSpan);
+
+            var paddedMemory = new ReadOnlyMemory<float>(paddedInput, 0, paddedLen);
+
+            // Get the HuBERT features on conditioned, padded input
+            var hubert = _vecModel.Forward(paddedMemory);
+
+            // Repeat and transpose the features
+            var hubertRepeated = RVCUtils.RepeatTensor(hubert, 2);
+            hubertRepeated = RVCUtils.Transpose(hubertRepeated, 0, 2, 1);
+
+            hubert = null; // Allow for garbage collection
+
+            // 3. Temporal smoothing on HuBERT features — reduces frame-level noise
+            AudioPreprocessor.SmoothHubertFeatures(hubertRepeated, alpha: 0.8f);
+
+            var hubertLength = hubertRepeated.Dimensions[1];
+            var hubertLengthTensor = new DenseTensor<long>([1]) { [0] = hubertLength };
+
+            // Allocate buffers for F0 calculations
+            var f0Buffer = _arrayPool.Rent(hubertLength);
+            var f0Memory = new Memory<float>(f0Buffer, 0, hubertLength);
 
             try
             {
-                // Apply pitch shift and convert to mel scale
-                for (var i = 0; i < hubertLength; i++)
-                {
-                    // Apply pitch shift
-                    var shiftedF0 = f0Buffer[i] * (float)Math.Pow(2, f0UpKey / 12.0);
-                    pitchfTensor[0, i] = shiftedF0;
+                // Calculate F0 on conditioned, padded input
+                f0Predictor.ComputeF0(paddedMemory, f0Memory, hubertLength);
 
-                    // Convert to mel scale for pitch
-                    var f0Mel = 1127 * Math.Log(1 + shiftedF0 / 700.0);
-                    if (f0Mel > 0)
-                    {
-                        f0Mel = (f0Mel - f0MelMin) * 254 / (f0MelMax - f0MelMin) + 1;
-                        f0Mel = Math.Round(f0Mel);
-                    }
+                // 4. Median filter F0 — removes spurious pitch spikes from noisy audio
+                AudioPreprocessor.MedianFilterF0(f0Buffer.AsSpan(0, hubertLength), kernelSize: 3);
 
-                    if (f0Mel <= 1)
-                    {
-                        f0Mel = 1;
-                    }
+                // Create pitch tensors
+                var pitchBuffer = _arrayPool.Rent(hubertLength);
+                var pitchTensor = new DenseTensor<long>(new[] { 1, hubertLength });
+                var pitchfTensor = new DenseTensor<float>(new[] { 1, hubertLength });
 
-                    if (f0Mel > 255)
-                    {
-                        f0Mel = 255;
-                    }
-
-                    pitchTensor[0, i] = (long)f0Mel;
-                }
-
-                // Generate random noise tensor
-                var rndTensor = new DenseTensor<float>(new[] { 1, 192, hubertLength });
-                var random = new Random();
-                for (var i = 0; i < 192 * hubertLength; i++)
-                {
-                    rndTensor[0, i / hubertLength, i % hubertLength] = (float)random.NextDouble();
-                }
-
-                // Run the model
-                var outWav = Forward(
-                    hubertRepeated,
-                    hubertLengthTensor,
-                    pitchTensor,
-                    pitchfTensor,
-                    speakerIdTensor,
-                    rndTensor
-                );
-
-                // Apply padding to match original implementation
-                // (adding padding at the end only, like in original Pad method)
-                var paddedSize = outWav.Length + 2 * _hopSize;
-                var paddedOutput = _shortArrayPool.Rent(paddedSize);
                 try
                 {
-                    // Copy original output to the beginning of padded output
-                    for (var i = 0; i < outWav.Length; i++)
+                    // Apply pitch shift and convert to mel scale
+                    for (var i = 0; i < hubertLength; i++)
                     {
-                        paddedOutput[i] = outWav[i];
-                    }
-                    // Rest of array is already zeroed when rented from pool
+                        // Apply pitch shift
+                        var shiftedF0 = f0Buffer[i] * (float)Math.Pow(2, f0UpKey / 12.0);
+                        pitchfTensor[0, i] = shiftedF0;
 
-                    // Find min and max values for normalization
-                    var minOutValue = short.MaxValue;
-                    var maxOutValue = short.MinValue;
-                    for (var i = 0; i < outWav.Length; i++)
+                        // Convert to mel scale for pitch
+                        var f0Mel = 1127 * Math.Log(1 + shiftedF0 / 700.0);
+                        if (f0Mel > 0)
+                        {
+                            f0Mel = (f0Mel - f0MelMin) * 254 / (f0MelMax - f0MelMin) + 1;
+                            f0Mel = Math.Round(f0Mel);
+                        }
+
+                        if (f0Mel <= 1)
+                        {
+                            f0Mel = 1;
+                        }
+
+                        if (f0Mel > 255)
+                        {
+                            f0Mel = 255;
+                        }
+
+                        pitchTensor[0, i] = (long)f0Mel;
+                    }
+
+                    // Generate random noise tensor — must be Gaussian N(0,1)
+                    // to match torch.randn() in the official RVC pipeline
+                    var rndTensor = new DenseTensor<float>(new[] { 1, 192, hubertLength });
+                    var random = new Random();
+                    for (var i = 0; i < 192 * hubertLength; i++)
                     {
-                        minOutValue = Math.Min(minOutValue, outWav[i]);
-                        maxOutValue = Math.Max(maxOutValue, outWav[i]);
+                        // Box-Muller transform: uniform [0,1) → standard normal N(0,1)
+                        var u1 = 1.0 - random.NextDouble(); // (0, 1] to avoid log(0)
+                        var u2 = random.NextDouble();
+                        var gaussian = (float)(
+                            Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2)
+                        );
+                        rndTensor[0, i / hubertLength, i % hubertLength] = gaussian;
                     }
 
-                    // Copy the output to the buffer with normalization matching original
+                    // Run the model
+                    var outWav = Forward(
+                        hubertRepeated,
+                        hubertLengthTensor,
+                        pitchTensor,
+                        pitchfTensor,
+                        speakerIdTensor,
+                        rndTensor
+                    );
+
+                    // --- Trim reflection-padded edges from output ---
+                    var trimOutputSamples = (int)
+                        Math.Round((double)padSamples / paddedLen * outWav.Length);
+                    var trimmedStart = trimOutputSamples;
+                    var trimmedEnd = outWav.Length - trimOutputSamples;
+
+                    if (trimmedEnd <= trimmedStart)
+                    {
+                        trimmedStart = 0;
+                        trimmedEnd = outWav.Length;
+                    }
+
+                    var trimmedLength = trimmedEnd - trimmedStart;
+
+                    // Convert short → float directly (no per-chunk normalization)
                     var outputSpan = output.Span;
-                    if (outputSpan.Length < paddedSize)
+                    if (outputSpan.Length < trimmedLength)
                     {
                         throw new InvalidOperationException(
-                            $"Output buffer too small. Needed {paddedSize}, but only had {outputSpan.Length}"
+                            $"Output buffer too small. Needed {trimmedLength}, but only had {outputSpan.Length}"
                         );
                     }
 
-                    var maxLen = Math.Min(paddedSize, outputSpan.Length);
-
-                    // Apply normalization that matches the original implementation
-                    float range = maxOutValue - minOutValue;
-                    if (range > 0)
+                    const float shortToFloat = 1.0f / 32768f;
+                    for (var i = 0; i < trimmedLength; i++)
                     {
-                        for (var i = 0; i < maxLen; i++)
-                        {
-                            outputSpan[i] = paddedOutput[i] * originalScale / range;
-                        }
-                    }
-                    else
-                    {
-                        // Handle edge case where all values are the same
-                        for (var i = 0; i < maxLen; i++)
-                        {
-                            outputSpan[i] = 0;
-                        }
+                        outputSpan[i] = outWav[trimmedStart + i] * shortToFloat;
                     }
 
-                    return outWav.Length;
+                    // 5. RMS envelope matching — prevent volume fluctuations from RVC
+                    AudioPreprocessor.MatchRmsEnvelope(
+                        inputAudio: inputSpan,
+                        inputSampleRate: 16000,
+                        outputAudio: outputSpan[..trimmedLength],
+                        outputSampleRate: 16000,
+                        mixRate: 0.25f
+                    );
+
+                    return trimmedLength;
                 }
                 finally
                 {
-                    _shortArrayPool.Return(paddedOutput);
+                    _arrayPool.Return(pitchBuffer);
                 }
             }
             finally
             {
-                _arrayPool.Return(pitchBuffer);
+                _arrayPool.Return(f0Buffer);
             }
         }
         finally
         {
-            _arrayPool.Return(f0Buffer);
+            _arrayPool.Return(paddedInput);
         }
     }
 

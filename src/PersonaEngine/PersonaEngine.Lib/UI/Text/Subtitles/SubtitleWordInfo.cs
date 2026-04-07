@@ -1,30 +1,28 @@
-﻿using System.Numerics;
+using System.Numerics;
 using FontStashSharp;
 
 namespace PersonaEngine.Lib.UI.Text.Subtitles;
 
 /// <summary>
-///     Holds the intrinsic properties and calculated state of a single word for rendering.
-///     Designed as a struct to potentially reduce GC pressure when dealing with many words,
-///     but be mindful of copying costs if passed around extensively by value.
+///     Holds the properties and animation state of a single word for rendering.
 /// </summary>
-public struct SubtitleWordInfo
+public class SubtitleWordInfo
 {
-    public string Text;
+    public required string Text { get; init; }
 
-    public Vector2 Size;
+    public required Vector2 Size { get; init; }
 
-    public float AbsoluteStartTime;
+    public required float AbsoluteStartTime { get; set; }
 
-    public float Duration;
+    public required float Duration { get; set; }
 
-    public Vector2 Position;
+    public Vector2 Position { get; set; }
 
-    public float AnimationProgress;
+    public float AnimationProgress { get; set; }
 
-    public FSColor CurrentColor;
+    public FSColor CurrentColor { get; set; }
 
-    public Vector2 CurrentScale;
+    public Vector2 CurrentScale { get; set; }
 
     public bool IsActive(float currentTime)
     {

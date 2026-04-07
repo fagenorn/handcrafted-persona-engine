@@ -2,7 +2,7 @@
 using Microsoft.Extensions.Logging;
 using PersonaEngine.Lib.IO;
 
-namespace PersonaEngine.Lib.TTS.Synthesis;
+namespace PersonaEngine.Lib.TTS.Synthesis.Kokoro;
 
 /// <summary>
 ///     Voice provider implementation to manage voice embeddings
@@ -31,9 +31,9 @@ public class KokoroVoiceProvider : IKokoroVoiceProvider
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<VoiceData> GetVoiceAsync(
+    public async Task<KokoroVoiceEmbedding> GetVoiceAsync(
         string voiceId,
-        CancellationToken cancellationToken = default
+        CancellationToken ct = default
     )
     {
         if (string.IsNullOrEmpty(voiceId))
@@ -46,15 +46,15 @@ public class KokoroVoiceProvider : IKokoroVoiceProvider
             // Use cache to avoid repeated loading
             return await _cache.GetOrAddAsync(
                 $"voice_{voiceId}",
-                async ct =>
+                async ct2 =>
                 {
                     _logger.LogDebug("Loading voice data for {VoiceId}", voiceId);
 
                     // Get voice directory
-                    var voiceDirPath = await GetVoicePathAsync(voiceId, ct);
+                    var voiceDirPath = GetVoicePath(voiceId);
 
                     // Load binary data
-                    var bytes = await File.ReadAllBytesAsync(voiceDirPath, ct);
+                    var bytes = await File.ReadAllBytesAsync(voiceDirPath, ct2);
 
                     // Convert to float array
                     var embedding = new float[bytes.Length / sizeof(float)];
@@ -66,9 +66,9 @@ public class KokoroVoiceProvider : IKokoroVoiceProvider
                         embedding.Length
                     );
 
-                    return new VoiceData(voiceId, embedding);
+                    return new KokoroVoiceEmbedding(voiceId, embedding);
                 },
-                cancellationToken
+                ct
             );
         }
         catch (Exception ex)
@@ -80,24 +80,18 @@ public class KokoroVoiceProvider : IKokoroVoiceProvider
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<string>> GetAvailableVoicesAsync(
-        CancellationToken cancellationToken = default
-    )
+    public IReadOnlyList<string> GetAvailableVoices()
     {
         try
         {
             // Get voice directory
-            var model = await _modelProvider.GetModelAsync(
-                IO.ModelType.KokoroVoices,
-                cancellationToken
-            );
-            var voicesDir = model.Path;
+            var voicesDir = _modelProvider.GetModelPath(IO.ModelType.Kokoro.Voices);
 
             if (!Directory.Exists(voicesDir))
             {
                 _logger.LogWarning("Voices directory not found: {Path}", voicesDir);
 
-                return Array.Empty<string>();
+                return [];
             }
 
             // Get all .bin files
@@ -143,10 +137,7 @@ public class KokoroVoiceProvider : IKokoroVoiceProvider
     /// <summary>
     ///     Gets the file path for a voice
     /// </summary>
-    private async Task<string> GetVoicePathAsync(
-        string voiceId,
-        CancellationToken cancellationToken
-    )
+    private string GetVoicePath(string voiceId)
     {
         // Check if path is cached
         if (_voicePaths.TryGetValue(voiceId, out var cachedPath))
@@ -155,11 +146,7 @@ public class KokoroVoiceProvider : IKokoroVoiceProvider
         }
 
         // Get base directory
-        var model = await _modelProvider.GetModelAsync(
-            IO.ModelType.KokoroVoices,
-            cancellationToken
-        );
-        var voicesDir = model.Path;
+        var voicesDir = _modelProvider.GetModelPath(IO.ModelType.Kokoro.Voices);
 
         // Build path
         var voicePath = Path.Combine(voicesDir, $"{voiceId}.bin");

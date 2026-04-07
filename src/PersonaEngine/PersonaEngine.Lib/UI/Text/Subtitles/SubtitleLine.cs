@@ -26,11 +26,4 @@ public class SubtitleLine
         Words.Add(word);
         TotalWidth += word.Size.X;
     }
-
-    public void Clear()
-    {
-        Words.Clear();
-        TotalWidth = 0;
-        BaselineY = 0;
-    }
 }

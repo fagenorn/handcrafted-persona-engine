@@ -5,6 +5,7 @@ using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
+using PersonaEngine.Lib.Utils;
 
 namespace PersonaEngine.Lib.TTS.RVC;
 
@@ -478,7 +479,9 @@ public class CrepeOnnxSimd : IF0Predictor, IDisposable
         }
 
         // Find the most likely final state
-        var maxI = FindArgMax(_valueBuffer, (nSteps - 1) * PITCH_BINS, PITCH_BINS);
+        var maxI = (
+            (ReadOnlySpan<float>)_valueBuffer.AsSpan((nSteps - 1) * PITCH_BINS, PITCH_BINS)
+        ).ArgMax();
 
         // Backward pass to find optimal path
         _stateBuffer[nSteps - 1] = maxI;
@@ -602,23 +605,6 @@ public class CrepeOnnxSimd : IF0Predictor, IDisposable
                 }
             }
         );
-    }
-
-    private int FindArgMax(float[] data, int offset, int length)
-    {
-        var maxIdx = 0;
-        var maxVal = float.NegativeInfinity;
-
-        for (var i = 0; i < length; i++)
-        {
-            if (data[offset + i] > maxVal)
-            {
-                maxVal = data[offset + i];
-                maxIdx = i;
-            }
-        }
-
-        return maxIdx;
     }
 
     private void ConvertToF0(float[] probabilities, float[] f0, float[] pd, int nSteps, int offset)

@@ -15,29 +15,30 @@
     <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Aurio.LibSampleRate" Version="4.2.1" />
+    <PackageReference Include="Aurio.LibSampleRate" Version="4.2.2" />
     <PackageReference Include="FontStashSharp" Version="1.3.10" />
-    <PackageReference Include="Hexa.NET.ImGui" Version="2.2.7" />
-    <PackageReference Include="Hexa.NET.ImGui.Backends" Version="1.0.15" />
-    <PackageReference Include="Hexa.NET.ImGui.Widgets" Version="1.2.13" />
-    <PackageReference Include="Hexa.NET.ImNodes" Version="2.2.7" />
+    <PackageReference Include="Hexa.NET.ImGui" Version="2.2.9" />
+    <PackageReference Include="Hexa.NET.ImGui.Backends" Version="1.0.18" />
+    <PackageReference Include="Hexa.NET.ImGui.Widgets" Version="1.2.15" />
+    <PackageReference Include="Hexa.NET.ImNodes" Version="2.2.9" />
     <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.2" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.2" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.2" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.5" />
     <PackageReference
       Include="Microsoft.Extensions.Options.ConfigurationExtensions"
       Version="9.0.2"
     />
+    <PackageReference Include="LLamaSharp" Version="0.26.0" />
+    <PackageReference Include="LLamaSharp.Backend.Cuda12" Version="0.26.0" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime.Extensions" Version="0.14.0" />
-    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.21.0" />
-    <PackageReference Include="Microsoft.ML.Tokenizers" Version="1.0.2" />
-    <PackageReference Include="Microsoft.ML.Tokenizers.Data.Cl100kBase" Version="1.0.2" />
-    <PackageReference Include="Microsoft.SemanticKernel.Abstractions" Version="1.40.0" />
-    <PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.40.0" />
-    <PackageReference Include="Microsoft.SemanticKernel.Core" Version="1.40.0" />
-    <PackageReference Include="Microsoft.SemanticKernel.Yaml" Version="1.40.0" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.24.4" />
+    <PackageReference Include="Microsoft.ML.Tokenizers" Version="2.0.0" />
+    <PackageReference Include="Microsoft.SemanticKernel.Abstractions" Version="1.74.0" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.74.0" />
+    <PackageReference Include="Microsoft.SemanticKernel.Core" Version="1.74.0" />
+    <PackageReference Include="Microsoft.SemanticKernel.Yaml" Version="1.74.0" />
     <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="Polly" Version="8.5.2" />
     <PackageReference Include="Polly.Contrib.WaitAndRetry" Version="1.1.1" />
@@ -46,11 +47,11 @@
     <PackageReference Include="Silk.NET" Version="2.22.0" />
     <PackageReference Include="Silk.NET.Input.Extensions" Version="2.22.0" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.7" />
-    <PackageReference Include="Spout.NETCore" Version="1.0.0" />
+    <PackageReference Include="Spout.NETCore" Version="2.7.17" />
     <PackageReference Include="Stateless" Version="5.17.0" />
     <PackageReference Include="System.Runtime.Caching" Version="9.0.2" />
-    <PackageReference Include="Whisper.net" Version="1.8.1" />
-    <PackageReference Include="Whisper.net.Runtime.Cuda.Windows" Version="1.8.1" />
+    <PackageReference Include="Whisper.net" Version="1.9.0" />
+    <PackageReference Include="Whisper.net.Runtime.Cuda.Windows" Version="1.9.0" />
     <PackageReference Include="OpenNLP" Version="1.3.5" />
   </ItemGroup>
   <ItemGroup>

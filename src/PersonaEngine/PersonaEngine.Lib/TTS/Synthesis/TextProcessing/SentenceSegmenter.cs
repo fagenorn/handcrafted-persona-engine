@@ -2,7 +2,7 @@
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 
-namespace PersonaEngine.Lib.TTS.Synthesis;
+namespace PersonaEngine.Lib.TTS.Synthesis.TextProcessing;
 
 /// <summary>
 ///     High-performance sentence segmentation using both rule-based and ML approaches with
@@ -33,7 +33,7 @@ public partial class SentenceSegmenter(
     {
         if (string.IsNullOrEmpty(text))
         {
-            return Array.Empty<string>();
+            return [];
         }
 
         try
@@ -67,7 +67,7 @@ public partial class SentenceSegmenter(
         {
             _logger.LogError(ex, "Error in sentence segmentation.");
 
-            return Array.Empty<string>();
+            return [];
         }
     }
 

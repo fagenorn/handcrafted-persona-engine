@@ -1,3 +1,6 @@
+# Worktrees
+.worktrees/
+
 # Created by https://www.toptal.com/developers/gitignore/api/rust,rider,visualstudiocode,visualstudio,csharp
 # Edit at https://www.toptal.com/developers/gitignore?templates=rust,rider,visualstudiocode,visualstudio,csharp
 

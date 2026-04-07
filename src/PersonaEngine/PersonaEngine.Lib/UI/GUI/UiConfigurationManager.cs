@@ -52,7 +52,7 @@ public class UiConfigurationManager : IUiConfigurationManager
         return sectionKey switch
         {
             "TTS" => (T)(object)_currentConfig.Tts,
-            "Voice" => (T)(object)_currentConfig.Tts.Voice,
+            "Kokoro" => (T)(object)_currentConfig.Tts.Kokoro,
             "RouletteWheel" => (T)(object)_currentConfig.RouletteWheel,
             "Microphone" => (T)(object)_currentConfig.Microphone,
             _ => throw new ArgumentException($"Unknown section key: {sectionKey}"),
@@ -99,13 +99,13 @@ public class UiConfigurationManager : IUiConfigurationManager
 
                 break;
 
-            case "Voice":
+            case "Kokoro":
                 if (configuration is KokoroVoiceOptions voiceOptions)
                 {
                     var tts = _currentConfig.Tts;
                     _currentConfig = _currentConfig with
                     {
-                        Tts = tts with { Voice = voiceOptions },
+                        Tts = tts with { Kokoro = voiceOptions },
                     };
                     OnConfigurationChanged(
                         sectionKey,

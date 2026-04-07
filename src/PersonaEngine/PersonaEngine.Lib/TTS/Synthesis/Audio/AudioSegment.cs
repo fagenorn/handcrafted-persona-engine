@@ -12,6 +12,8 @@ public record AudioSegment
 
     public Guid Id { get; init; } = Guid.NewGuid();
 
+    public Guid SentenceId { get; init; }
+
     public Memory<float> AudioData { get; set; }
 
     public int SampleRate { get; set; }

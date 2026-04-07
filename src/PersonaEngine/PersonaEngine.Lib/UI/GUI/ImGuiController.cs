@@ -14,7 +14,6 @@ using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 using Shader = PersonaEngine.Lib.UI.Common.Shader;
-using Texture = PersonaEngine.Lib.UI.Common.Texture;
 
 namespace PersonaEngine.Lib.UI.GUI;
 
@@ -43,8 +42,6 @@ public class ImGuiController : IDisposable
     private bool _ctrlVProcessed = false;
 
     private uint _elementsHandle;
-
-    private Texture _fontTexture;
 
     private bool _frameBegun;
 
@@ -126,7 +123,7 @@ public class ImGuiController : IDisposable
         {
             fontBuilder.SetOption(config =>
             {
-                config.FontBuilderFlags |= (uint)ImGuiFreeTypeBuilderFlags.LoadColor;
+                config.FontLoaderFlags |= (uint)ImGuiFreeTypeLoaderFlags.LoadColor;
                 config.MergeMode = true;
                 config.PixelSnapH = true;
             });
@@ -135,9 +132,9 @@ public class ImGuiController : IDisposable
         }
 
         _ = fontBuilder.Build();
-        io.Fonts.Build();
 
         io.BackendFlags |= ImGuiBackendFlags.RendererHasVtxOffset;
+        io.BackendFlags |= ImGuiBackendFlags.RendererHasTextures;
         io.ConfigFlags |= ImGuiConfigFlags.DockingEnable;
         io.ConfigViewportsNoAutoMerge = false;
         io.ConfigViewportsNoTaskBarIcon = false;
@@ -157,7 +154,7 @@ public class ImGuiController : IDisposable
     /// <summary>
     ///     Frees all graphics resources used by the renderer.
     /// </summary>
-    public void Dispose()
+    public unsafe void Dispose()
     {
         _view.Resize -= WindowResized;
         _keyboard.KeyChar -= OnKeyChar;
@@ -166,7 +163,25 @@ public class ImGuiController : IDisposable
         _gl.DeleteBuffer(_elementsHandle);
         _gl.DeleteVertexArray(_vertexArrayObject);
 
-        _fontTexture.Dispose();
+        // Destroy all backend-managed textures
+        var platformIO = ImGui.GetPlatformIO();
+        for (var i = 0; i < platformIO.Textures.Size; i++)
+        {
+            var tex = platformIO.Textures[i];
+            if (!tex.IsNull && tex.RefCount == 1)
+            {
+                var glTex = (uint)tex.TexID.Handle;
+                if (glTex != 0)
+                {
+                    _gl.DeleteTexture(glTex);
+                }
+
+                tex.SetTexID(default);
+                tex.BackendUserData = null;
+                tex.SetStatus(ImTextureStatus.Destroyed);
+            }
+        }
+
         _shader.Dispose();
 
         ImGui.DestroyContext(Context);
@@ -724,6 +739,9 @@ public class ImGuiController : IDisposable
             return;
         }
 
+        // Process texture create/update/destroy requests
+        UpdateTextures(drawDataPtr);
+
         // Backup GL state
         _gl.GetInteger(GLEnum.ActiveTexture, out var lastActiveTexture);
         _gl.ActiveTexture(GLEnum.Texture0);
@@ -823,7 +841,14 @@ public class ImGuiController : IDisposable
                     _gl.CheckError("Scissor");
 
                     // Bind texture, Draw
-                    _gl.BindTexture(GLEnum.Texture2D, (uint)cmdPtr.TextureId.Handle);
+                    // With RendererHasTextures, TexRef.TexID may be 0;
+                    // read through the TexData pointer instead.
+                    var texRef = cmdPtr.TexRef;
+                    var texId =
+                        texRef.TexData != null
+                            ? (uint)texRef.TexData->TexID.Handle
+                            : (uint)texRef.TexID.Handle;
+                    _gl.BindTexture(GLEnum.Texture2D, texId);
                     _gl.CheckError("Texture");
 
                     _gl.DrawElementsBaseVertex(
@@ -972,8 +997,6 @@ public class ImGuiController : IDisposable
         _vboHandle = _gl.GenBuffer();
         _elementsHandle = _gl.GenBuffer();
 
-        RecreateFontDeviceTexture();
-
         // Restore modified GL state
         _gl.BindTexture(GLEnum.Texture2D, (uint)lastTexture);
         _gl.BindBuffer(GLEnum.ArrayBuffer, (uint)lastArrayBuffer);
@@ -983,32 +1006,114 @@ public class ImGuiController : IDisposable
         _gl.CheckError("End of ImGui setup");
     }
 
-    /// <summary>
-    ///     Creates the texture used to render text.
-    /// </summary>
-    private unsafe void RecreateFontDeviceTexture()
+    private unsafe void UpdateTextures(ImDrawDataPtr drawDataPtr)
     {
-        // Build texture atlas
-        var io = ImGui.GetIO();
-        byte* pixels = null;
-        var width = 0;
-        var height = 0;
-        var bytesPerPixel = 0;
-        io.Fonts.GetTexDataAsRGBA32(ref pixels, ref width, ref height, ref bytesPerPixel); // Load as RGBA 32-bit (75% of the memory is wasted, but default font is so small) because it is more likely to be compatible with user's existing shaders. If your ImTextureId represent a higher-level concept than just a GL texture id, consider calling GetTexDataAsAlpha8() instead to save on GPU memory.
+        for (var i = 0; i < drawDataPtr.Textures.Size; i++)
+        {
+            var tex = drawDataPtr.Textures[i];
+            if (tex.Status == ImTextureStatus.Ok)
+            {
+                continue;
+            }
 
-        // Upload texture to graphics system
-        _gl.GetInteger(GLEnum.TextureBinding2D, out var lastTexture);
+            UpdateTexture(tex);
+        }
+    }
 
-        _fontTexture = new Texture(_gl, width, height, new IntPtr(pixels));
-        _fontTexture.Bind();
-        _fontTexture.SetMagFilter(TextureMagFilter.Linear);
-        _fontTexture.SetMinFilter(TextureMinFilter.Linear);
+    private unsafe void UpdateTexture(ImTextureDataPtr tex)
+    {
+        // Set pixel store alignment for create/update operations
+        if (tex.Status == ImTextureStatus.WantCreate || tex.Status == ImTextureStatus.WantUpdates)
+        {
+            _gl.PixelStore(GLEnum.UnpackRowLength, 0);
+            _gl.PixelStore(GLEnum.UnpackAlignment, 1);
+        }
 
-        // Store our identifier
-        io.Fonts.SetTexID(new ImTextureID(_fontTexture.GlTexture));
+        if (tex.Status == ImTextureStatus.WantCreate)
+        {
+            _gl.GetInteger(GLEnum.TextureBinding2D, out var lastTexture);
 
-        // Restore state
-        _gl.BindTexture(GLEnum.Texture2D, (uint)lastTexture);
+            var glTex = _gl.GenTexture();
+            _gl.BindTexture(GLEnum.Texture2D, glTex);
+            _gl.TexParameterI(
+                GLEnum.Texture2D,
+                TextureParameterName.TextureMinFilter,
+                (int)GLEnum.Linear
+            );
+            _gl.TexParameterI(
+                GLEnum.Texture2D,
+                TextureParameterName.TextureMagFilter,
+                (int)GLEnum.Linear
+            );
+            _gl.TexParameterI(
+                GLEnum.Texture2D,
+                TextureParameterName.TextureWrapS,
+                (int)GLEnum.ClampToEdge
+            );
+            _gl.TexParameterI(
+                GLEnum.Texture2D,
+                TextureParameterName.TextureWrapT,
+                (int)GLEnum.ClampToEdge
+            );
+
+            _gl.TexImage2D(
+                GLEnum.Texture2D,
+                0,
+                (int)GLEnum.Rgba,
+                (uint)tex.Width,
+                (uint)tex.Height,
+                0,
+                GLEnum.Rgba,
+                GLEnum.UnsignedByte,
+                tex.GetPixels()
+            );
+
+            tex.SetTexID(new ImTextureID((nuint)glTex));
+            tex.SetStatus(ImTextureStatus.Ok);
+
+            _gl.BindTexture(GLEnum.Texture2D, (uint)lastTexture);
+        }
+        else if (tex.Status == ImTextureStatus.WantUpdates)
+        {
+            _gl.GetInteger(GLEnum.TextureBinding2D, out var lastTexture);
+
+            var glTex = (uint)tex.TexID.Handle;
+            _gl.BindTexture(GLEnum.Texture2D, glTex);
+
+            _gl.PixelStore(GLEnum.UnpackRowLength, tex.Width);
+            for (var i = 0; i < tex.Updates.Size; i++)
+            {
+                var r = tex.Updates[i];
+                _gl.TexSubImage2D(
+                    GLEnum.Texture2D,
+                    0,
+                    r.X,
+                    r.Y,
+                    r.W,
+                    r.H,
+                    GLEnum.Rgba,
+                    GLEnum.UnsignedByte,
+                    tex.GetPixelsAt(r.X, r.Y)
+                );
+            }
+
+            _gl.PixelStore(GLEnum.UnpackRowLength, 0);
+            tex.SetStatus(ImTextureStatus.Ok);
+
+            _gl.BindTexture(GLEnum.Texture2D, (uint)lastTexture);
+        }
+        else if (tex.Status == ImTextureStatus.WantDestroy && tex.UnusedFrames > 0)
+        {
+            var glTex = (uint)tex.TexID.Handle;
+            if (glTex != 0)
+            {
+                _gl.DeleteTexture(glTex);
+            }
+
+            tex.SetTexID(default);
+            tex.BackendUserData = null;
+            tex.SetStatus(ImTextureStatus.Destroyed);
+        }
     }
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]

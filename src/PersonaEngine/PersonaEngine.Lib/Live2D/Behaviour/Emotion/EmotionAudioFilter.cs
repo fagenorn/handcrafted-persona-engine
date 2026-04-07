@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using PersonaEngine.Lib.TTS.Synthesis;
+using PersonaEngine.Lib.TTS.Synthesis.Audio;
 
 namespace PersonaEngine.Lib.Live2D.Behaviour.Emotion;
 
