@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using PersonaEngine.Lib.LLM;
 using PersonaEngine.Lib.TTS.Synthesis.Audio;
+using PersonaEngine.Lib.TTS.Synthesis.LipSync;
 
 namespace PersonaEngine.Lib.TTS.Synthesis.Engine;
 
@@ -16,6 +17,7 @@ public sealed class SentenceProcessor
     private readonly List<ITextFilter> _textFilters;
     private readonly IPhonemizer _phonemizer;
     private readonly ILogger<SentenceProcessor> _logger;
+    private readonly ILipSyncProcessorProvider? _lipSyncProvider;
 
     private readonly TextFilterResult[] _filterResults;
     private readonly AudioFilterPipeline _pipeline;
@@ -24,12 +26,14 @@ public sealed class SentenceProcessor
         IEnumerable<ITextFilter> textFilters,
         IEnumerable<IAudioFilter> audioFilters,
         IPhonemizer phonemizer,
-        ILoggerFactory loggerFactory
+        ILoggerFactory loggerFactory,
+        ILipSyncProcessorProvider? lipSyncProvider = null
     )
     {
         _textFilters = textFilters.OrderByDescending(x => x.Priority).ToList();
         _phonemizer = phonemizer;
         _logger = loggerFactory.CreateLogger<SentenceProcessor>();
+        _lipSyncProvider = lipSyncProvider;
         _filterResults = new TextFilterResult[_textFilters.Count];
         _pipeline = new AudioFilterPipeline(
             audioFilters.OrderByDescending(x => x.Priority).ToList()
@@ -77,8 +81,15 @@ public sealed class SentenceProcessor
                     .ConfigureAwait(false);
             }
 
+            // 4.5: Enrich with lip sync (via currently active processor)
+            var enriched = segment;
+            if (_lipSyncProvider is not null)
+            {
+                enriched = enriched with { LipSync = _lipSyncProvider.Current.Process(enriched) };
+            }
+
             // 5. Stamp sentence ID and submit to audio filter pipeline
-            var stamped = segment with
+            var stamped = enriched with
             {
                 SentenceId = sentenceId,
             };
