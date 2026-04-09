@@ -53,6 +53,15 @@ public sealed class PgdBlendshapeSolver : IBlendshapeSolver
     /// </summary>
     private readonly double _temporalScale;
 
+    // Pre-allocated working buffers for Solve()
+    private readonly double[] _dtDelta;
+    private readonly double[] _xBuf;
+    private readonly double[] _bBuf;
+    private readonly float[] _resultBuf;
+
+    // Pre-allocated buffer for LuSolve()
+    private readonly double[] _pb;
+
     /// <summary>
     ///     Initializes the solver by precomputing the system matrix, LU-based
     ///     initial-guess matrix, and PGD step size.
@@ -95,37 +104,7 @@ public sealed class PgdBlendshapeSolver : IBlendshapeSolver
 
         if (numVerts > 0 && templateBBSize > 0)
         {
-            double minX = double.MaxValue,
-                minY = double.MaxValue,
-                minZ = double.MaxValue;
-            double maxX = double.MinValue,
-                maxY = double.MinValue,
-                maxZ = double.MinValue;
-
-            for (var v = 0; v < numVerts; v++)
-            {
-                var x = (double)maskedNeutralFlat[v * 3];
-                var y = (double)maskedNeutralFlat[v * 3 + 1];
-                var z = (double)maskedNeutralFlat[v * 3 + 2];
-
-                if (x < minX)
-                    minX = x;
-                if (x > maxX)
-                    maxX = x;
-                if (y < minY)
-                    minY = y;
-                if (y > maxY)
-                    maxY = y;
-                if (z < minZ)
-                    minZ = z;
-                if (z > maxZ)
-                    maxZ = z;
-            }
-
-            var dx = maxX - minX;
-            var dy = maxY - minY;
-            var dz = maxZ - minZ;
-            var bbSize = Math.Sqrt(dx * dx + dy * dy + dz * dz);
+            var bbSize = SolverMath.ComputeBoundingBoxDiagonal(maskedNeutralFlat);
 
             if (bbSize > 0)
             {
@@ -135,32 +114,11 @@ public sealed class PgdBlendshapeSolver : IBlendshapeSolver
 
         // Build D^T [K x V] from D [V x K]
         _dt = new double[K * V];
-
-        for (var vi = 0; vi < V; vi++)
-        {
-            for (var k = 0; k < K; k++)
-            {
-                _dt[k * V + vi] = deltaMatrix[vi * K + k];
-            }
-        }
+        SolverMath.ComputeTranspose(deltaMatrix, V, K, _dt);
 
         // Compute DtD = D^T @ D [K x K]
         var dtd = new double[K * K];
-
-        for (var i = 0; i < K; i++)
-        {
-            for (var j = 0; j < K; j++)
-            {
-                var sum = 0.0;
-
-                for (var vi = 0; vi < V; vi++)
-                {
-                    sum += _dt[i * V + vi] * _dt[j * V + vi];
-                }
-
-                dtd[i * K + j] = sum;
-            }
-        }
+        SolverMath.ComputeDtD(_dt, K, V, dtd);
 
         // Build A_noTemporal = DtD + L2_reg + L1_reg
         var aNoTemp = new double[K * K];
@@ -169,7 +127,7 @@ public sealed class PgdBlendshapeSolver : IBlendshapeSolver
         // Add L2 regularization to diagonal
         for (var i = 0; i < K; i++)
         {
-            aNoTemp[i * K + i] += 10.0 * scale * strengthL2;
+            aNoTemp[i * K + i] += SolverMath.L2Multiplier * scale * strengthL2;
         }
 
         // Add L1 regularization to ALL entries
@@ -177,12 +135,12 @@ public sealed class PgdBlendshapeSolver : IBlendshapeSolver
         {
             for (var j = 0; j < K; j++)
             {
-                aNoTemp[i * K + j] += 0.25 * scale * strengthL1;
+                aNoTemp[i * K + j] += SolverMath.L1Multiplier * scale * strengthL1;
             }
         }
 
         // Build full A = A_noTemporal + temporal_reg (for PGD refinement)
-        _temporalScale = 100.0 * scale * strengthTemporal;
+        _temporalScale = SolverMath.TemporalMultiplier * scale * strengthTemporal;
         _a = new double[K * K];
         Array.Copy(aNoTemp, _a, K * K);
 
@@ -198,6 +156,7 @@ public sealed class PgdBlendshapeSolver : IBlendshapeSolver
         // Compute M = inv(A_noTemporal) @ D^T via LU decomposition
         // A_noTemporal is K x K (small), so LU is trivial
         var luPivot = new int[K];
+        _pb = new double[K];
         LuDecompose(aNoTemp, K, luPivot);
 
         _m = new double[K * V];
@@ -219,6 +178,12 @@ public sealed class PgdBlendshapeSolver : IBlendshapeSolver
                 _m[k * V + vi] = solCol[k];
             }
         }
+
+        // Pre-allocate working buffers for Solve()
+        _dtDelta = new double[K];
+        _xBuf = new double[K];
+        _bBuf = new double[K];
+        _resultBuf = new float[K];
     }
 
     /// <summary>
@@ -232,8 +197,6 @@ public sealed class PgdBlendshapeSolver : IBlendshapeSolver
         var v = _maskedPositionCount;
 
         // 1. Compute D^T @ delta
-        var dtDelta = new double[k];
-
         for (var i = 0; i < k; i++)
         {
             var sum = 0.0;
@@ -243,12 +206,10 @@ public sealed class PgdBlendshapeSolver : IBlendshapeSolver
                 sum += _dt[i * v + j] * delta[j];
             }
 
-            dtDelta[i] = sum;
+            _dtDelta[i] = sum;
         }
 
         // 2. Initial guess from precomputed matrix: x = clip(M @ delta, 0, 1)
-        var x = new double[k];
-
         for (var i = 0; i < k; i++)
         {
             var sum = 0.0;
@@ -258,15 +219,13 @@ public sealed class PgdBlendshapeSolver : IBlendshapeSolver
                 sum += _m[i * v + j] * delta[j];
             }
 
-            x[i] = Math.Clamp(sum, 0.0, 1.0);
+            _xBuf[i] = Math.Clamp(sum, 0.0, 1.0);
         }
 
         // 3. Compute b with temporal: b = D^T @ delta + temporalScale * prevWeights
-        var b = new double[k];
-
         for (var i = 0; i < k; i++)
         {
-            b[i] = dtDelta[i] + _temporalScale * _prevWeights[i];
+            _bBuf[i] = _dtDelta[i] + _temporalScale * _prevWeights[i];
         }
 
         // 4. PGD refinement (using full A with temporal)
@@ -276,17 +235,17 @@ public sealed class PgdBlendshapeSolver : IBlendshapeSolver
 
             for (var i = 0; i < k; i++)
             {
-                var g = -b[i];
+                var g = -_bBuf[i];
 
                 for (var j = 0; j < k; j++)
                 {
-                    g += _a[i * k + j] * x[j];
+                    g += _a[i * k + j] * _xBuf[j];
                 }
 
-                var oldX = x[i];
-                x[i] = Math.Clamp(oldX - _stepSize * g, 0.0, 1.0);
+                var oldX = _xBuf[i];
+                _xBuf[i] = Math.Clamp(oldX - _stepSize * g, 0.0, 1.0);
 
-                var change = Math.Abs(x[i] - oldX);
+                var change = Math.Abs(_xBuf[i] - oldX);
 
                 if (change > maxChange)
                 {
@@ -301,15 +260,13 @@ public sealed class PgdBlendshapeSolver : IBlendshapeSolver
         }
 
         // 5. Store for temporal smoothing and convert to float output
-        var result = new float[k];
-
         for (var i = 0; i < k; i++)
         {
-            _prevWeights[i] = x[i];
-            result[i] = (float)x[i];
+            _prevWeights[i] = _xBuf[i];
+            _resultBuf[i] = (float)_xBuf[i];
         }
 
-        return result;
+        return _resultBuf;
     }
 
     /// <summary>
@@ -433,33 +390,31 @@ public sealed class PgdBlendshapeSolver : IBlendshapeSolver
     /// <summary>
     ///     Solve LU @ x = b via forward/back substitution.
     /// </summary>
-    private static void LuSolve(double[] lu, int n, int[] pivot, double[] b, double[] x)
+    private void LuSolve(double[] lu, int n, int[] pivot, double[] b, double[] x)
     {
-        // Permute b
-        var pb = new double[n];
-
+        // Permute b using pre-allocated _pb
         for (var i = 0; i < n; i++)
         {
-            pb[i] = b[pivot[i]];
+            _pb[i] = b[pivot[i]];
         }
 
         // Forward substitution (L @ y = pb)
         for (var i = 0; i < n; i++)
         {
-            var sum = pb[i];
+            var sum = _pb[i];
 
             for (var j = 0; j < i; j++)
             {
-                sum -= lu[i * n + j] * pb[j];
+                sum -= lu[i * n + j] * _pb[j];
             }
 
-            pb[i] = sum;
+            _pb[i] = sum;
         }
 
         // Back substitution (U @ x = y)
         for (var i = n - 1; i >= 0; i--)
         {
-            var sum = pb[i];
+            var sum = _pb[i];
 
             for (var j = i + 1; j < n; j++)
             {
