@@ -28,14 +28,7 @@ public static class ResponseCurves
             if (span < 1e-6f)
                 return t;
             var s = (t - lo) / span; // 0..1
-            // Hermite: p0=lo, p1=0, m0=0, m1=2*span
-            var s2 = s * s;
-            var s3 = s2 * s;
-            var h00 = 2f * s3 - 3f * s2 + 1f;
-            var h10 = s3 - 2f * s2 + s;
-            var h01 = -2f * s3 + 3f * s2;
-            var h11 = s3 - s2;
-            return h00 * lo + h10 * 0f + h01 * 0f + h11 * (2f * span);
+            return HermiteSegment(s, lo, 0f, 0f, 2f * span);
         }
         else
         {
@@ -44,13 +37,18 @@ public static class ResponseCurves
             if (span < 1e-6f)
                 return t;
             var s = t / span; // 0..1
-            var s2 = s * s;
-            var s3 = s2 * s;
-            var h00 = 2f * s3 - 3f * s2 + 1f;
-            var h10 = s3 - 2f * s2 + s;
-            var h01 = -2f * s3 + 3f * s2;
-            var h11 = s3 - s2;
-            return h00 * 0f + h10 * (2f * span) + h01 * hi + h11 * 0f;
+            return HermiteSegment(s, 0f, hi, 2f * span, 0f);
         }
+    }
+
+    private static float HermiteSegment(float s, float p0, float p1, float m0, float m1)
+    {
+        var s2 = s * s;
+        var s3 = s2 * s;
+        var h00 = 2f * s3 - 3f * s2 + 1f;
+        var h10 = s3 - 2f * s2 + s;
+        var h01 = -2f * s3 + 3f * s2;
+        var h11 = s3 - s2;
+        return h00 * p0 + h10 * m0 + h01 * p1 + h11 * m1;
     }
 }

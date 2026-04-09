@@ -1,5 +1,3 @@
-using System;
-
 namespace PersonaEngine.Lib.TTS.Synthesis.LipSync.Audio2Face;
 
 /// <summary>
@@ -106,82 +104,80 @@ public static class ARKitToLive2DMapper
         var cheekPuff = weights[CheekPuff];
 
         // ── JawOpen: ease-in curve ──
-        var jawOpenOut = ResponseCurves.EaseIn(MathF.Min(MathF.Max(jawOpen, 0f), 1f));
+        var jawOpenOut = ResponseCurves.EaseIn(Math.Clamp(jawOpen, 0f, 1f));
 
         // ── MouthOpenY: VBridger formula with ease-in ──
-        var mouthOpenRaw = MathF.Min(
-            MathF.Max(
-                (jawOpen - mouthClose) - (rollUpper + rollLower) * 0.2f + mouthFunnel * 0.2f,
-                0f
-            ),
+        var mouthOpenRaw = Math.Clamp(
+            (jawOpen - mouthClose) - (rollUpper + rollLower) * 0.2f + mouthFunnel * 0.2f,
+            0f,
             1f
         );
         var mouthOpenY = ResponseCurves.EaseIn(mouthOpenRaw);
 
         // ── MouthForm: VBridger compound smile-frown axis ──
         var dimpleAvg = (dimpleL + dimpleR) / 2f;
-        var mouthForm = ClampSigned(
-            (2f - frownL - frownR - mouthPucker + smileR + smileL + dimpleAvg) / 4f
+        var mouthForm = Math.Clamp(
+            (2f - frownL - frownR - mouthPucker + smileR + smileL + dimpleAvg) / 4f,
+            -1f,
+            1f
         );
 
         // ── MouthFunnel: raw funnel minus jaw artifact ──
-        var mouthFunnelOut = Clamp01(mouthFunnel - jawOpen * 0.2f);
+        var mouthFunnelOut = Math.Clamp(mouthFunnel - jawOpen * 0.2f, 0f, 1f);
 
         // ── MouthPressLipOpen: center-weighted Hermite spline ──
-        var pressRaw = MathF.Min(
-            MathF.Max(
-                (upperUpR + upperUpL + lowerDownR + lowerDownL) / 1.8f - (rollLower + rollUpper),
-                -1.3f
-            ),
+        var pressRaw = Math.Clamp(
+            (upperUpR + upperUpL + lowerDownR + lowerDownL) / 1.8f - (rollLower + rollUpper),
+            -1.3f,
             1.3f
         );
         var mouthPressLipOpen = ResponseCurves.CenterWeighted(pressRaw, -1.3f, 1.3f);
 
         // ── MouthPuckerWiden: spread-vs-pucker ──
-        var mouthPuckerWiden = ClampSigned((dimpleR + dimpleL) * 2f - mouthPucker);
+        var mouthPuckerWiden = Math.Clamp((dimpleR + dimpleL) * 2f - mouthPucker, -1f, 1f);
 
         // ── MouthX: lateral shift + asymmetric smile ──
-        var mouthX = ClampSigned((mouthLeft - mouthRight) + (smileL - smileR));
+        var mouthX = Math.Clamp((mouthLeft - mouthRight) + (smileL - smileR), -1f, 1f);
 
         // ── MouthShrug: chin raise + lip compression ──
-        var mouthShrug = Clamp01((shrugUpper + shrugLower + pressR + pressL) / 4f);
+        var mouthShrug = Math.Clamp((shrugUpper + shrugLower + pressR + pressL) / 4f, 0f, 1f);
 
         // ── CheekPuff: direct passthrough ──
-        var cheekPuffC = Clamp01(cheekPuff);
+        var cheekPuffC = Math.Clamp(cheekPuff, 0f, 1f);
 
         // ── Eyes: Aria [0,2] range (default 1.0 = normal open) ──
-        var eyeLOpen = MathF.Min(
-            MathF.Max(
-                (0.5f + weights[EyeBlinkLeft] * -0.8f + weights[EyeWideLeft] * 0.8f) * 2f,
-                0f
-            ),
+        var eyeLOpen = Math.Clamp(
+            (0.5f + weights[EyeBlinkLeft] * -0.8f + weights[EyeWideLeft] * 0.8f) * 2f,
+            0f,
             2f
         );
-        var eyeROpen = MathF.Min(
-            MathF.Max(
-                (0.5f + weights[EyeBlinkRight] * -0.8f + weights[EyeWideRight] * 0.8f) * 2f,
-                0f
-            ),
+        var eyeROpen = Math.Clamp(
+            (0.5f + weights[EyeBlinkRight] * -0.8f + weights[EyeWideRight] * 0.8f) * 2f,
+            0f,
             2f
         );
 
         // ── Eye squint: direct passthrough ──
-        var eyeSquintL = Clamp01(weights[EyeSquintLeft]);
-        var eyeSquintR = Clamp01(weights[EyeSquintRight]);
+        var eyeSquintL = Math.Clamp(weights[EyeSquintLeft], 0f, 1f);
+        var eyeSquintR = Math.Clamp(weights[EyeSquintRight], 0f, 1f);
 
         // ── Brows: with mouth-shift coupling ──
-        var browLY = ClampSigned(
-            (weights[BrowOuterUpLeft] - weights[BrowDownLeft]) + (mouthRight - mouthLeft) / 8f
+        var browLY = Math.Clamp(
+            (weights[BrowOuterUpLeft] - weights[BrowDownLeft]) + (mouthRight - mouthLeft) / 8f,
+            -1f,
+            1f
         );
-        var browRY = ClampSigned(
-            (weights[BrowOuterUpRight] - weights[BrowDownRight]) + (mouthLeft - mouthRight) / 8f
+        var browRY = Math.Clamp(
+            (weights[BrowOuterUpRight] - weights[BrowDownRight]) + (mouthLeft - mouthRight) / 8f,
+            -1f,
+            1f
         );
 
         // ── BrowInnerUp: direct passthrough ──
-        var browInnerUpOut = Clamp01(weights[BrowInnerUp]);
+        var browInnerUpOut = Math.Clamp(weights[BrowInnerUp], 0f, 1f);
 
         // ── Cheek: average of cheek squint ──
-        var cheek = Clamp01((weights[CheekSquintLeft] + weights[CheekSquintRight]) / 2f);
+        var cheek = Math.Clamp((weights[CheekSquintLeft] + weights[CheekSquintRight]) / 2f, 0f, 1f);
 
         return new LipSyncFrame
         {
@@ -203,17 +199,5 @@ public static class ARKitToLive2DMapper
             BrowInnerUp = browInnerUpOut,
             Cheek = cheek,
         };
-    }
-
-    /// <summary>Clamps a value to [0, 1].</summary>
-    private static float Clamp01(float value)
-    {
-        return MathF.Min(MathF.Max(value, 0f), 1f);
-    }
-
-    /// <summary>Clamps a value to [-1, 1].</summary>
-    private static float ClampSigned(float value)
-    {
-        return MathF.Min(MathF.Max(value, -1f), 1f);
     }
 }
