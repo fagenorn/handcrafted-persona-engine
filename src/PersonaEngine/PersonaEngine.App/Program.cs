@@ -138,6 +138,14 @@ internal static class Program
                 "PersonaEngine.Lib.TTS.Synthesis.Alignment",
                 LogEventLevel.Information
             )
+            .MinimumLevel.Override(
+                "PersonaEngine.Lib.TTS.Synthesis.LipSync",
+                LogEventLevel.Information
+            )
+            .MinimumLevel.Override(
+                "PersonaEngine.Lib.TTS.Synthesis.Engine.SentenceProcessor",
+                LogEventLevel.Information
+            )
             .MinimumLevel.Override("Startup", LogEventLevel.Information)
             .MinimumLevel.Override("llama.cpp", LogEventLevel.Error)
             .Enrich.FromLogContext()

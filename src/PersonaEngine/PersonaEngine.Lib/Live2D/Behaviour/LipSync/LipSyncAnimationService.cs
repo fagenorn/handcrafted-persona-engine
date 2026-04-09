@@ -14,11 +14,7 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
 {
     #region Configuration Constants
 
-    private const float SmoothingFactor = 35.0f;
-
     private const float NeutralReturnFactor = 15.0f;
-
-    private const float CheekPuffDecayFactor = 80.0f;
 
     #endregion
 
@@ -42,13 +38,41 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
 
     private static readonly string ParamCheekPuffC = "ParamCheekPuffC";
 
+    private static readonly string ParamCheekPuffL = "ParamCheekPuffL";
+
+    private static readonly string ParamCheekPuffR = "ParamCheekPuffR";
+
+    private static readonly string ParamMouthOpenYRaw = "ParamMouthOpenY_Raw";
+
+    private static readonly string ParamMouthFormHalfPos = "ParamMouthForm_HalfPos";
+
     private static readonly string ParamEyeLOpen = "ParamEyeLOpen";
 
     private static readonly string ParamEyeROpen = "ParamEyeROpen";
 
+    private static readonly string ParamEyeLSmile = "ParamEyeLSmile";
+
+    private static readonly string ParamEyeRSmile = "ParamEyeRSmile";
+
+    private static readonly string ParamEyeLSquint = "ParamEyeLSquint";
+
+    private static readonly string ParamEyeRSquint = "ParamEyeRSquint";
+
     private static readonly string ParamBrowLY = "ParamBrowLY";
 
     private static readonly string ParamBrowRY = "ParamBrowRY";
+
+    private static readonly string ParamBrowInnerUpC = "ParamBrowInnerUpC";
+
+    private static readonly string ParamBrowInnerUpL = "ParamBrowInnerUpL";
+
+    private static readonly string ParamBrowInnerUpR = "ParamBrowInnerUpR";
+
+    private static readonly string ParamCheek = "ParamCheek";
+
+    private static readonly string ParamEyeBallX = "ParamEyeBallX";
+
+    private static readonly string ParamEyeBallY = "ParamEyeBallY";
 
     #endregion
 
@@ -69,8 +93,6 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
     private LipSyncTimeline? _activeTimeline;
 
     private Guid _currentSentenceId;
-
-    private double _cumulativeTimeOffset;
 
     private double _currentPlaybackTime;
 
@@ -123,77 +145,20 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
             return;
         }
 
-        var effectiveTime = _cumulativeTimeOffset + _currentPlaybackTime;
+        var effectiveTime = _currentPlaybackTime;
         var target = _activeTimeline.GetFrameAtTime(effectiveTime);
 
-        SmoothToTarget(target, deltaTime);
+        // Apply target values directly — the timeline already provides
+        // interpolated frames (GetFrameAtTime lerps between keyframes)
+        // and the processor's ParamSmoother already applied per-parameter
+        // EMA.  Adding consumer-side smoothing on top causes visible lag.
+        _currentValues = target;
         ApplyToModel();
     }
 
     #endregion
 
     #region Smoothing
-
-    private void SmoothToTarget(in LipSyncFrame target, float deltaTime)
-    {
-        var sf = SmoothingFactor * deltaTime;
-
-        _currentValues.MouthOpenY = Lerp(_currentValues.MouthOpenY, target.MouthOpenY, sf);
-        _currentValues.JawOpen = Lerp(_currentValues.JawOpen, target.JawOpen, sf);
-        _currentValues.MouthForm = Lerp(_currentValues.MouthForm, target.MouthForm, sf);
-        _currentValues.MouthShrug = Lerp(_currentValues.MouthShrug, target.MouthShrug, sf);
-        _currentValues.MouthFunnel = Lerp(_currentValues.MouthFunnel, target.MouthFunnel, sf);
-        _currentValues.MouthPuckerWiden = Lerp(
-            _currentValues.MouthPuckerWiden,
-            target.MouthPuckerWiden,
-            sf
-        );
-        _currentValues.MouthPressLipOpen = Lerp(
-            _currentValues.MouthPressLipOpen,
-            target.MouthPressLipOpen,
-            sf
-        );
-        _currentValues.MouthX = Lerp(_currentValues.MouthX, target.MouthX, sf);
-
-        if (target.CheekPuffC > 0.02f)
-        {
-            _currentValues.CheekPuffC = Lerp(_currentValues.CheekPuffC, target.CheekPuffC, sf);
-        }
-        else
-        {
-            var decayFactor = CheekPuffDecayFactor * deltaTime;
-            _currentValues.CheekPuffC = Lerp(_currentValues.CheekPuffC, 0.0f, decayFactor);
-        }
-
-        // Optional eye/brow params
-        if (target.EyeLOpen.HasValue)
-        {
-            _currentValues.EyeLOpen = Lerp(
-                _currentValues.EyeLOpen ?? 1.0f,
-                target.EyeLOpen.Value,
-                sf
-            );
-        }
-
-        if (target.EyeROpen.HasValue)
-        {
-            _currentValues.EyeROpen = Lerp(
-                _currentValues.EyeROpen ?? 1.0f,
-                target.EyeROpen.Value,
-                sf
-            );
-        }
-
-        if (target.BrowLY.HasValue)
-        {
-            _currentValues.BrowLY = Lerp(_currentValues.BrowLY ?? 0.0f, target.BrowLY.Value, sf);
-        }
-
-        if (target.BrowRY.HasValue)
-        {
-            _currentValues.BrowRY = Lerp(_currentValues.BrowRY ?? 0.0f, target.BrowRY.Value, sf);
-        }
-    }
 
     private void SmoothToNeutral(float deltaTime)
     {
@@ -207,9 +172,7 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
         _currentValues.MouthPuckerWiden = Lerp(_currentValues.MouthPuckerWiden, 0.0f, sf);
         _currentValues.MouthPressLipOpen = Lerp(_currentValues.MouthPressLipOpen, 0.0f, sf);
         _currentValues.MouthX = Lerp(_currentValues.MouthX, 0.0f, sf);
-
-        var decayFactor = CheekPuffDecayFactor * deltaTime;
-        _currentValues.CheekPuffC = Lerp(_currentValues.CheekPuffC, 0.0f, decayFactor);
+        _currentValues.CheekPuffC = Lerp(_currentValues.CheekPuffC, 0.0f, sf);
 
         ApplyToModel();
     }
@@ -238,6 +201,15 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
             cubismModel.SetParameterValue(ParamMouthX, _currentValues.MouthX);
             cubismModel.SetParameterValue(ParamCheekPuffC, _currentValues.CheekPuffC);
 
+            // Derived: duplicate cheek puff to L/R, mouth variants
+            cubismModel.SetParameterValue(ParamCheekPuffL, _currentValues.CheekPuffC);
+            cubismModel.SetParameterValue(ParamCheekPuffR, _currentValues.CheekPuffC);
+            cubismModel.SetParameterValue(ParamMouthOpenYRaw, _currentValues.MouthOpenY);
+            cubismModel.SetParameterValue(
+                ParamMouthFormHalfPos,
+                Math.Max(0f, _currentValues.MouthForm)
+            );
+
             if (_currentValues.EyeLOpen.HasValue)
             {
                 cubismModel.SetParameterValue(ParamEyeLOpen, _currentValues.EyeLOpen.Value);
@@ -248,6 +220,18 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
                 cubismModel.SetParameterValue(ParamEyeROpen, _currentValues.EyeROpen.Value);
             }
 
+            if (_currentValues.EyeSquintL.HasValue)
+            {
+                cubismModel.SetParameterValue(ParamEyeLSmile, _currentValues.EyeSquintL.Value);
+                cubismModel.SetParameterValue(ParamEyeLSquint, _currentValues.EyeSquintL.Value);
+            }
+
+            if (_currentValues.EyeSquintR.HasValue)
+            {
+                cubismModel.SetParameterValue(ParamEyeRSmile, _currentValues.EyeSquintR.Value);
+                cubismModel.SetParameterValue(ParamEyeRSquint, _currentValues.EyeSquintR.Value);
+            }
+
             if (_currentValues.BrowLY.HasValue)
             {
                 cubismModel.SetParameterValue(ParamBrowLY, _currentValues.BrowLY.Value);
@@ -256,6 +240,28 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
             if (_currentValues.BrowRY.HasValue)
             {
                 cubismModel.SetParameterValue(ParamBrowRY, _currentValues.BrowRY.Value);
+            }
+
+            if (_currentValues.BrowInnerUp.HasValue)
+            {
+                cubismModel.SetParameterValue(ParamBrowInnerUpC, _currentValues.BrowInnerUp.Value);
+                cubismModel.SetParameterValue(ParamBrowInnerUpL, _currentValues.BrowInnerUp.Value);
+                cubismModel.SetParameterValue(ParamBrowInnerUpR, _currentValues.BrowInnerUp.Value);
+            }
+
+            if (_currentValues.Cheek.HasValue)
+            {
+                cubismModel.SetParameterValue(ParamCheek, _currentValues.Cheek.Value);
+            }
+
+            if (_currentValues.EyeBallX.HasValue)
+            {
+                cubismModel.SetParameterValue(ParamEyeBallX, _currentValues.EyeBallX.Value);
+            }
+
+            if (_currentValues.EyeBallY.HasValue)
+            {
+                cubismModel.SetParameterValue(ParamEyeBallY, _currentValues.EyeBallY.Value);
             }
         }
         catch (Exception ex)
@@ -282,7 +288,6 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
         {
             _logger.LogTrace("New sentence started: {SentenceId}", chunk.SentenceId);
             _currentSentenceId = chunk.SentenceId;
-            _cumulativeTimeOffset = 0.0;
             _activeTimeline = null;
         }
 
@@ -290,18 +295,7 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
         _isPlaying = true;
     }
 
-    private void HandleChunkEnded(object? sender, AudioChunkPlaybackEndedEvent e)
-    {
-        if (!_isStarted)
-        {
-            return;
-        }
-
-        if (e.Chunk.SentenceId == _currentSentenceId)
-        {
-            _cumulativeTimeOffset += e.Chunk.DurationInSeconds;
-        }
-    }
+    private void HandleChunkEnded(object? sender, AudioChunkPlaybackEndedEvent e) { }
 
     private void HandleProgress(object? sender, AudioPlaybackProgressEvent e)
     {
@@ -322,7 +316,6 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
         _activeTimeline = null;
         _isPlaying = false;
         _currentSentenceId = Guid.Empty;
-        _cumulativeTimeOffset = 0.0;
         _currentPlaybackTime = 0.0;
         _currentValues = LipSyncFrame.Neutral;
         _logger.LogTrace("LipSyncAnimationService state reset.");

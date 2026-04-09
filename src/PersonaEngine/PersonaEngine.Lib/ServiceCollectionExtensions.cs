@@ -36,6 +36,9 @@ using PersonaEngine.Lib.TTS.Synthesis.Alignment;
 using PersonaEngine.Lib.TTS.Synthesis.Audio;
 using PersonaEngine.Lib.TTS.Synthesis.Engine;
 using PersonaEngine.Lib.TTS.Synthesis.Kokoro;
+using PersonaEngine.Lib.TTS.Synthesis.LipSync;
+using PersonaEngine.Lib.TTS.Synthesis.LipSync.Audio2Face;
+using PersonaEngine.Lib.TTS.Synthesis.LipSync.VBridger;
 using PersonaEngine.Lib.TTS.Synthesis.Qwen3;
 using PersonaEngine.Lib.TTS.Synthesis.TextProcessing;
 using PersonaEngine.Lib.UI;
@@ -322,6 +325,19 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITtsCache, TtsMemoryCache>();
         services.AddSingleton<IAudioFilter, BlacklistAudioFilter>();
 
+        // Lip sync
+        services.Configure<LipSyncOptions>(configuration.GetSection("Config:LipSync"));
+        services.Configure<Audio2FaceOptions>(
+            configuration.GetSection("Config:LipSync:Audio2Face")
+        );
+        services.AddSingleton<ILipSyncProcessor, VBridgerLipSyncProcessor>();
+        var lipSyncEngine = configuration.GetValue<string>("Config:LipSync:Engine") ?? "VBridger";
+        if (lipSyncEngine.Equals("Audio2Face", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<ILipSyncProcessor, Audio2FaceLipSyncProcessor>();
+        }
+        services.AddSingleton<ILipSyncProcessorProvider, LipSyncProcessorProvider>();
+
         return services;
     }
 
@@ -352,7 +368,7 @@ public static class ServiceCollectionExtensions
         services.Configure<Live2DOptions>(configuration.GetSection("Config:Live2D"));
 
         services.AddSingleton<IRenderComponent, Live2DManager>();
-        services.AddSingleton<ILive2DAnimationService, VBridgerLipSyncService>();
+        services.AddSingleton<ILive2DAnimationService, LipSyncAnimationService>();
         services.AddSingleton<ILive2DAnimationService, IdleBlinkingAnimationService>();
         services.AddEmotionProcessing(configuration);
 

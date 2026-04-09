@@ -18,12 +18,21 @@ internal static class NpyReader
     public static (float[] Data, int[] Shape) ReadFloat32(string path)
     {
         using var stream = File.OpenRead(path);
+
+        return ReadFloat32(stream, path);
+    }
+
+    /// <summary>
+    ///     Reads a .npy stream containing float32 data.
+    /// </summary>
+    public static (float[] Data, int[] Shape) ReadFloat32(Stream stream, string? sourceName = null)
+    {
         var (dtype, shape) = ReadHeader(stream);
 
         if (dtype is not ("<f4" or "f4"))
         {
             throw new InvalidDataException(
-                $"Expected float32 dtype ('<f4'), got '{dtype}' in {path}"
+                $"Expected float32 dtype ('<f4'), got '{dtype}' in {sourceName ?? "stream"}"
             );
         }
 
@@ -36,6 +45,48 @@ internal static class NpyReader
             stream.ReadExactly(byteBuffer, 0, totalElements * sizeof(float));
 
             Buffer.BlockCopy(byteBuffer, 0, data, 0, totalElements * sizeof(float));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(byteBuffer);
+        }
+
+        return (data, shape);
+    }
+
+    /// <summary>
+    ///     Reads a .npy file containing int32 data.
+    /// </summary>
+    public static (int[] Data, int[] Shape) ReadInt32(string path)
+    {
+        using var stream = File.OpenRead(path);
+
+        return ReadInt32(stream, path);
+    }
+
+    /// <summary>
+    ///     Reads a .npy stream containing int32 data.
+    /// </summary>
+    public static (int[] Data, int[] Shape) ReadInt32(Stream stream, string? sourceName = null)
+    {
+        var (dtype, shape) = ReadHeader(stream);
+
+        if (dtype is not ("<i4" or "i4"))
+        {
+            throw new InvalidDataException(
+                $"Expected int32 dtype ('<i4'), got '{dtype}' in {sourceName ?? "stream"}"
+            );
+        }
+
+        var totalElements = ComputeTotalElements(shape);
+        var data = new int[totalElements];
+        var byteBuffer = ArrayPool<byte>.Shared.Rent(totalElements * sizeof(int));
+
+        try
+        {
+            stream.ReadExactly(byteBuffer, 0, totalElements * sizeof(int));
+
+            Buffer.BlockCopy(byteBuffer, 0, data, 0, totalElements * sizeof(int));
         }
         finally
         {

@@ -49,6 +49,7 @@ public sealed class SentenceProcessor
     {
         var sentenceId = Guid.CreateVersion7();
         _pipeline.Reset();
+        _lipSyncProvider?.Current.BeginSentence();
 
         // 1. Apply text filters
         var processedText = sentence;
@@ -85,7 +86,12 @@ public sealed class SentenceProcessor
             var enriched = segment;
             if (_lipSyncProvider is not null)
             {
-                enriched = enriched with { LipSync = _lipSyncProvider.Current.Process(enriched) };
+                var proc = _lipSyncProvider.Current;
+                enriched = enriched with { LipSync = proc.Process(enriched) };
+            }
+            else
+            {
+                _logger.LogWarning("LipSync: _lipSyncProvider is null, skipping");
             }
 
             // 5. Stamp sentence ID and submit to audio filter pipeline

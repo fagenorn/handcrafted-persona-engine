@@ -18,6 +18,12 @@ public interface ILipSyncProcessor
     LipSyncTimeline Process(AudioSegment segment);
 
     /// <summary>
+    ///     Signals the start of a new sentence. Resets per-sentence bookkeeping
+    ///     (e.g. timestamp offsets) without clearing model state (GRU, solver).
+    /// </summary>
+    void BeginSentence() { }
+
+    /// <summary>
     ///     Resets any internal state accumulated across calls. Called when switching engines.
     /// </summary>
     void Reset();

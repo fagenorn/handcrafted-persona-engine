@@ -76,5 +76,10 @@ public static class ModelType
         public static readonly ModelId SkinMark = new("audio2face/bs_skin_Mark.npz");
         public static readonly ModelId SkinConfigMark = new("audio2face/bs_skin_config_Mark.json");
         public static readonly ModelId ModelDataMark = new("audio2face/model_data_Mark.npz");
+        public static readonly ModelId ModelConfigClaire = new(
+            "audio2face/model_config_Claire.json"
+        );
+        public static readonly ModelId ModelConfigJames = new("audio2face/model_config_James.json");
+        public static readonly ModelId ModelConfigMark = new("audio2face/model_config_Mark.json");
     }
 }

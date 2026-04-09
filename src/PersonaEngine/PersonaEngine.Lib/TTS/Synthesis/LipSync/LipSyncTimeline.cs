@@ -20,8 +20,14 @@ public struct LipSyncFrame
     // Optional facial parameters
     public float? EyeLOpen;
     public float? EyeROpen;
+    public float? EyeSquintL;
+    public float? EyeSquintR;
     public float? BrowLY;
     public float? BrowRY;
+    public float? BrowInnerUp;
+    public float? Cheek;
+    public float? EyeBallX;
+    public float? EyeBallY;
 
     public double Timestamp;
 
@@ -48,24 +54,23 @@ public struct LipSyncFrame
                 a.MouthPressLipOpen + (b.MouthPressLipOpen - a.MouthPressLipOpen) * t,
             MouthX = a.MouthX + (b.MouthX - a.MouthX) * t,
             CheekPuffC = a.CheekPuffC + (b.CheekPuffC - a.CheekPuffC) * t,
-            EyeLOpen =
-                a.EyeLOpen.HasValue && b.EyeLOpen.HasValue
-                    ? a.EyeLOpen.Value + (b.EyeLOpen.Value - a.EyeLOpen.Value) * t
-                    : null,
-            EyeROpen =
-                a.EyeROpen.HasValue && b.EyeROpen.HasValue
-                    ? a.EyeROpen.Value + (b.EyeROpen.Value - a.EyeROpen.Value) * t
-                    : null,
-            BrowLY =
-                a.BrowLY.HasValue && b.BrowLY.HasValue
-                    ? a.BrowLY.Value + (b.BrowLY.Value - a.BrowLY.Value) * t
-                    : null,
-            BrowRY =
-                a.BrowRY.HasValue && b.BrowRY.HasValue
-                    ? a.BrowRY.Value + (b.BrowRY.Value - a.BrowRY.Value) * t
-                    : null,
+            EyeLOpen = LerpNullable(a.EyeLOpen, b.EyeLOpen, t),
+            EyeROpen = LerpNullable(a.EyeROpen, b.EyeROpen, t),
+            EyeSquintL = LerpNullable(a.EyeSquintL, b.EyeSquintL, t),
+            EyeSquintR = LerpNullable(a.EyeSquintR, b.EyeSquintR, t),
+            BrowLY = LerpNullable(a.BrowLY, b.BrowLY, t),
+            BrowRY = LerpNullable(a.BrowRY, b.BrowRY, t),
+            BrowInnerUp = LerpNullable(a.BrowInnerUp, b.BrowInnerUp, t),
+            Cheek = LerpNullable(a.Cheek, b.Cheek, t),
+            EyeBallX = LerpNullable(a.EyeBallX, b.EyeBallX, t),
+            EyeBallY = LerpNullable(a.EyeBallY, b.EyeBallY, t),
             Timestamp = a.Timestamp + (b.Timestamp - a.Timestamp) * t,
         };
+    }
+
+    private static float? LerpNullable(float? a, float? b, float t)
+    {
+        return a.HasValue && b.HasValue ? a.Value + (b.Value - a.Value) * t : null;
     }
 }
 

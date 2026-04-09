@@ -10,6 +10,8 @@ public class LipSyncOptions
     ///     Hot-reloadable via <c>IOptionsMonitor</c> — changing this swaps the active processor at runtime.
     /// </summary>
     public string Engine { get; set; } = "VBridger";
+
+    public Audio2FaceOptions Audio2Face { get; set; } = new();
 }
 
 /// <summary>
@@ -26,4 +28,9 @@ public class Audio2FaceOptions
     ///     Whether to use the GPU for inference.
     /// </summary>
     public bool UseGpu { get; set; }
+
+    /// <summary>
+    ///     Which blendshape solver to use. Valid values: "BVLS" (default), "PGD".
+    /// </summary>
+    public string SolverType { get; set; } = "BVLS";
 }
