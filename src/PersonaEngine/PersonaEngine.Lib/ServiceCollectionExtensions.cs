@@ -331,11 +331,7 @@ public static class ServiceCollectionExtensions
             configuration.GetSection("Config:LipSync:Audio2Face")
         );
         services.AddSingleton<ILipSyncProcessor, VBridgerLipSyncProcessor>();
-        var lipSyncEngine = configuration.GetValue<string>("Config:LipSync:Engine") ?? "VBridger";
-        if (lipSyncEngine.Equals("Audio2Face", StringComparison.OrdinalIgnoreCase))
-        {
-            services.AddSingleton<ILipSyncProcessor, Audio2FaceLipSyncProcessor>();
-        }
+        services.AddSingleton<ILipSyncProcessor, Audio2FaceLipSyncProcessor>();
         services.AddSingleton<ILipSyncProcessorProvider, LipSyncProcessorProvider>();
 
         return services;
