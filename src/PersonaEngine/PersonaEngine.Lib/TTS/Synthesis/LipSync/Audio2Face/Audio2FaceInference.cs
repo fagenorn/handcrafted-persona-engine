@@ -121,6 +121,8 @@ public sealed class Audio2FaceInference : IDisposable
 
             throw;
         }
+
+        sessionOptions.Dispose();
     }
 
     /// <summary>
@@ -274,6 +276,7 @@ public sealed class Audio2FaceInference : IDisposable
 
         _disposed = true;
         _session.Dispose();
+        _cachedNoise = null;
     }
 
     /// <summary>
