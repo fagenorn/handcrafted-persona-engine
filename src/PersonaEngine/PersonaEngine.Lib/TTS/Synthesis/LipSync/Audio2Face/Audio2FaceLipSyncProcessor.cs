@@ -42,6 +42,8 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
     private const int EyesSize = 4;
     private const int TotalBlendshapes = 52;
 
+    private static readonly float[] ZeroPadding = new float[PaddingSize];
+
     private readonly AnimatorSkinConfig _animatorConfig;
     private readonly BlendshapeConfig _config;
     private readonly BlendshapeData _data;
@@ -51,6 +53,12 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
     private readonly IBlendshapeSolver _solver;
     private readonly float[] _vertexEmaAlpha;
     private readonly ParamSmoother _smoother = new();
+
+    // Pre-allocated frame processing buffers
+    private readonly float[] _composedBuffer;
+    private readonly float[] _deltaBuffer;
+    private readonly float[] _fullWeightsBuffer = new float[TotalBlendshapes];
+
     private int _saccadeFrameCounter;
     private float[]? _prevDeltas;
     private float[]? _audioCarryover;
@@ -128,6 +136,8 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
             modelProvider.GetModelPath(modelDataId),
             _config
         );
+        _composedBuffer = new float[SkinSize];
+        _deltaBuffer = new float[_data.MaskedPositionCount];
         _vertexEmaAlpha = BuildVertexEmaAlpha(_animatorConfig, _data.NeutralSkinFlat);
         _solver = CreateSolver(opts.SolverType);
         _inference = new Audio2FaceInference(modelProvider, opts.UseGpu, logger);
@@ -282,7 +292,7 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
         }
         else
         {
-            _sentenceAudio.AddRange(new float[PaddingSize]);
+            _sentenceAudio.AddRange(ZeroPadding);
         }
 
         _saccadeFrameCounter = 0;
@@ -400,8 +410,8 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
 
     private LipSyncFrame ProcessSkinFrame(ReadOnlySpan<float> skinFlat)
     {
-        var composed = new float[SkinSize];
-        var delta = new float[_data.MaskedPositionCount];
+        var composed = _composedBuffer;
+        var delta = _deltaBuffer;
 
         for (var i = 0; i < SkinSize; i++)
         {
@@ -435,18 +445,18 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
         }
 
         var activeWeights = _solver.Solve(delta);
-        var fullWeights = new float[TotalBlendshapes];
+        Array.Clear(_fullWeightsBuffer);
         for (var k = 0; k < _config.ActiveIndices.Length; k++)
         {
             var idx = _config.ActiveIndices[k];
-            fullWeights[idx] = Math.Clamp(
+            _fullWeightsBuffer[idx] = Math.Clamp(
                 activeWeights[k] * _config.Multipliers[idx] + _config.Offsets[idx],
                 0f,
                 1f
             );
         }
 
-        return ARKitToLive2DMapper.Map(fullWeights);
+        return ARKitToLive2DMapper.Map(_fullWeightsBuffer);
     }
 
     /// <summary>
