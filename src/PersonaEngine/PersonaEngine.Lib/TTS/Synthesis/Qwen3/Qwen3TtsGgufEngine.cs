@@ -434,7 +434,7 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
 
         var absoluteTimings = new (double Start, double End)?[ctcWords.Length];
 
-        var accumulatedAudio = new List<float[]>();
+        var accumulatedAudio = new List<float>(OutputSampleRate);
         var totalSamplesEmitted = 0;
         var lastAlignAt = 0;
         var confirmedWordCount = 0;
@@ -459,7 +459,7 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
             )
         )
         {
-            accumulatedAudio.Add(audioChunk);
+            accumulatedAudio.AddRange(audioChunk);
             totalSamplesEmitted += audioChunk.Length;
 
             if (totalSamplesEmitted - lastAlignAt < alignInterval)
@@ -475,8 +475,8 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                 var winLength = totalSamplesEmitted - winStart;
                 var windowStartTimeSec = winStart / (double)OutputSampleRate;
 
-                var allAudio = ConcatAudio(accumulatedAudio, totalSamplesEmitted);
-                var audioWindow = allAudio.AsSpan(winStart, winLength);
+                var allAudio = CollectionsMarshal.AsSpan(accumulatedAudio);
+                var audioWindow = allAudio.Slice(winStart, winLength);
 
                 using var result = _aligner.AlignSpokenWindowed(
                     audioWindow,
@@ -508,8 +508,6 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
 
             lastAlignAt = totalSamplesEmitted;
 
-            var fullAudio = ConcatAudio(accumulatedAudio, totalSamplesEmitted);
-
             for (var w = lastEmittedWordCount; w < confirmedWordCount; w++)
             {
                 var wordEndSample = Math.Min(
@@ -521,7 +519,10 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                 {
                     var sliceStartSec = lastEmittedSample / (double)OutputSampleRate;
                     var emitLength = wordEndSample - lastEmittedSample;
-                    var audioToEmit = fullAudio.AsSpan(lastEmittedSample, emitLength).ToArray();
+                    var audioToEmit = CollectionsMarshal
+                        .AsSpan(accumulatedAudio)
+                        .Slice(lastEmittedSample, emitLength)
+                        .ToArray();
 
                     var (tokStart, tokCount) = wordToTokenRange[w];
                     ApplyTimingToTokenRange(
@@ -549,9 +550,11 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
         // Final full CTC alignment for best accuracy
         if (totalSamplesEmitted > 0)
         {
-            var finalAudio = ConcatAudio(accumulatedAudio, totalSamplesEmitted);
-
-            using var finalResult = _aligner.Align(finalAudio, alignText, OutputSampleRate);
+            using var finalResult = _aligner.Align(
+                CollectionsMarshal.AsSpan(accumulatedAudio),
+                alignText,
+                OutputSampleRate
+            );
             for (var i = 0; i < finalResult.Count && i < ctcWords.Length; i++)
             {
                 absoluteTimings[i] = (
@@ -571,7 +574,10 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                 {
                     var sliceStartSec = lastEmittedSample / (double)OutputSampleRate;
                     var emitLen = wordEndSample - lastEmittedSample;
-                    var audioSlice = finalAudio.AsSpan(lastEmittedSample, emitLen).ToArray();
+                    var audioSlice = CollectionsMarshal
+                        .AsSpan(accumulatedAudio)
+                        .Slice(lastEmittedSample, emitLen)
+                        .ToArray();
 
                     var (tokStart, tokCount) = wordToTokenRange[w];
                     ApplyTimingToTokenRange(
@@ -597,7 +603,10 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
             if (totalSamplesEmitted > lastEmittedSample)
             {
                 var tailLength = totalSamplesEmitted - lastEmittedSample;
-                var tailAudio = finalAudio.AsSpan(lastEmittedSample, tailLength).ToArray();
+                var tailAudio = CollectionsMarshal
+                    .AsSpan(accumulatedAudio)
+                    .Slice(lastEmittedSample, tailLength)
+                    .ToArray();
 
                 yield return new AudioSegment(
                     tailAudio.AsMemory(),
@@ -696,19 +705,6 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
         _llama.Dispose();
         _decoderSession.Dispose();
         _disposed = true;
-    }
-
-    private static float[] ConcatAudio(List<float[]> chunks, int totalSamples)
-    {
-        var result = new float[totalSamples];
-        var offset = 0;
-        foreach (var chunk in chunks)
-        {
-            Array.Copy(chunk, 0, result, offset, chunk.Length);
-            offset += chunk.Length;
-        }
-
-        return result;
     }
 
     private IEnumerable<int[]> GenerateCodeFrames(
