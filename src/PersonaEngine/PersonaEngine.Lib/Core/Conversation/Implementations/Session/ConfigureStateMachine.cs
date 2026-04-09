@@ -198,7 +198,7 @@ public partial class ConversationSession
                     return;
                 }
 
-                if (unmetGuards.Count != 0 && unmetGuards.First() == "Barge-In")
+                if (unmetGuards is { Count: not 0 } && unmetGuards.First() == "Barge-In")
                 {
                     return;
                 }
