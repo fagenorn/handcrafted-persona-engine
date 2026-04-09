@@ -1,3 +1,4 @@
+using System.Threading;
 using Microsoft.Extensions.Logging;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Adapters;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
@@ -20,59 +21,59 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
 
     #region Parameter Names
 
-    private static readonly string ParamMouthOpenY = "ParamMouthOpenY";
+    private const string ParamMouthOpenY = "ParamMouthOpenY";
 
-    private static readonly string ParamJawOpen = "ParamJawOpen";
+    private const string ParamJawOpen = "ParamJawOpen";
 
-    private static readonly string ParamMouthForm = "ParamMouthForm";
+    private const string ParamMouthForm = "ParamMouthForm";
 
-    private static readonly string ParamMouthShrug = "ParamMouthShrug";
+    private const string ParamMouthShrug = "ParamMouthShrug";
 
-    private static readonly string ParamMouthFunnel = "ParamMouthFunnel";
+    private const string ParamMouthFunnel = "ParamMouthFunnel";
 
-    private static readonly string ParamMouthPuckerWiden = "ParamMouthPuckerWiden";
+    private const string ParamMouthPuckerWiden = "ParamMouthPuckerWiden";
 
-    private static readonly string ParamMouthPressLipOpen = "ParamMouthPressLipOpen";
+    private const string ParamMouthPressLipOpen = "ParamMouthPressLipOpen";
 
-    private static readonly string ParamMouthX = "ParamMouthX";
+    private const string ParamMouthX = "ParamMouthX";
 
-    private static readonly string ParamCheekPuffC = "ParamCheekPuffC";
+    private const string ParamCheekPuffC = "ParamCheekPuffC";
 
-    private static readonly string ParamCheekPuffL = "ParamCheekPuffL";
+    private const string ParamCheekPuffL = "ParamCheekPuffL";
 
-    private static readonly string ParamCheekPuffR = "ParamCheekPuffR";
+    private const string ParamCheekPuffR = "ParamCheekPuffR";
 
-    private static readonly string ParamMouthOpenYRaw = "ParamMouthOpenY_Raw";
+    private const string ParamMouthOpenYRaw = "ParamMouthOpenY_Raw";
 
-    private static readonly string ParamMouthFormHalfPos = "ParamMouthForm_HalfPos";
+    private const string ParamMouthFormHalfPos = "ParamMouthForm_HalfPos";
 
-    private static readonly string ParamEyeLOpen = "ParamEyeLOpen";
+    private const string ParamEyeLOpen = "ParamEyeLOpen";
 
-    private static readonly string ParamEyeROpen = "ParamEyeROpen";
+    private const string ParamEyeROpen = "ParamEyeROpen";
 
-    private static readonly string ParamEyeLSmile = "ParamEyeLSmile";
+    private const string ParamEyeLSmile = "ParamEyeLSmile";
 
-    private static readonly string ParamEyeRSmile = "ParamEyeRSmile";
+    private const string ParamEyeRSmile = "ParamEyeRSmile";
 
-    private static readonly string ParamEyeLSquint = "ParamEyeLSquint";
+    private const string ParamEyeLSquint = "ParamEyeLSquint";
 
-    private static readonly string ParamEyeRSquint = "ParamEyeRSquint";
+    private const string ParamEyeRSquint = "ParamEyeRSquint";
 
-    private static readonly string ParamBrowLY = "ParamBrowLY";
+    private const string ParamBrowLY = "ParamBrowLY";
 
-    private static readonly string ParamBrowRY = "ParamBrowRY";
+    private const string ParamBrowRY = "ParamBrowRY";
 
-    private static readonly string ParamBrowInnerUpC = "ParamBrowInnerUpC";
+    private const string ParamBrowInnerUpC = "ParamBrowInnerUpC";
 
-    private static readonly string ParamBrowInnerUpL = "ParamBrowInnerUpL";
+    private const string ParamBrowInnerUpL = "ParamBrowInnerUpL";
 
-    private static readonly string ParamBrowInnerUpR = "ParamBrowInnerUpR";
+    private const string ParamBrowInnerUpR = "ParamBrowInnerUpR";
 
-    private static readonly string ParamCheek = "ParamCheek";
+    private const string ParamCheek = "ParamCheek";
 
-    private static readonly string ParamEyeBallX = "ParamEyeBallX";
+    private const string ParamEyeBallX = "ParamEyeBallX";
 
-    private static readonly string ParamEyeBallY = "ParamEyeBallY";
+    private const string ParamEyeBallY = "ParamEyeBallY";
 
     #endregion
 
@@ -86,7 +87,7 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
 
     private bool _isStarted;
 
-    private bool _isPlaying;
+    private volatile bool _isPlaying;
 
     private bool _disposed;
 
@@ -94,7 +95,7 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
 
     private Guid _currentSentenceId;
 
-    private double _currentPlaybackTime;
+    private long _currentPlaybackTimeTicks;
 
     private LipSyncFrame _currentValues;
 
@@ -109,7 +110,6 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
         _audioProgressNotifier = audioProgressNotifier;
 
         _audioProgressNotifier.ChunkPlaybackStarted += HandleChunkStarted;
-        _audioProgressNotifier.ChunkPlaybackEnded += HandleChunkEnded;
         _audioProgressNotifier.PlaybackProgress += HandleProgress;
     }
 
@@ -139,14 +139,17 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
             return;
         }
 
-        if (!_isPlaying || _activeTimeline == null)
+        var timeline = Volatile.Read(ref _activeTimeline);
+
+        if (!_isPlaying || timeline == null)
         {
             SmoothToNeutral(deltaTime);
             return;
         }
 
-        var effectiveTime = _currentPlaybackTime;
-        var target = _activeTimeline.GetFrameAtTime(effectiveTime);
+        var ticks = Interlocked.Read(ref _currentPlaybackTimeTicks);
+        var effectiveTime = new TimeSpan(ticks).TotalSeconds;
+        var target = timeline.GetFrameAtTime(effectiveTime);
 
         // Apply target values directly — the timeline already provides
         // interpolated frames (GetFrameAtTime lerps between keyframes)
@@ -288,14 +291,12 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
         {
             _logger.LogTrace("New sentence started: {SentenceId}", chunk.SentenceId);
             _currentSentenceId = chunk.SentenceId;
-            _activeTimeline = null;
+            Volatile.Write(ref _activeTimeline, null);
         }
 
-        _activeTimeline = chunk.LipSync;
+        Volatile.Write(ref _activeTimeline, chunk.LipSync);
         _isPlaying = true;
     }
-
-    private void HandleChunkEnded(object? sender, AudioChunkPlaybackEndedEvent e) { }
 
     private void HandleProgress(object? sender, AudioPlaybackProgressEvent e)
     {
@@ -304,7 +305,7 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
             return;
         }
 
-        _currentPlaybackTime = e.CurrentPlaybackTime.TotalSeconds;
+        Interlocked.Exchange(ref _currentPlaybackTimeTicks, e.CurrentPlaybackTime.Ticks);
     }
 
     #endregion
@@ -313,10 +314,10 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
 
     private void ResetState()
     {
-        _activeTimeline = null;
+        Volatile.Write(ref _activeTimeline, null);
         _isPlaying = false;
         _currentSentenceId = Guid.Empty;
-        _currentPlaybackTime = 0.0;
+        Interlocked.Exchange(ref _currentPlaybackTimeTicks, 0L);
         _currentValues = LipSyncFrame.Neutral;
         _logger.LogTrace("LipSyncAnimationService state reset.");
     }
@@ -346,7 +347,6 @@ public sealed class LipSyncAnimationService : ILive2DAnimationService
         Stop();
 
         _audioProgressNotifier.ChunkPlaybackStarted -= HandleChunkStarted;
-        _audioProgressNotifier.ChunkPlaybackEnded -= HandleChunkEnded;
         _audioProgressNotifier.PlaybackProgress -= HandleProgress;
 
         _disposed = true;
