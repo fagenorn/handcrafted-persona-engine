@@ -63,6 +63,14 @@ public sealed class Audio2FaceInference : IDisposable
     /// </summary>
     private readonly float[] _gruState;
 
+    // Pre-allocated buffers reused across Infer() calls
+    private readonly float[] _windowBuffer = new float[AudioBufferLen];
+    private readonly float[] _identityBuffer = new float[NumIdentities];
+    private readonly float[] _emotionBuffer = new float[1 * NumCenterFrames * NumEmotions];
+    private readonly float[] _latentsBuffer;
+    private readonly float[] _skinOutputBuffer = new float[NumCenterFrames * SkinSize];
+    private readonly float[] _eyeOutputBuffer = new float[NumCenterFrames * EyesSize];
+
     private float[]? _cachedNoise;
 
     private bool _disposed;
@@ -79,6 +87,7 @@ public sealed class Audio2FaceInference : IDisposable
     {
         _logger = logger;
         _gruState = new float[NumDiffusionSteps * NumGruLayers * 1 * GruLatentDim];
+        _latentsBuffer = new float[NumDiffusionSteps * NumGruLayers * 1 * GruLatentDim];
 
         var modelPath = modelProvider.GetModelPath(IO.ModelType.Audio2Face.Network);
 
@@ -138,9 +147,11 @@ public sealed class Audio2FaceInference : IDisposable
     ///     Identity slot index (0-based, must be less than <see cref="NumIdentities" />).
     /// </param>
     /// <returns>
-    ///     Skin vertices [30, 72006] and eye rotation [30, 4] (rightX, rightY, leftX, leftY).
+    ///     Flat skin vertices [30 * 72006] and flat eye rotation [30 * 4] (rightX, rightY, leftX, leftY),
+    ///     plus the frame count.  The returned arrays are internal buffers — callers must not hold
+    ///     references across calls.
     /// </returns>
-    public (float[,] Skin, float[,] EyeRot) Infer(
+    public (float[] SkinFlat, float[] EyeFlat, int FrameCount) Infer(
         ReadOnlySpan<float> audio16Khz,
         int identityIndex = 0
     )
@@ -157,25 +168,27 @@ public sealed class Audio2FaceInference : IDisposable
         }
 
         // 1. Build window tensor [1, AudioBufferLen]
-        var windowData = new float[AudioBufferLen];
+        Array.Clear(_windowBuffer);
         var copyLen = Math.Min(audio16Khz.Length, AudioBufferLen);
-        audio16Khz[..copyLen].CopyTo(windowData);
-        var windowTensor = new DenseTensor<float>(windowData, [1, AudioBufferLen]);
+        audio16Khz[..copyLen].CopyTo(_windowBuffer);
+        var windowTensor = new DenseTensor<float>(_windowBuffer, [1, AudioBufferLen]);
 
         // 2. Build identity tensor [1, NumIdentities] — one-hot
-        var identityData = new float[NumIdentities];
-        identityData[identityIndex] = 1f;
-        var identityTensor = new DenseTensor<float>(identityData, [1, NumIdentities]);
+        Array.Clear(_identityBuffer);
+        _identityBuffer[identityIndex] = 1f;
+        var identityTensor = new DenseTensor<float>(_identityBuffer, [1, NumIdentities]);
 
         // 3. Build emotion tensor [1, NumCenterFrames, NumEmotions] — all zeros (neutral)
-        var emotionData = new float[1 * NumCenterFrames * NumEmotions];
-        var emotionTensor = new DenseTensor<float>(emotionData, [1, NumCenterFrames, NumEmotions]);
+        Array.Clear(_emotionBuffer);
+        var emotionTensor = new DenseTensor<float>(
+            _emotionBuffer,
+            [1, NumCenterFrames, NumEmotions]
+        );
 
         // 4. Build input_latents tensor [NumDiffusionSteps, NumGruLayers, 1, GruLatentDim] — copy from GRU state
-        var latentsData = new float[_gruState.Length];
-        Array.Copy(_gruState, latentsData, _gruState.Length);
+        Array.Copy(_gruState, _latentsBuffer, _gruState.Length);
         var latentsTensor = new DenseTensor<float>(
-            latentsData,
+            _latentsBuffer,
             [NumDiffusionSteps, NumGruLayers, 1, GruLatentDim]
         );
 
@@ -188,7 +201,7 @@ public sealed class Audio2FaceInference : IDisposable
             [1, NumDiffusionSteps + 1, TotalFrames, TotalOutputDim]
         );
 
-        var inputs = new List<NamedOnnxValue>
+        var inputs = new List<NamedOnnxValue>(5)
         {
             NamedOnnxValue.CreateFromTensor("window", windowTensor),
             NamedOnnxValue.CreateFromTensor("identity", identityTensor),
@@ -199,30 +212,57 @@ public sealed class Audio2FaceInference : IDisposable
 
         using var results = _session.Run(inputs);
 
-        // Extract prediction: skip LeftPadFrames, take NumCenterFrames
-        var predictionValue = results.First(r => r.Name == "prediction");
-        var predictionTensor = predictionValue.AsTensor<float>();
-        var skinOutput = new float[NumCenterFrames, SkinSize];
-        var eyeOutput = new float[NumCenterFrames, EyesSize];
+        // Extract prediction and output_latents in a single pass over results
+        Tensor<float>? predictionTensor = null;
+        Tensor<float>? outputLatentsTensor = null;
+
+        foreach (var result in results)
+        {
+            switch (result.Name)
+            {
+                case "prediction":
+                    predictionTensor = result.AsTensor<float>();
+                    break;
+                case "output_latents":
+                    outputLatentsTensor = result.AsTensor<float>();
+                    break;
+            }
+
+            if (predictionTensor != null && outputLatentsTensor != null)
+            {
+                break;
+            }
+        }
+
+        if (predictionTensor == null || outputLatentsTensor == null)
+        {
+            throw new InvalidOperationException(
+                "ONNX model did not return expected 'prediction' and 'output_latents' outputs."
+            );
+        }
+
+        // Extract prediction: skip LeftPadFrames, take NumCenterFrames into flat buffers
+        Array.Clear(_skinOutputBuffer);
+        Array.Clear(_eyeOutputBuffer);
 
         for (var frame = 0; frame < NumCenterFrames; frame++)
         {
             var sourceFrame = LeftPadFrames + frame;
+            var skinBase = frame * SkinSize;
+            var eyeBase = frame * EyesSize;
 
             for (var j = 0; j < SkinSize; j++)
             {
-                skinOutput[frame, j] = predictionTensor[0, sourceFrame, j];
+                _skinOutputBuffer[skinBase + j] = predictionTensor[0, sourceFrame, j];
             }
 
             for (var j = 0; j < EyesSize; j++)
             {
-                eyeOutput[frame, j] = predictionTensor[0, sourceFrame, EyesOffset + j];
+                _eyeOutputBuffer[eyeBase + j] = predictionTensor[0, sourceFrame, EyesOffset + j];
             }
         }
 
         // Extract output_latents and copy to GRU state
-        var outputLatentsValue = results.First(r => r.Name == "output_latents");
-        var outputLatentsTensor = outputLatentsValue.AsTensor<float>();
         var gruIdx = 0;
 
         for (var d = 0; d < NumDiffusionSteps; d++)
@@ -236,7 +276,7 @@ public sealed class Audio2FaceInference : IDisposable
             }
         }
 
-        return (skinOutput, eyeOutput);
+        return (_skinOutputBuffer, _eyeOutputBuffer, NumCenterFrames);
     }
 
     /// <summary>

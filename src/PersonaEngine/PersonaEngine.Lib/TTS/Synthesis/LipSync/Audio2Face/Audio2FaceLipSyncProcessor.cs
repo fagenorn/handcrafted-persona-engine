@@ -39,6 +39,7 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
         PaddingDuration + StrideDuration + 3 * SecondsPerFrame;
 
     private const int SkinSize = 72006;
+    private const int EyesSize = 4;
     private const int TotalBlendshapes = 52;
 
     private readonly AnimatorSkinConfig _animatorConfig;
@@ -356,24 +357,14 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
 
     private void ProcessWindow(ReadOnlySpan<float> windowAudio, bool appendFrames)
     {
-        var (skin, eyeRot) = _inference.Infer(windowAudio, _identityIndex);
-        for (var f = 0; f < FramesPerWindow; f++)
+        var (skinFlat, eyeFlat, frameCount) = _inference.Infer(windowAudio, _identityIndex);
+        for (var f = 0; f < frameCount; f++)
         {
-            var skinData = new float[SkinSize];
-            for (var j = 0; j < SkinSize; j++)
-            {
-                skinData[j] = skin[f, j];
-            }
+            var skinSlice = skinFlat.AsSpan(f * SkinSize, SkinSize);
+            var frame = ProcessSkinFrame(skinSlice);
 
-            var frame = ProcessSkinFrame(skinData);
-
-            var eyesSize = eyeRot.GetLength(1);
-            var eyeData = new float[eyesSize];
-            for (var j = 0; j < eyesSize; j++)
-            {
-                eyeData[j] = eyeRot[f, j];
-            }
-            ApplyEyeRotation(ref frame, eyeData);
+            var eyeSlice = eyeFlat.AsSpan(f * EyesSize, EyesSize);
+            ApplyEyeRotation(ref frame, eyeSlice);
 
             frame = _smoother.Smooth(in frame);
 
@@ -407,7 +398,7 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
         return lo;
     }
 
-    private LipSyncFrame ProcessSkinFrame(float[] skinFlat)
+    private LipSyncFrame ProcessSkinFrame(ReadOnlySpan<float> skinFlat)
     {
         var composed = new float[SkinSize];
         var delta = new float[_data.MaskedPositionCount];
@@ -462,7 +453,7 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
     ///     Applies the SDK eye rotation formula: average both eyes, normalize degrees to [-1, 1].
     ///     eye_rot layout: [rightX, rightY, leftX, leftY].
     /// </summary>
-    private void ApplyEyeRotation(ref LipSyncFrame frame, float[] eyeRot)
+    private void ApplyEyeRotation(ref LipSyncFrame frame, ReadOnlySpan<float> eyeRot)
     {
         var strength = _animatorConfig.EyeballsStrength;
         var saccadeStrength = _animatorConfig.SaccadeStrength;
