@@ -64,10 +64,13 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
     private float[]? _audioCarryover;
 
     /// <summary>
-    ///     Window offsets that were inferred with right-padding and need a
-    ///     full-audio re-run to properly advance GRU / solver / EMA state.
+    ///     Windows that were inferred with right-padding and need a full-audio
+    ///     re-run to advance GRU / solver / EMA state and replace the
+    ///     silence-influenced frames with correct ones.
+    ///     Each entry stores the audio offset and the index in
+    ///     <see cref="_sentenceFrames" /> where its 30 frames begin.
     /// </summary>
-    private readonly Queue<int> _deferredWindowOffsets = new();
+    private readonly Queue<(int AudioOffset, int FrameStartIndex)> _deferredWindowOffsets = new();
 
     /// <summary>Sentence-level audio buffer (resampled to 16 kHz).
     /// May be pre-filled with silence for GRU warmup on cold start.</summary>
@@ -160,22 +163,23 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
             var audio16K = Resample(segment.AudioData.Span, segment.SampleRate, TargetSampleRate);
             _sentenceAudio.AddRange(audio16K);
 
-            // ── Deferred re-runs: advance state with full audio ──
+            // ── Deferred re-runs: advance state AND replace frames ──
             // Right-padded windows save/restore ALL state so frames can be
             // produced early without contaminating temporal context.  When the
             // full audio for a deferred window becomes available we re-run
-            // inference + the full processing pipeline (without appending
-            // frames) to properly advance GRU, solver, vertex-EMA and
-            // param-smoother state.  This gives both early frames AND correct
-            // temporal continuity across window boundaries.
+            // inference + the full processing pipeline, advancing GRU, solver,
+            // vertex-EMA and param-smoother state AND overwriting the
+            // silence-influenced frames with correct ones.  This eliminates
+            // the "dip toward neutral" artifacts that zero-padding causes in
+            // the later center frames of each right-padded window.
             var buf = CollectionsMarshal.AsSpan(_sentenceAudio);
             while (
                 _deferredWindowOffsets.Count > 0
-                && _deferredWindowOffsets.Peek() + WindowSize <= _sentenceAudio.Count
+                && _deferredWindowOffsets.Peek().AudioOffset + WindowSize <= _sentenceAudio.Count
             )
             {
-                var deferredOffset = _deferredWindowOffsets.Dequeue();
-                RunStateAdvancement(buf.Slice(deferredOffset, WindowSize));
+                var (deferredOffset, frameStartIdx) = _deferredWindowOffsets.Dequeue();
+                RunFrameReplacement(buf.Slice(deferredOffset, WindowSize), frameStartIdx);
             }
 
             // ── Sliding-window inference ──
@@ -191,12 +195,14 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
                 {
                     // Right-padded window — save ALL state, produce frames,
                     // then restore so the silence doesn't contaminate context.
-                    // Queue offset for full-audio re-run later.
+                    // Record frame start index so the deferred re-run can
+                    // overwrite these silence-influenced frames with correct ones.
                     var savedGru = _inference.SaveGruState();
                     var savedSolver = _solver.SaveTemporal();
                     var savedDeltas = _prevDeltas?.ToArray();
                     var savedSmoother = _smoother.Save();
 
+                    var frameStartIdx = _sentenceFrames.Count;
                     var padded = new float[WindowSize];
                     buf.Slice(_nextWindowOffset, available).CopyTo(padded);
                     InferAndAppend(padded);
@@ -206,7 +212,7 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
                     _prevDeltas = savedDeltas;
                     _smoother.Restore(savedSmoother);
 
-                    _deferredWindowOffsets.Enqueue(_nextWindowOffset);
+                    _deferredWindowOffsets.Enqueue((_nextWindowOffset, frameStartIdx));
                 }
                 _nextWindowOffset += Stride;
             }
@@ -353,15 +359,19 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
 
     /// <summary>
     ///     Re-runs a previously right-padded window with full audio to advance
-    ///     GRU, solver, vertex-EMA and param-smoother state without producing
-    ///     duplicate frames.
+    ///     GRU, solver, vertex-EMA and param-smoother state AND overwrite the
+    ///     silence-influenced frames at <paramref name="replaceAtIndex" />.
     /// </summary>
-    private void RunStateAdvancement(ReadOnlySpan<float> windowAudio)
+    private void RunFrameReplacement(ReadOnlySpan<float> windowAudio, int replaceAtIndex)
     {
-        ProcessWindow(windowAudio, appendFrames: false);
+        ProcessWindow(windowAudio, appendFrames: false, replaceAtIndex: replaceAtIndex);
     }
 
-    private void ProcessWindow(ReadOnlySpan<float> windowAudio, bool appendFrames)
+    private void ProcessWindow(
+        ReadOnlySpan<float> windowAudio,
+        bool appendFrames,
+        int replaceAtIndex = -1
+    )
     {
         var (skinFlat, eyeFlat, frameCount) = _inference.Infer(windowAudio, _identityIndex);
         for (var f = 0; f < frameCount; f++)
@@ -374,7 +384,14 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
 
             frame = _smoother.Smooth(in frame);
 
-            if (appendFrames)
+            if (replaceAtIndex >= 0)
+            {
+                // Overwrite the silence-influenced frame with the correct one.
+                var idx = replaceAtIndex + f;
+                frame.Timestamp = idx * SecondsPerFrame - FrameTimestampOffset;
+                _sentenceFrames[idx] = frame;
+            }
+            else if (appendFrames)
             {
                 frame.Timestamp = _sentenceFrames.Count * SecondsPerFrame - FrameTimestampOffset;
                 _sentenceFrames.Add(frame);
