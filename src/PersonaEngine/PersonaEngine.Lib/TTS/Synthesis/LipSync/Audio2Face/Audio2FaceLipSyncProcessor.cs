@@ -91,39 +91,35 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
         _logger = logger;
         var opts = options.Value;
 
-        _identityIndex = opts.Identity switch
-        {
-            "Claire" => 0,
-            "James" => 1,
-            "Mark" => 2,
-            _ => throw new ArgumentException(
-                $"Unknown Audio2Face identity '{opts.Identity}'.",
-                nameof(options)
-            ),
-        };
-
-        var (skinId, skinConfigId, modelDataId, modelConfigId) = opts.Identity switch
+        var (identityIndex, skinId, skinConfigId, modelDataId, modelConfigId) = opts.Identity switch
         {
             "Claire" => (
+                0,
                 A2FModels.SkinClaire,
                 A2FModels.SkinConfigClaire,
                 A2FModels.ModelDataClaire,
                 A2FModels.ModelConfigClaire
             ),
             "James" => (
+                1,
                 A2FModels.SkinJames,
                 A2FModels.SkinConfigJames,
                 A2FModels.ModelDataJames,
                 A2FModels.ModelConfigJames
             ),
             "Mark" => (
+                2,
                 A2FModels.SkinMark,
                 A2FModels.SkinConfigMark,
                 A2FModels.ModelDataMark,
                 A2FModels.ModelConfigMark
             ),
-            _ => throw new ArgumentException($"Unknown identity '{opts.Identity}'."),
+            _ => throw new ArgumentException(
+                $"Unknown Audio2Face identity '{opts.Identity}'.",
+                nameof(options)
+            ),
         };
+        _identityIndex = identityIndex;
 
         _config = BlendshapeConfig.FromJson(
             File.ReadAllText(modelProvider.GetModelPath(skinConfigId))

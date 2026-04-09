@@ -91,7 +91,7 @@ public sealed class SentenceProcessor
             }
             else
             {
-                _logger.LogWarning("LipSync: _lipSyncProvider is null, skipping");
+                _logger.LogDebug("LipSync: _lipSyncProvider is null, skipping");
             }
 
             // 5. Stamp sentence ID and submit to audio filter pipeline
