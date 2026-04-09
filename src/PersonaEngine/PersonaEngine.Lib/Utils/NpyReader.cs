@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace PersonaEngine.Lib.Utils;
@@ -119,24 +120,8 @@ internal static class NpyReader
             );
         }
 
-        var byteBuffer = ArrayPool<byte>.Shared.Rent(totalElements * sizeof(float));
-
-        try
-        {
-            stream.ReadExactly(byteBuffer, 0, totalElements * sizeof(float));
-
-            Buffer.BlockCopy(
-                byteBuffer,
-                0,
-                destination.ToArray(),
-                0,
-                totalElements * sizeof(float)
-            );
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(byteBuffer);
-        }
+        var destBytes = MemoryMarshal.AsBytes(destination[..totalElements]);
+        stream.ReadExactly(destBytes);
 
         return shape;
     }
