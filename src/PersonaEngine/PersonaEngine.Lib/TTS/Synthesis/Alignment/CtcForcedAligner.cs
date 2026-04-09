@@ -45,6 +45,17 @@ public sealed class CtcForcedAligner : IForcedAligner
             ExecutionMode = ExecutionMode.ORT_SEQUENTIAL,
             LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR,
         };
+
+        try
+        {
+            opts.AppendExecutionProvider_CUDA();
+            logger?.LogInformation("CTC forced aligner: CUDA execution provider enabled.");
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "CTC forced aligner: CUDA init failed, falling back to CPU.");
+        }
+
         _session = new InferenceSession(modelPath, opts);
 
         // Load vocabulary: char → index mapping
