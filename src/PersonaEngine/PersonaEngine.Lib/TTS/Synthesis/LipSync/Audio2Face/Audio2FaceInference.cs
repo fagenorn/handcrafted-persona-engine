@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
-using Microsoft.ML.OnnxRuntime.Tensors;
 using PersonaEngine.Lib.IO;
 
 namespace PersonaEngine.Lib.TTS.Synthesis.LipSync.Audio2Face;
@@ -71,6 +70,15 @@ public sealed class Audio2FaceInference : IDisposable
     private readonly float[] _skinOutputBuffer = new float[NumCenterFrames * SkinSize];
     private readonly float[] _eyeOutputBuffer = new float[NumCenterFrames * EyesSize];
 
+    // Persistent OrtValues wrapping pre-allocated input buffers.
+    // Created once at construction, reused every Infer() call.
+    // Safe because the underlying arrays are pre-allocated and never reallocated.
+    private readonly OrtValue _windowOrt;
+    private readonly OrtValue _identityOrt;
+    private readonly OrtValue _emotionOrt;
+    private readonly OrtValue _latentsOrt;
+    private OrtValue? _noiseOrt;
+
     private float[]? _cachedNoise;
 
     private bool _disposed;
@@ -132,6 +140,27 @@ public sealed class Audio2FaceInference : IDisposable
         }
 
         sessionOptions.Dispose();
+
+        _windowOrt = OrtValue.CreateTensorValueFromMemory(
+            OrtMemoryInfo.DefaultInstance,
+            _windowBuffer.AsMemory(),
+            [1, AudioBufferLen]
+        );
+        _identityOrt = OrtValue.CreateTensorValueFromMemory(
+            OrtMemoryInfo.DefaultInstance,
+            _identityBuffer.AsMemory(),
+            [1, NumIdentities]
+        );
+        _emotionOrt = OrtValue.CreateTensorValueFromMemory(
+            OrtMemoryInfo.DefaultInstance,
+            _emotionBuffer.AsMemory(),
+            [1, NumCenterFrames, NumEmotions]
+        );
+        _latentsOrt = OrtValue.CreateTensorValueFromMemory(
+            OrtMemoryInfo.DefaultInstance,
+            _latentsBuffer.AsMemory(),
+            [NumDiffusionSteps, NumGruLayers, 1, GruLatentDim]
+        );
     }
 
     /// <summary>
@@ -167,114 +196,53 @@ public sealed class Audio2FaceInference : IDisposable
             );
         }
 
-        // 1. Build window tensor [1, AudioBufferLen]
+        // 1. Update pre-allocated input buffers (OrtValues see changes via shared memory)
         Array.Clear(_windowBuffer);
         var copyLen = Math.Min(audio16Khz.Length, AudioBufferLen);
         audio16Khz[..copyLen].CopyTo(_windowBuffer);
-        var windowTensor = new DenseTensor<float>(_windowBuffer, [1, AudioBufferLen]);
 
-        // 2. Build identity tensor [1, NumIdentities] — one-hot
         Array.Clear(_identityBuffer);
         _identityBuffer[identityIndex] = 1f;
-        var identityTensor = new DenseTensor<float>(_identityBuffer, [1, NumIdentities]);
 
-        // 3. Build emotion tensor [1, NumCenterFrames, NumEmotions] — all zeros (neutral)
         Array.Clear(_emotionBuffer);
-        var emotionTensor = new DenseTensor<float>(
-            _emotionBuffer,
-            [1, NumCenterFrames, NumEmotions]
-        );
 
-        // 4. Build input_latents tensor [NumDiffusionSteps, NumGruLayers, 1, GruLatentDim] — copy from GRU state
         Array.Copy(_gruState, _latentsBuffer, _gruState.Length);
-        var latentsTensor = new DenseTensor<float>(
-            _latentsBuffer,
-            [NumDiffusionSteps, NumGruLayers, 1, GruLatentDim]
-        );
 
-        // 5. Build noise tensor [1, NumDiffusionSteps + 1, TotalFrames, TotalOutputDim] — Gaussian via Box-Muller, cached for session lifetime
-        _cachedNoise ??= GenerateGaussianNoise(
-            1 * (NumDiffusionSteps + 1) * TotalFrames * TotalOutputDim
-        );
-        var noiseTensor = new DenseTensor<float>(
-            _cachedNoise,
-            [1, NumDiffusionSteps + 1, TotalFrames, TotalOutputDim]
-        );
+        EnsureNoiseInitialized();
 
-        var inputs = new List<NamedOnnxValue>(5)
-        {
-            NamedOnnxValue.CreateFromTensor("window", windowTensor),
-            NamedOnnxValue.CreateFromTensor("identity", identityTensor),
-            NamedOnnxValue.CreateFromTensor("emotion", emotionTensor),
-            NamedOnnxValue.CreateFromTensor("input_latents", latentsTensor),
-            NamedOnnxValue.CreateFromTensor("noise", noiseTensor),
-        };
+        // 2. Bind inputs via IoBinding (no managed tensor wrappers)
+        using var ioBinding = _session.CreateIoBinding();
+        ioBinding.BindInput("window", _windowOrt);
+        ioBinding.BindInput("identity", _identityOrt);
+        ioBinding.BindInput("emotion", _emotionOrt);
+        ioBinding.BindInput("input_latents", _latentsOrt);
+        ioBinding.BindInput("noise", _noiseOrt!);
 
-        using var results = _session.Run(inputs);
+        // 3. Bind outputs to CPU (ONNX Runtime allocates result tensors)
+        var cpuMem = OrtMemoryInfo.DefaultInstance;
+        ioBinding.BindOutputToDevice("prediction", cpuMem);
+        ioBinding.BindOutputToDevice("output_latents", cpuMem);
 
-        // Extract prediction and output_latents in a single pass over results
-        Tensor<float>? predictionTensor = null;
-        Tensor<float>? outputLatentsTensor = null;
+        // 4. Run inference
+        using var runOptions = new RunOptions();
+        using var results = _session.RunWithBoundResults(runOptions, ioBinding);
 
-        foreach (var result in results)
-        {
-            switch (result.Name)
-            {
-                case "prediction":
-                    predictionTensor = result.AsTensor<float>();
-                    break;
-                case "output_latents":
-                    outputLatentsTensor = result.AsTensor<float>();
-                    break;
-            }
-
-            if (predictionTensor != null && outputLatentsTensor != null)
-            {
-                break;
-            }
-        }
-
-        if (predictionTensor == null || outputLatentsTensor == null)
-        {
-            throw new InvalidOperationException(
-                "ONNX model did not return expected 'prediction' and 'output_latents' outputs."
-            );
-        }
-
-        // Extract prediction: skip LeftPadFrames, take NumCenterFrames into flat buffers
-        Array.Clear(_skinOutputBuffer);
-        Array.Clear(_eyeOutputBuffer);
-
+        // 5. Extract prediction via Span — replaces 2.16M indexed DenseTensor reads
+        //    with 60 Span.Slice + CopyTo calls.
+        //    prediction shape: [1, TotalFrames, TotalOutputDim]
+        var predSpan = results[0].GetTensorDataAsSpan<float>();
         for (var frame = 0; frame < NumCenterFrames; frame++)
         {
-            var sourceFrame = LeftPadFrames + frame;
-            var skinBase = frame * SkinSize;
-            var eyeBase = frame * EyesSize;
-
-            for (var j = 0; j < SkinSize; j++)
-            {
-                _skinOutputBuffer[skinBase + j] = predictionTensor[0, sourceFrame, j];
-            }
-
-            for (var j = 0; j < EyesSize; j++)
-            {
-                _eyeOutputBuffer[eyeBase + j] = predictionTensor[0, sourceFrame, EyesOffset + j];
-            }
+            var srcOffset = (LeftPadFrames + frame) * TotalOutputDim;
+            predSpan.Slice(srcOffset, SkinSize).CopyTo(_skinOutputBuffer.AsSpan(frame * SkinSize));
+            predSpan
+                .Slice(srcOffset + EyesOffset, EyesSize)
+                .CopyTo(_eyeOutputBuffer.AsSpan(frame * EyesSize));
         }
 
-        // Extract output_latents and copy to GRU state
-        var gruIdx = 0;
-
-        for (var d = 0; d < NumDiffusionSteps; d++)
-        {
-            for (var l = 0; l < NumGruLayers; l++)
-            {
-                for (var h = 0; h < GruLatentDim; h++)
-                {
-                    _gruState[gruIdx++] = outputLatentsTensor[d, l, 0, h];
-                }
-            }
-        }
+        // 6. Extract GRU state — output_latents is [D, L, 1, H], contiguous and
+        //    matches _gruState layout, so a single copy replaces the triple-nested loop.
+        results[1].GetTensorDataAsSpan<float>().CopyTo(_gruState);
 
         return (_skinOutputBuffer, _eyeOutputBuffer, NumCenterFrames);
     }
@@ -306,6 +274,23 @@ public sealed class Audio2FaceInference : IDisposable
         Array.Copy(saved, _gruState, _gruState.Length);
     }
 
+    private void EnsureNoiseInitialized()
+    {
+        if (_noiseOrt is not null)
+        {
+            return;
+        }
+
+        _cachedNoise = GenerateGaussianNoise(
+            1 * (NumDiffusionSteps + 1) * TotalFrames * TotalOutputDim
+        );
+        _noiseOrt = OrtValue.CreateTensorValueFromMemory(
+            OrtMemoryInfo.DefaultInstance,
+            _cachedNoise.AsMemory(),
+            [1, NumDiffusionSteps + 1, TotalFrames, TotalOutputDim]
+        );
+    }
+
     /// <inheritdoc />
     public void Dispose()
     {
@@ -315,6 +300,11 @@ public sealed class Audio2FaceInference : IDisposable
         }
 
         _disposed = true;
+        _windowOrt.Dispose();
+        _identityOrt.Dispose();
+        _emotionOrt.Dispose();
+        _latentsOrt.Dispose();
+        _noiseOrt?.Dispose();
         _session.Dispose();
         _cachedNoise = null;
     }
