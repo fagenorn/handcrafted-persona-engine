@@ -1,5 +1,6 @@
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
+using PersonaEngine.Lib.Utils.Onnx;
 
 namespace PersonaEngine.Lib.TTS.RVC;
 
@@ -26,19 +27,11 @@ public class RmvpeOnnx : IF0Predictor
     {
         _threshold = threshold;
 
-        var options = new SessionOptions
-        {
-            EnableMemoryPattern = true,
-            ExecutionMode = ExecutionMode.ORT_PARALLEL,
-            InterOpNumThreads = Environment.ProcessorCount,
-            IntraOpNumThreads = Environment.ProcessorCount,
-            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL,
-        };
-
-        options.AppendExecutionProvider_CPU();
-
-        _session = new InferenceSession(modelPath, options);
+        _session = OnnxSessionFactory.Create(
+            modelPath,
+            ExecutionProvider.Cpu,
+            logLevel: OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL
+        );
         _melSpectrogram = new MelSpectrogram();
     }
 

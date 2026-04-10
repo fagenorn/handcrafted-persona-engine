@@ -1,6 +1,6 @@
 using System.IO.Compression;
 using System.Text.Json;
-using PersonaEngine.Lib.Utils;
+using PersonaEngine.Lib.Utils.IO;
 
 namespace PersonaEngine.Lib.TTS.Synthesis.LipSync.Audio2Face;
 

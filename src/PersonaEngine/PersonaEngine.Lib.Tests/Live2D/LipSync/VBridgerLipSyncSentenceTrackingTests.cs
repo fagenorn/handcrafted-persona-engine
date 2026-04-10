@@ -18,7 +18,7 @@ public class VBridgerLipSyncSentenceTrackingTests
     private VBridgerLipSyncService CreateService()
     {
         var service = new VBridgerLipSyncService(_logger, _notifier);
-        service._isStarted = true;
+        service.IsStarted = true;
         return service;
     }
 

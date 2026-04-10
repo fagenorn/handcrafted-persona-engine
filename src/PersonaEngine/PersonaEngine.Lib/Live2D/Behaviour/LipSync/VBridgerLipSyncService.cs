@@ -1,7 +1,6 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Adapters;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
-using PersonaEngine.Lib.Live2D.App;
 using PersonaEngine.Lib.TTS.Synthesis;
 
 namespace PersonaEngine.Lib.Live2D.Behaviour.LipSync;
@@ -9,14 +8,14 @@ namespace PersonaEngine.Lib.Live2D.Behaviour.LipSync;
 /// <summary>
 ///     LipSync service for VBridger parameter conventions.
 /// </summary>
-public sealed class VBridgerLipSyncService : ILive2DAnimationService
+public sealed class VBridgerLipSyncService : AnimationServiceBase
 {
     public VBridgerLipSyncService(
         ILogger<VBridgerLipSyncService> logger,
         IAudioProgressNotifier audioProgressNotifier
     )
+        : base(logger)
     {
-        _logger = logger;
         _audioProgressNotifier = audioProgressNotifier;
         _phonemeMap = InitializeMisakiPhonemeMap();
 
@@ -25,12 +24,12 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
 
     private void InitializeCurrentParameters()
     {
-        if (_model == null)
+        if (Model == null)
         {
             return;
         }
 
-        var cubismModel = _model.Model;
+        var cubismModel = Model.Model;
 
         // Fetch initial values from the model
         _currentParameterValues[ParamMouthOpenY] = cubismModel.GetParameterValue(ParamMouthOpenY);
@@ -83,8 +82,6 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
 
     #region Dependencies and State
 
-    private LAppModel? _model;
-
     private readonly IAudioProgressNotifier _audioProgressNotifier;
 
     internal readonly List<TimedPhoneme> _activePhonemes = new();
@@ -97,10 +94,6 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
 
     internal double _cumulativeTimeOffset;
 
-    internal bool _isStarted = false;
-
-    private bool _disposed = false;
-
     private PhonemePose _currentTargetPose = PhonemePose.Neutral;
 
     private PhonemePose _nextTargetPose = PhonemePose.Neutral;
@@ -112,17 +105,12 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
     private readonly Dictionary<string, PhonemePose> _phonemeMap;
 
     private readonly HashSet<char> _phonemeShapeIgnoreChars = ['ˈ', 'ˌ', 'ː']; // Ignore stress/length marks
-
-    private readonly ILogger<VBridgerLipSyncService> _logger;
-
     #endregion
 
-    #region ILipSyncService Implementation
+    #region Lifecycle Hooks
 
     private void SubscribeToAudioProgressNotifier()
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-
         UnsubscribeFromCurrentNotifier();
 
         _audioProgressNotifier.ChunkPlaybackStarted += HandleChunkStarted;
@@ -139,33 +127,30 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
         ResetState();
     }
 
-    public void Start(LAppModel model)
+    protected override void OnStarting()
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-
-        _model = model;
-
         InitializeCurrentParameters();
-
-        _isStarted = true;
-
-        _logger.LogInformation("Started lip syncing.");
     }
 
-    public void Stop()
+    protected override void OnStopping()
     {
-        _isStarted = false;
         ResetState();
-        _logger.LogInformation("Stopped lip syncing.");
+    }
+
+    protected override void OnDisposing()
+    {
+        UnsubscribeFromCurrentNotifier();
+        _activePhonemes.Clear();
+        _currentParameterValues.Clear();
     }
 
     #endregion
 
     #region Update Logic
 
-    public void Update(float deltaTime)
+    public override void Update(float deltaTime)
     {
-        if (deltaTime <= 0.0f || _disposed || !_isStarted || _model == null)
+        if (deltaTime <= 0.0f || !IsStarted || Model == null)
         {
             return;
         }
@@ -185,14 +170,14 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
 
     private void UpdateTargetPoses(float currentTime)
     {
-        if (_model == null || !_isPlaying || _activePhonemes.Count == 0)
+        if (Model == null || !_isPlaying || _activePhonemes.Count == 0)
         {
             if (_currentTargetPose != PhonemePose.Neutral || _nextTargetPose != PhonemePose.Neutral)
             {
                 _currentTargetPose = GetPoseFromCurrentValues();
                 _nextTargetPose = PhonemePose.Neutral;
                 _interpolationT = 0f;
-                _logger.LogTrace("Targeting Neutral Pose.");
+                Logger.LogTrace("Targeting Neutral Pose.");
             }
 
             _currentPhonemeIndex = -1;
@@ -206,7 +191,7 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
         {
             if (foundIndex != _currentPhonemeIndex)
             {
-                _logger.LogTrace(
+                Logger.LogTrace(
                     "Phoneme changed: {PhonemeIndex} -> {FoundIndex} ({Phoneme}) at T={CurrentTime:F3}",
                     _currentPhonemeIndex,
                     foundIndex,
@@ -243,7 +228,7 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
                 _currentTargetPose = GetPoseFromCurrentValues();
                 _nextTargetPose = PhonemePose.Neutral;
                 _interpolationT = 0f;
-                _logger.LogTrace("Targeting Neutral Pose (Gap/End).");
+                Logger.LogTrace("Targeting Neutral Pose (Gap/End).");
             }
 
             if (
@@ -459,16 +444,16 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
 
     private void ApplySmoothedParameters()
     {
-        if (_model == null)
+        if (Model == null)
         {
-            _logger.LogWarning("Attempted to apply parameters but model is null.");
+            Logger.LogWarning("Attempted to apply parameters but model is null.");
 
             return;
         }
 
         try
         {
-            var cubismModel = _model.Model;
+            var cubismModel = Model.Model;
             cubismModel.SetParameterValue(
                 ParamMouthOpenY,
                 _currentParameterValues[ParamMouthOpenY]
@@ -499,7 +484,7 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error applying Live2D parameters");
+            Logger.LogError(ex, "Error applying Live2D parameters");
         }
     }
 
@@ -509,7 +494,7 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
 
     private void HandleChunkStarted(object? sender, AudioChunkPlaybackStartedEvent e)
     {
-        if (!_isStarted)
+        if (!IsStarted)
         {
             return;
         }
@@ -519,7 +504,7 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
 
         if (isNewSentence)
         {
-            _logger.LogTrace("New sentence started: {SentenceId}", chunk.SentenceId);
+            Logger.LogTrace("New sentence started: {SentenceId}", chunk.SentenceId);
             _currentSentenceId = chunk.SentenceId;
             _cumulativeTimeOffset = 0.0;
             _activePhonemes.Clear();
@@ -534,7 +519,7 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
         }
         else
         {
-            _logger.LogTrace(
+            Logger.LogTrace(
                 "Sentence {SentenceId}: continuation chunk at offset {Offset:F3}s",
                 chunk.SentenceId,
                 _cumulativeTimeOffset
@@ -554,12 +539,12 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
 
     private void HandleChunkEnded(object? sender, AudioChunkPlaybackEndedEvent e)
     {
-        if (!_isStarted)
+        if (!IsStarted)
         {
             return;
         }
 
-        _logger.LogTrace("Audio Chunk Playback Ended.");
+        Logger.LogTrace("Audio Chunk Playback Ended.");
 
         if (e.Chunk.SentenceId == _currentSentenceId)
         {
@@ -573,7 +558,7 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
 
     private void HandleProgress(object? sender, AudioPlaybackProgressEvent e)
     {
-        if (!_isStarted || !_isPlaying)
+        if (!IsStarted || !_isPlaying)
         {
             return;
         }
@@ -593,7 +578,7 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
         _nextTargetPose = PhonemePose.Neutral;
         _interpolationT = 0f;
         InitializeCurrentParameters();
-        _logger.LogTrace("LipSync state reset.");
+        Logger.LogTrace("LipSync state reset.");
     }
 
     #endregion
@@ -619,7 +604,7 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
                 || token.EndTs.Value <= token.StartTs.Value
             )
             {
-                _logger.LogTrace(
+                Logger.LogTrace(
                     "Skipping invalid token: Phonemes='{Phonemes}', Start={StartTs}, End={EndTs}",
                     token.Phonemes,
                     token.StartTs,
@@ -635,7 +620,7 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
             var phonemeChars = SplitPhonemes(token.Phonemes);
             if (phonemeChars.Count == 0)
             {
-                _logger.LogTrace(
+                Logger.LogTrace(
                     "No valid phoneme characters found in token: '{Phonemes}'",
                     token.Phonemes
                 );
@@ -666,7 +651,7 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
 
         if (_activePhonemes.Count > beforeCount)
         {
-            _logger.LogDebug(
+            Logger.LogDebug(
                 "Appended {Count} timed phonemes (total: {Total}).",
                 _activePhonemes.Count - beforeCount,
                 _activePhonemes.Count
@@ -700,7 +685,7 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
             return pose;
         }
 
-        _logger.LogDebug("Phoneme '{Phoneme}' not found in map. Returning Neutral.", phoneme);
+        Logger.LogDebug("Phoneme '{Phoneme}' not found in map. Returning Neutral.", phoneme);
 
         return PhonemePose.Neutral;
     }
@@ -944,35 +929,6 @@ public sealed class VBridgerLipSyncService : ILive2DAnimationService
         map.Add("ɒ", new PhonemePose(0.8f, 0.9f, funnel: 0.2f, puckerWiden: 0.1f, pressLip: 0.8f)); // 'on': Open, slight funnel, slight pucker, separated
 
         return map;
-    }
-
-    #endregion
-
-    #region IDisposable Implementation
-
-    public void Dispose()
-    {
-        Dispose(true);
-    }
-
-    private void Dispose(bool disposing)
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        if (disposing)
-        {
-            _logger.LogDebug("Disposing...");
-            Stop();
-            UnsubscribeFromCurrentNotifier();
-            _activePhonemes.Clear();
-            _currentParameterValues.Clear();
-        }
-
-        _disposed = true;
-        _logger.LogInformation("Disposed");
     }
 
     #endregion

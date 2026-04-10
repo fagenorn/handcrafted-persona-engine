@@ -1,7 +1,7 @@
-using System.Buffers;
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
+using PersonaEngine.Lib.Utils.Pooling;
 
 namespace PersonaEngine.Lib.TTS.Synthesis.Qwen3;
 
@@ -62,20 +62,20 @@ public sealed class Qwen3StreamingAudioDecoder : IDisposable
         var codesLen = numFrames * NumCodeGroups;
 
         // Build audio_codes [1, numFrames, 16] as int64
-        var codesBuffer = ArrayPool<long>.Shared.Rent(Math.Max(codesLen, 1));
+        using var codesBuffer = PooledArray<long>.Rent(Math.Max(codesLen, 1));
 
-        try
         {
             for (var f = 0; f < numFrames; f++)
             {
                 var frame = frames[f];
                 for (var g = 0; g < NumCodeGroups; g++)
                 {
-                    codesBuffer[f * NumCodeGroups + g] = Math.Clamp(frame[g], 0, 2047);
+                    codesBuffer.Array[f * NumCodeGroups + g] = Math.Clamp(frame[g], 0, 2047);
                 }
             }
 
-            var codesMemory = codesLen > 0 ? codesBuffer.AsMemory(0, codesLen) : Memory<long>.Empty;
+            var codesMemory =
+                codesLen > 0 ? codesBuffer.Array.AsMemory(0, codesLen) : Memory<long>.Empty;
 
             using var codesOrt = OrtValue.CreateTensorValueFromMemory(
                 OrtMemoryInfo.DefaultInstance,
@@ -198,10 +198,6 @@ public sealed class Qwen3StreamingAudioDecoder : IDisposable
             }
 
             return audio;
-        }
-        finally
-        {
-            ArrayPool<long>.Shared.Return(codesBuffer);
         }
     }
 

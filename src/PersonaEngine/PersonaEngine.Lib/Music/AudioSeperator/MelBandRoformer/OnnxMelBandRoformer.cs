@@ -4,6 +4,8 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
+using PersonaEngine.Lib.Utils.Onnx;
+using PersonaEngine.Lib.Utils.Pooling;
 
 namespace PersonaEngine.Lib.Music.AudioSeperator.MelBandRoformer;
 
@@ -57,36 +59,22 @@ public class OnnxMelBandRoformer : IAudioSourceSeparator, IAsyncDisposable
         if (_session is not null)
             return;
 
-        var so = new SessionOptions
-        {
-            EnableMemoryPattern = true,
-            ExecutionMode = ExecutionMode.ORT_SEQUENTIAL,
-            InterOpNumThreads = Math.Max(1, Environment.ProcessorCount / 2),
-            IntraOpNumThreads = Environment.ProcessorCount,
-            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR,
-        };
-
-        // Safe runtime perf toggles
-        so.AddSessionConfigEntry("session.set_denormal_as_zero", "1");
-        so.AddSessionConfigEntry("session.intra_op.allow_spinning", "1");
-        so.AddSessionConfigEntry("session.inter_op.allow_spinning", "1");
-        so.AddSessionConfigEntry("session.enable_quant_qdq_cleanup", "1");
-        so.AddSessionConfigEntry("session.qdq_matmulnbits_accuracy_level", "4");
-        so.AddSessionConfigEntry("optimization.enable_gelu_approximation", "1");
-        so.AddSessionConfigEntry("disable_synchronize_execution_providers", "1");
-        so.AddSessionConfigEntry("session.use_device_allocator_for_initializers", "1");
-
-        // Try CUDA if available; otherwise CPU is fine.
-        try
-        {
-            so.AppendExecutionProvider_CUDA();
-        }
-        catch
-        { /* ignore if not available */
-        }
-
-        _session = new InferenceSession(_cfg.ModelPath, so);
+        _session = OnnxSessionFactory.Create(
+            _cfg.ModelPath,
+            ExecutionProvider.CudaWithCpuFallback,
+            SessionProfile.HalfParallel,
+            configure: opts =>
+            {
+                opts.AddSessionConfigEntry("session.set_denormal_as_zero", "1");
+                opts.AddSessionConfigEntry("session.intra_op.allow_spinning", "1");
+                opts.AddSessionConfigEntry("session.inter_op.allow_spinning", "1");
+                opts.AddSessionConfigEntry("session.enable_quant_qdq_cleanup", "1");
+                opts.AddSessionConfigEntry("session.qdq_matmulnbits_accuracy_level", "4");
+                opts.AddSessionConfigEntry("optimization.enable_gelu_approximation", "1");
+                opts.AddSessionConfigEntry("disable_synchronize_execution_providers", "1");
+                opts.AddSessionConfigEntry("session.use_device_allocator_for_initializers", "1");
+            }
+        );
         var inputs = _session.InputMetadata;
         var outputs = _session.OutputMetadata;
         _inName = GetSingleName(inputs, preferContains: "input");
@@ -185,10 +173,10 @@ public class OnnxMelBandRoformer : IAudioSourceSeparator, IAsyncDisposable
 
                 // Get flat span of output. If channel-last, reorder to [C, Lout].
                 var oSpanRaw = ((DenseTensor<float>)outTensor).Buffer.Span;
-                float[]? chFirstTmp = null; // from pool if needed
-                Span<float> oChFirst = isChannelFirst
-                    ? oSpanRaw
-                    : (chFirstTmp = _pool.Rent(C * Lout)).AsSpan(0, C * Lout);
+                var chFirstRent = isChannelFirst
+                    ? (PooledArray<float>?)null
+                    : PooledArray<float>.Rent(C * Lout);
+                Span<float> oChFirst = isChannelFirst ? oSpanRaw : chFirstRent!.Value.Span;
 
                 if (!isChannelFirst)
                 {
@@ -207,22 +195,9 @@ public class OnnxMelBandRoformer : IAudioSourceSeparator, IAsyncDisposable
                 int framesToAppend = Lout - pendingBefore;
                 if (framesToAppend > 0)
                 {
-                    var mixTail = _pool.Rent(framesToAppend * C);
-                    try
-                    {
-                        PlanarTailToInterleaved(
-                            deint,
-                            mixTail.AsSpan(0, framesToAppend * C),
-                            C,
-                            L,
-                            framesToAppend
-                        );
-                        _mixTimeline!.Write(mixTail.AsSpan(0, framesToAppend * C));
-                    }
-                    finally
-                    {
-                        _pool.Return(mixTail);
-                    }
+                    using var mixTail = PooledArray<float>.Rent(framesToAppend * C);
+                    PlanarTailToInterleaved(deint, mixTail.Span, C, L, framesToAppend);
+                    _mixTimeline!.Write(mixTail.Span);
                 }
 
                 // Overlap-add model output into target accumulators.
@@ -237,8 +212,7 @@ public class OnnxMelBandRoformer : IAudioSourceSeparator, IAsyncDisposable
                 );
 
                 // Recycle channel-last reorder buffer if we allocated it
-                if (chFirstTmp is not null)
-                    _pool.Return(chFirstTmp);
+                chFirstRent?.Dispose();
 
                 // Emit as many frames as our hop allows (and available).
                 int availableFrames = Math.Min(
@@ -528,21 +502,14 @@ public class OnnxMelBandRoformer : IAudioSourceSeparator, IAsyncDisposable
     )
     {
         // Read new hop frames into a small planar scratch, then scatter to each channel tail.
-        var scratch = _pool.Rent(C * hop);
-        try
-        {
-            var s = scratch.AsSpan(0, C * hop);
-            fifo.ReadInterleavedToPlanar(s, C, hop, peekOnly: false);
+        using var scratch = PooledArray<float>.Rent(C * hop);
+        var s = scratch.Span;
+        fifo.ReadInterleavedToPlanar(s, C, hop, peekOnly: false);
 
-            for (int c = 0; c < C; c++)
-            {
-                // copy scratch[c][0..hop) -> planar[c][L-hop .. L)
-                s.Slice(c * hop, hop).CopyTo(planar.Slice(c * L + (L - hop), hop));
-            }
-        }
-        finally
+        for (int c = 0; c < C; c++)
         {
-            _pool.Return(scratch);
+            // copy scratch[c][0..hop) -> planar[c][L-hop .. L)
+            s.Slice(c * hop, hop).CopyTo(planar.Slice(c * L + (L - hop), hop));
         }
     }
 

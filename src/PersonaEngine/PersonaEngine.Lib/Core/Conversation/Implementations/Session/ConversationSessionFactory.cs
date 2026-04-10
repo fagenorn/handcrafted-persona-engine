@@ -50,7 +50,9 @@ public class ConversationSessionFactory(
             BargeInType.Ignore => new IgnoreBargeInStrategy(),
             BargeInType.Allow => new AllowBargeInStrategy(),
             BargeInType.NoSpeaking => new NoSpeakingBargeInStrategy(),
-            BargeInType.MinWordsNoSpeaking => new MinWordsNoSpeakingStrategy(),
+            BargeInType.MinWordsNoSpeaking => new MinWordsNoSpeakingStrategy(
+                new MinWordsBargeInStrategy()
+            ),
             BargeInType.MinWords => new MinWordsBargeInStrategy(),
             _ => throw new ArgumentOutOfRangeException(
                 nameof(options.BargeInType),

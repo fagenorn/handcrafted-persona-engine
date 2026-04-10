@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
 using PersonaEngine.Lib.IO;
+using PersonaEngine.Lib.Utils.Onnx;
 
 namespace PersonaEngine.Lib.TTS.Synthesis.LipSync.Audio2Face;
 
@@ -99,47 +100,13 @@ public sealed class Audio2FaceInference : IDisposable
 
         var modelPath = modelProvider.GetModelPath(IO.ModelType.Audio2Face.Network);
 
-        var sessionOptions = new SessionOptions
-        {
-            EnableMemoryPattern = true,
-            ExecutionMode = ExecutionMode.ORT_SEQUENTIAL,
-            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR,
-        };
+        _session = OnnxSessionFactory.Create(
+            modelPath,
+            useGpu ? ExecutionProvider.CudaWithCpuFallback : ExecutionProvider.Cpu,
+            SessionProfile.Sequential
+        );
 
-        if (useGpu)
-        {
-            try
-            {
-                sessionOptions.AppendExecutionProvider_CUDA();
-                _logger?.LogInformation("Audio2Face: CUDA execution provider enabled.");
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogWarning(
-                    ex,
-                    "Audio2Face: Failed to initialize CUDA, falling back to CPU."
-                );
-            }
-        }
-
-        try
-        {
-            _session = new InferenceSession(modelPath, sessionOptions);
-            _logger?.LogInformation(
-                "Audio2Face: ONNX session created from {ModelPath}.",
-                modelPath
-            );
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogError(ex, "Audio2Face: Failed to create ONNX inference session.");
-            sessionOptions.Dispose();
-
-            throw;
-        }
-
-        sessionOptions.Dispose();
+        _logger?.LogInformation("Audio2Face: ONNX session created from {ModelPath}.", modelPath);
 
         _windowOrt = OrtValue.CreateTensorValueFromMemory(
             OrtMemoryInfo.DefaultInstance,

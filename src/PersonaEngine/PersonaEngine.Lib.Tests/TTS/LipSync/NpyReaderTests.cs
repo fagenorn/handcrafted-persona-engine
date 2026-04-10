@@ -1,4 +1,4 @@
-using PersonaEngine.Lib.Utils;
+using PersonaEngine.Lib.Utils.IO;
 using Xunit;
 
 namespace PersonaEngine.Lib.Tests.TTS.LipSync;

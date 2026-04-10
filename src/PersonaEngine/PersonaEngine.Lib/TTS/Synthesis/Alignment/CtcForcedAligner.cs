@@ -6,7 +6,10 @@ using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
 using PersonaEngine.Lib.Audio;
 using PersonaEngine.Lib.IO;
-using PersonaEngine.Lib.Utils;
+using PersonaEngine.Lib.Utils.Numerics;
+using PersonaEngine.Lib.Utils.Onnx;
+using PersonaEngine.Lib.Utils.Pooling;
+using PersonaEngine.Lib.Utils.Text;
 
 namespace PersonaEngine.Lib.TTS.Synthesis.Alignment;
 
@@ -39,24 +42,11 @@ public sealed class CtcForcedAligner : IForcedAligner
         var modelPath = modelProvider.GetModelPath(IO.ModelType.Ctc.Model);
         var vocabPath = modelProvider.GetModelPath(IO.ModelType.Ctc.Vocab);
 
-        using var opts = new SessionOptions
-        {
-            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-            ExecutionMode = ExecutionMode.ORT_SEQUENTIAL,
-            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR,
-        };
-
-        try
-        {
-            opts.AppendExecutionProvider_CUDA();
-            logger?.LogInformation("CTC forced aligner: CUDA execution provider enabled.");
-        }
-        catch (Exception ex)
-        {
-            logger?.LogWarning(ex, "CTC forced aligner: CUDA init failed, falling back to CPU.");
-        }
-
-        _session = new InferenceSession(modelPath, opts);
+        _session = OnnxSessionFactory.Create(
+            modelPath,
+            ExecutionProvider.CudaWithCpuFallback,
+            SessionProfile.Sequential
+        );
 
         // Load vocabulary: char → index mapping
         var vocabJson = JsonSerializer.Deserialize<Dictionary<string, int>>(
@@ -92,31 +82,18 @@ public sealed class CtcForcedAligner : IForcedAligner
 
         var audioDurationSec = audio.Length / (double)sampleRate;
         var audio16Khz = ResampleTo16Khz(audio, sampleRate, out var resampledRent);
-        float[]? logProbs = null;
 
-        try
+        using (resampledRent)
         {
-            logProbs = RunWav2Vec(audio16Khz, out var logProbsLength);
-            var numFrames = logProbsLength / VocabSize;
+            using var logProbs = RunWav2Vec(audio16Khz);
+            var numFrames = logProbs.Length / VocabSize;
             var frameDuration = audioDurationSec / numFrames;
 
             var ctcText = text.ToUpperInvariant().Replace(' ', '|');
             var labels = BuildCtcLabels(ctcText);
-            var path = ViterbiAlign(logProbs, numFrames, labels);
+            var path = ViterbiAlign(logProbs.Array, numFrames, labels);
 
-            return ExtractWordTimings(path, labels, ctcText, frameDuration, logProbs);
-        }
-        finally
-        {
-            if (logProbs is not null)
-            {
-                ArrayPool<float>.Shared.Return(logProbs);
-            }
-
-            if (resampledRent is not null)
-            {
-                ArrayPool<float>.Shared.Return(resampledRent);
-            }
+            return ExtractWordTimings(path, labels, ctcText, frameDuration, logProbs.Array);
         }
     }
 
@@ -132,16 +109,15 @@ public sealed class CtcForcedAligner : IForcedAligner
 
         var windowDurationSec = audioWindow.Length / (double)sampleRate;
         var audio16Khz = ResampleTo16Khz(audioWindow, sampleRate, out var resampledRent);
-        float[]? logProbs = null;
 
-        try
+        using (resampledRent)
         {
-            logProbs = RunWav2Vec(audio16Khz, out var logProbsLength);
-            var numFrames = logProbsLength / VocabSize;
+            using var logProbs = RunWav2Vec(audio16Khz);
+            var numFrames = logProbs.Length / VocabSize;
             var frameDuration = windowDurationSec / numFrames;
 
             // Greedy decode on the window to see which remaining words are present
-            var greedyText = GreedyDecode(logProbs, numFrames);
+            var greedyText = GreedyDecode(logProbs.Array, numFrames);
             var spokenCount = CountSpokenWords(greedyText, remainingText);
 
             _logger?.LogDebug(
@@ -162,10 +138,16 @@ public sealed class CtcForcedAligner : IForcedAligner
             var prefixText = string.Join(' ', words, 0, spokenCount);
             var ctcText = prefixText.ToUpperInvariant().Replace(' ', '|');
             var labels = BuildCtcLabels(ctcText);
-            var path = ViterbiAlign(logProbs, numFrames, labels);
+            var path = ViterbiAlign(logProbs.Array, numFrames, labels);
 
             // Extract timings relative to window, then offset to absolute time
-            var windowResult = ExtractWordTimings(path, labels, ctcText, frameDuration, logProbs);
+            var windowResult = ExtractWordTimings(
+                path,
+                labels,
+                ctcText,
+                frameDuration,
+                logProbs.Array
+            );
 
             // Offset all timings by windowStartTime to get absolute times
             var buffer = ArrayPool<WordTiming>.Shared.Rent(windowResult.Count);
@@ -185,18 +167,6 @@ public sealed class CtcForcedAligner : IForcedAligner
 
             return new AlignmentResult(buffer, count);
         }
-        finally
-        {
-            if (logProbs is not null)
-            {
-                ArrayPool<float>.Shared.Return(logProbs);
-            }
-
-            if (resampledRent is not null)
-            {
-                ArrayPool<float>.Shared.Return(resampledRent);
-            }
-        }
     }
 
     public void Dispose()
@@ -213,12 +183,12 @@ public sealed class CtcForcedAligner : IForcedAligner
     /// <summary>
     ///     Resamples audio to 16kHz for wav2vec2. Returns the 16kHz span via the return value
     ///     and optionally a rented buffer via <paramref name="rentedBuffer" /> that the caller
-    ///     must return to the pool when done.
+    ///     must dispose when done.
     /// </summary>
     private static ReadOnlySpan<float> ResampleTo16Khz(
         ReadOnlySpan<float> audio,
         int sampleRate,
-        out float[]? rentedBuffer
+        out PooledArray<float>? rentedBuffer
     )
     {
         if ((uint)sampleRate == Wav2VecSampleRate)
@@ -234,15 +204,15 @@ public sealed class CtcForcedAligner : IForcedAligner
             Wav2VecSampleRate
         );
 
-        var sourceRent = ArrayPool<float>.Shared.Rent(audio.Length);
-        audio.CopyTo(sourceRent.AsSpan(0, audio.Length));
+        using var sourceRent = PooledArray<float>.Rent(audio.Length);
+        audio.CopyTo(sourceRent.Span);
 
-        rentedBuffer = ArrayPool<float>.Shared.Rent(targetFrames);
+        var resampledRent = PooledArray<float>.Rent(targetFrames);
         try
         {
             AudioConverter.ResampleFloat(
-                sourceRent.AsMemory(0, audio.Length),
-                rentedBuffer.AsMemory(0, targetFrames),
+                sourceRent.Array.AsMemory(0, audio.Length),
+                resampledRent.Array.AsMemory(0, targetFrames),
                 channels: 1,
                 (uint)sampleRate,
                 Wav2VecSampleRate
@@ -250,16 +220,14 @@ public sealed class CtcForcedAligner : IForcedAligner
         }
         catch
         {
-            ArrayPool<float>.Shared.Return(rentedBuffer);
+            resampledRent.Dispose();
             rentedBuffer = null;
             throw;
         }
-        finally
-        {
-            ArrayPool<float>.Shared.Return(sourceRent);
-        }
 
-        return rentedBuffer.AsSpan(0, targetFrames);
+        rentedBuffer = resampledRent;
+
+        return resampledRent.Span;
     }
 
     /// <summary>
@@ -361,42 +329,34 @@ public sealed class CtcForcedAligner : IForcedAligner
         return bestMatchedWords;
     }
 
-    private float[] RunWav2Vec(ReadOnlySpan<float> audio16Khz, out int logProbsLength)
+    private PooledArray<float> RunWav2Vec(ReadOnlySpan<float> audio16Khz)
     {
-        var audioRent = ArrayPool<float>.Shared.Rent(audio16Khz.Length);
-        audio16Khz.CopyTo(audioRent.AsSpan(0, audio16Khz.Length));
+        using var audioRent = PooledArray<float>.Rent(audio16Khz.Length);
+        audio16Khz.CopyTo(audioRent.Span);
 
-        try
+        var inputShape = new long[] { 1, audio16Khz.Length };
+        using var inputOrt = OrtValue.CreateTensorValueFromMemory(
+            OrtMemoryInfo.DefaultInstance,
+            audioRent.Array.AsMemory(0, audio16Khz.Length),
+            inputShape
+        );
+
+        using var runOptions = new RunOptions();
+        using var results = _session.Run(runOptions, InputNames, [inputOrt], OutputNames);
+
+        // Output shape: [1, T, 32] — apply log_softmax
+        var logitsSpan = results[0].GetTensorDataAsSpan<float>();
+        var logProbs = PooledArray<float>.Rent(logitsSpan.Length);
+        logitsSpan.CopyTo(logProbs.Span);
+
+        var numFrames = logProbs.Length / VocabSize;
+        for (var t = 0; t < numFrames; t++)
         {
-            var inputShape = new long[] { 1, audio16Khz.Length };
-            using var inputOrt = OrtValue.CreateTensorValueFromMemory(
-                OrtMemoryInfo.DefaultInstance,
-                audioRent.AsMemory(0, audio16Khz.Length),
-                inputShape
-            );
-
-            using var runOptions = new RunOptions();
-            using var results = _session.Run(runOptions, InputNames, [inputOrt], OutputNames);
-
-            // Output shape: [1, T, 32] — apply log_softmax
-            var logitsSpan = results[0].GetTensorDataAsSpan<float>();
-            logProbsLength = logitsSpan.Length;
-            var logProbs = ArrayPool<float>.Shared.Rent(logProbsLength);
-            logitsSpan.CopyTo(logProbs.AsSpan(0, logProbsLength));
-
-            var numFrames = logProbsLength / VocabSize;
-            for (var t = 0; t < numFrames; t++)
-            {
-                var offset = t * VocabSize;
-                SpanMathExtensions.LogSoftmaxInPlace(logProbs.AsSpan(offset, VocabSize));
-            }
-
-            return logProbs;
+            var offset = t * VocabSize;
+            SpanMathExtensions.LogSoftmaxInPlace(logProbs.Array.AsSpan(offset, VocabSize));
         }
-        finally
-        {
-            ArrayPool<float>.Shared.Return(audioRent);
-        }
+
+        return logProbs;
     }
 
     /// <summary>
@@ -429,111 +389,103 @@ public sealed class CtcForcedAligner : IForcedAligner
         var labelCount = labels.Length;
 
         // Rent pooled arrays for trellis and backpointers
-        var trellisRent = ArrayPool<float>.Shared.Rent(numFrames * labelCount);
-        var backptrRent = ArrayPool<int>.Shared.Rent(numFrames * labelCount);
-        var trellis = trellisRent.AsSpan(0, numFrames * labelCount);
-        var backptr = backptrRent.AsSpan(0, numFrames * labelCount);
+        using var trellisRent = PooledArray<float>.Rent(numFrames * labelCount);
+        using var backptrRent = PooledArray<int>.Rent(numFrames * labelCount);
+        var trellis = trellisRent.Span;
+        var backptr = backptrRent.Span;
 
-        try
+        // Initialize with -inf
+        trellis.Fill(float.NegativeInfinity);
+        backptr.Clear();
+
+        // t=0: can start at blank (j=0) or first char (j=1)
+        trellis[0 * labelCount + 0] = logProbs[0 * VocabSize + labels[0]];
+        if (labelCount > 1)
         {
-            // Initialize with -inf
-            trellis.Fill(float.NegativeInfinity);
-            backptr.Clear();
+            trellis[0 * labelCount + 1] = logProbs[0 * VocabSize + labels[1]];
+        }
 
-            // t=0: can start at blank (j=0) or first char (j=1)
-            trellis[0 * labelCount + 0] = logProbs[0 * VocabSize + labels[0]];
-            if (labelCount > 1)
+        // Forward pass
+        for (var t = 1; t < numFrames; t++)
+        {
+            for (var j = 0; j < labelCount; j++)
             {
-                trellis[0 * labelCount + 1] = logProbs[0 * VocabSize + labels[1]];
-            }
+                var labelIdx = labels[j];
+                var emission = logProbs[t * VocabSize + labelIdx];
+                var bestScore = float.NegativeInfinity;
+                var bestBack = 0;
 
-            // Forward pass
-            for (var t = 1; t < numFrames; t++)
-            {
-                for (var j = 0; j < labelCount; j++)
+                // Option 1: stay at j
+                var stayScore = trellis[(t - 1) * labelCount + j];
+                if (stayScore > bestScore)
                 {
-                    var labelIdx = labels[j];
-                    var emission = logProbs[t * VocabSize + labelIdx];
-                    var bestScore = float.NegativeInfinity;
-                    var bestBack = 0;
+                    bestScore = stayScore;
+                    bestBack = 0;
+                }
 
-                    // Option 1: stay at j
-                    var stayScore = trellis[(t - 1) * labelCount + j];
-                    if (stayScore > bestScore)
+                // Option 2: from j-1 (advance one label position)
+                if (j > 0)
+                {
+                    var prevLabel = labels[j - 1];
+                    if (labelIdx == BlankIdx || labelIdx != prevLabel)
                     {
-                        bestScore = stayScore;
-                        bestBack = 0;
-                    }
-
-                    // Option 2: from j-1 (advance one label position)
-                    if (j > 0)
-                    {
-                        var prevLabel = labels[j - 1];
-                        if (labelIdx == BlankIdx || labelIdx != prevLabel)
+                        var advScore = trellis[(t - 1) * labelCount + (j - 1)];
+                        if (advScore > bestScore)
                         {
-                            var advScore = trellis[(t - 1) * labelCount + (j - 1)];
-                            if (advScore > bestScore)
-                            {
-                                bestScore = advScore;
-                                bestBack = -1;
-                            }
+                            bestScore = advScore;
+                            bestBack = -1;
                         }
-                    }
-
-                    // Option 3: from j-2 (skip blank for repeated chars)
-                    if (j > 1 && labelIdx != BlankIdx)
-                    {
-                        var twoBackLabel = labels[j - 2];
-                        if (labelIdx != twoBackLabel)
-                        {
-                            var skipScore = trellis[(t - 1) * labelCount + (j - 2)];
-                            if (skipScore > bestScore)
-                            {
-                                bestScore = skipScore;
-                                bestBack = -2;
-                            }
-                        }
-                    }
-
-                    if (bestScore > float.NegativeInfinity)
-                    {
-                        trellis[t * labelCount + j] = bestScore + emission;
-                        backptr[t * labelCount + j] = bestBack;
                     }
                 }
-            }
 
-            // Backtrack from the best end position
-            var endJ = labelCount - 1;
-            if (
-                labelCount > 1
-                && trellis[(numFrames - 1) * labelCount + labelCount - 2]
-                    > trellis[(numFrames - 1) * labelCount + labelCount - 1]
-            )
-            {
-                endJ = labelCount - 2;
-            }
+                // Option 3: from j-2 (skip blank for repeated chars)
+                if (j > 1 && labelIdx != BlankIdx)
+                {
+                    var twoBackLabel = labels[j - 2];
+                    if (labelIdx != twoBackLabel)
+                    {
+                        var skipScore = trellis[(t - 1) * labelCount + (j - 2)];
+                        if (skipScore > bestScore)
+                        {
+                            bestScore = skipScore;
+                            bestBack = -2;
+                        }
+                    }
+                }
 
-            var path = new List<(int Frame, int Label)>(numFrames);
-            for (var i = 0; i < numFrames; i++)
-            {
-                path.Add(default);
+                if (bestScore > float.NegativeInfinity)
+                {
+                    trellis[t * labelCount + j] = bestScore + emission;
+                    backptr[t * labelCount + j] = bestBack;
+                }
             }
-
-            var currentJ = endJ;
-            for (var t = numFrames - 1; t >= 0; t--)
-            {
-                path[t] = (t, currentJ);
-                currentJ += backptr[t * labelCount + currentJ];
-            }
-
-            return path;
         }
-        finally
+
+        // Backtrack from the best end position
+        var endJ = labelCount - 1;
+        if (
+            labelCount > 1
+            && trellis[(numFrames - 1) * labelCount + labelCount - 2]
+                > trellis[(numFrames - 1) * labelCount + labelCount - 1]
+        )
         {
-            ArrayPool<float>.Shared.Return(trellisRent);
-            ArrayPool<int>.Shared.Return(backptrRent);
+            endJ = labelCount - 2;
         }
+
+        var path = new List<(int Frame, int Label)>(numFrames);
+        for (var i = 0; i < numFrames; i++)
+        {
+            path.Add(default);
+        }
+
+        var currentJ = endJ;
+        for (var t = numFrames - 1; t >= 0; t--)
+        {
+            path[t] = (t, currentJ);
+            currentJ += backptr[t * labelCount + currentJ];
+        }
+
+        return path;
     }
 
     /// <summary>

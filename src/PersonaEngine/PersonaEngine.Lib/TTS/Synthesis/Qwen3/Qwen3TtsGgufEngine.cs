@@ -5,7 +5,9 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
 using PersonaEngine.Lib.IO;
+using PersonaEngine.Lib.TTS.Synthesis;
 using PersonaEngine.Lib.TTS.Synthesis.Alignment;
+using PersonaEngine.Lib.Utils.Onnx;
 
 namespace PersonaEngine.Lib.TTS.Synthesis.Qwen3;
 
@@ -93,17 +95,10 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
         logger?.LogInformation("LLamaSharp models loaded in {Elapsed}ms", sw.ElapsedMilliseconds);
 
         // Load streaming audio decoder (ONNX, GPU-accelerated)
-        var decoderOpts = new SessionOptions
-        {
-            EnableMemoryPattern = true,
-            ExecutionMode = ExecutionMode.ORT_SEQUENTIAL,
-            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR,
-        };
-        decoderOpts.AppendExecutionProvider_CUDA();
-        var decoderSession = new InferenceSession(
+        var decoderSession = OnnxSessionFactory.Create(
             modelProvider.GetModelPath(IO.ModelType.Qwen3.Decoder),
-            decoderOpts
+            ExecutionProvider.Cuda,
+            SessionProfile.Sequential
         );
 
         logger?.LogInformation("All models loaded in {Elapsed}ms total", sw.ElapsedMilliseconds);
@@ -525,12 +520,14 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                         .ToArray();
 
                     var (tokStart, tokCount) = wordToTokenRange[w];
-                    ApplyTimingToTokenRange(
+                    TokenTimingUtils.DistributeTimings(
                         tokens,
                         tokStart,
                         tokCount,
-                        absoluteTimings[w]!.Value,
-                        sliceStartSec
+                        absoluteTimings[w]!.Value.Start,
+                        absoluteTimings[w]!.Value.End,
+                        sliceStartSec,
+                        t => t.Text.Length
                     );
 
                     var tokenSlice = new ArraySegment<Token>(tokens, tokStart, tokCount);
@@ -580,12 +577,14 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                         .ToArray();
 
                     var (tokStart, tokCount) = wordToTokenRange[w];
-                    ApplyTimingToTokenRange(
+                    TokenTimingUtils.DistributeTimings(
                         tokens,
                         tokStart,
                         tokCount,
-                        absoluteTimings[w]!.Value,
-                        sliceStartSec
+                        absoluteTimings[w]!.Value.Start,
+                        absoluteTimings[w]!.Value.End,
+                        sliceStartSec,
+                        t => t.Text.Length
                     );
 
                     var tokenSlice = new ArraySegment<Token>(tokens, tokStart, tokCount);
@@ -654,45 +653,6 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
         }
 
         return mapping;
-    }
-
-    /// <summary>
-    ///     Applies CTC word timing to a range of phonemizer tokens by distributing
-    ///     the duration proportionally across the tokens in the range.
-    /// </summary>
-    private static void ApplyTimingToTokenRange(
-        Token[] tokens,
-        int start,
-        int count,
-        (double Start, double End) timing,
-        double sliceOffset
-    )
-    {
-        if (count == 1)
-        {
-            tokens[start].StartTs = timing.Start - sliceOffset;
-            tokens[start].EndTs = timing.End - sliceOffset;
-            return;
-        }
-
-        // Distribute timing proportionally by text length
-        var totalLen = 0;
-        for (var i = start; i < start + count; i++)
-        {
-            totalLen += Math.Max(1, tokens[i].Text.Length);
-        }
-
-        var duration = timing.End - timing.Start;
-        var cursor = timing.Start;
-
-        for (var i = start; i < start + count; i++)
-        {
-            var fraction = (double)Math.Max(1, tokens[i].Text.Length) / totalLen;
-            var tokenDuration = duration * fraction;
-            tokens[i].StartTs = cursor - sliceOffset;
-            tokens[i].EndTs = cursor + tokenDuration - sliceOffset;
-            cursor += tokenDuration;
-        }
     }
 
     public void Dispose()

@@ -3,7 +3,7 @@
 using System.Numerics.Tensors;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
-using PersonaEngine.Lib.Utils;
+using PersonaEngine.Lib.Utils.IO;
 
 namespace PersonaEngine.Lib.TTS.Synthesis.Qwen3;
 

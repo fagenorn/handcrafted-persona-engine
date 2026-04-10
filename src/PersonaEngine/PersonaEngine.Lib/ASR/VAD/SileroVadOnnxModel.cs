@@ -1,4 +1,5 @@
 using Microsoft.ML.OnnxRuntime;
+using PersonaEngine.Lib.Utils.Onnx;
 
 namespace PersonaEngine.Lib.ASR.VAD;
 
@@ -20,16 +21,11 @@ internal class SileroVadOnnxModel : IDisposable
 
     public SileroVadOnnxModel(string modelPath)
     {
-        var sessionOptions = new SessionOptions
-        {
-            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR,
-            InterOpNumThreads = 1,
-            IntraOpNumThreads = 1,
-        };
-
-        sessionOptions.AppendExecutionProvider_CPU();
-
-        session = new InferenceSession(modelPath, sessionOptions);
+        session = OnnxSessionFactory.Create(
+            modelPath,
+            ExecutionProvider.Cpu,
+            SessionProfile.LowLatency
+        );
         runOptions = new RunOptions();
     }
 

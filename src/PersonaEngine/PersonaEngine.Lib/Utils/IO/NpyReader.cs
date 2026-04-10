@@ -1,9 +1,9 @@
-using System.Buffers;
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using System.Text;
+using PersonaEngine.Lib.Utils.Pooling;
 
-namespace PersonaEngine.Lib.Utils;
+namespace PersonaEngine.Lib.Utils.IO;
 
 /// <summary>
 ///     Reads NumPy .npy files into typed arrays.
@@ -39,18 +39,10 @@ internal static class NpyReader
 
         var totalElements = ComputeTotalElements(shape);
         var data = new float[totalElements];
-        var byteBuffer = ArrayPool<byte>.Shared.Rent(totalElements * sizeof(float));
 
-        try
-        {
-            stream.ReadExactly(byteBuffer, 0, totalElements * sizeof(float));
-
-            Buffer.BlockCopy(byteBuffer, 0, data, 0, totalElements * sizeof(float));
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(byteBuffer);
-        }
+        using var byteBuffer = PooledArray<byte>.Rent(totalElements * sizeof(float));
+        stream.ReadExactly(byteBuffer.Array, 0, totalElements * sizeof(float));
+        Buffer.BlockCopy(byteBuffer.Array, 0, data, 0, totalElements * sizeof(float));
 
         return (data, shape);
     }
@@ -81,18 +73,10 @@ internal static class NpyReader
 
         var totalElements = ComputeTotalElements(shape);
         var data = new int[totalElements];
-        var byteBuffer = ArrayPool<byte>.Shared.Rent(totalElements * sizeof(int));
 
-        try
-        {
-            stream.ReadExactly(byteBuffer, 0, totalElements * sizeof(int));
-
-            Buffer.BlockCopy(byteBuffer, 0, data, 0, totalElements * sizeof(int));
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(byteBuffer);
-        }
+        using var byteBuffer = PooledArray<byte>.Rent(totalElements * sizeof(int));
+        stream.ReadExactly(byteBuffer.Array, 0, totalElements * sizeof(int));
+        Buffer.BlockCopy(byteBuffer.Array, 0, data, 0, totalElements * sizeof(int));
 
         return (data, shape);
     }
@@ -158,19 +142,11 @@ internal static class NpyReader
                 );
         }
 
-        var headerBytes = ArrayPool<byte>.Shared.Rent(headerLen);
+        using var headerBytes = PooledArray<byte>.Rent(headerLen);
+        stream.ReadExactly(headerBytes.Array, 0, headerLen);
+        var header = Encoding.ASCII.GetString(headerBytes.Array, 0, headerLen).Trim();
 
-        try
-        {
-            stream.ReadExactly(headerBytes, 0, headerLen);
-            var header = Encoding.ASCII.GetString(headerBytes, 0, headerLen).Trim();
-
-            return ParseHeader(header);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(headerBytes);
-        }
+        return ParseHeader(header);
     }
 
     private static (string Dtype, int[] Shape) ParseHeader(string header)

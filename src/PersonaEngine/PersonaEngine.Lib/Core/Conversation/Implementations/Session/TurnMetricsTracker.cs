@@ -3,6 +3,13 @@ using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Common;
 
 namespace PersonaEngine.Lib.Core.Conversation.Implementations.Session;
 
+public enum MetricPhase
+{
+    Llm,
+    Tts,
+    AudioPlayback,
+}
+
 internal readonly record struct TurnTimingSummary(
     double? TurnDurationMs,
     double? SttLatencyMs,
@@ -20,12 +27,11 @@ internal readonly record struct TurnTimingSummary(
 internal struct TurnMetricsTracker
 {
     private Stopwatch? _turnStopwatch;
-    private Stopwatch? _llmStopwatch;
-    private Stopwatch? _ttsStopwatch;
-    private Stopwatch? _audioPlaybackStopwatch;
     private Stopwatch? _firstLlmTokenLatencyStopwatch;
     private Stopwatch? _firstTtsChunkLatencyStopwatch;
     private Stopwatch? _firstAudioLatencyStopwatch;
+
+    private readonly Dictionary<MetricPhase, Stopwatch> _stopwatches = [];
 
     private double? _firstLlmTokenLatencyMs;
     private double? _firstTtsChunkLatencyMs;
@@ -41,11 +47,10 @@ internal struct TurnMetricsTracker
     public double? FirstTtsChunkLatencyMs => _firstTtsChunkLatencyMs;
     public double? FirstAudioLatencyMs => _firstAudioLatencyMs;
     public double? SttLatencyMs => _sttLatencyMs;
-    public Stopwatch? LlmStopwatch => _llmStopwatch;
-    public Stopwatch? TtsStopwatch => _ttsStopwatch;
-    public Stopwatch? AudioPlaybackStopwatch => _audioPlaybackStopwatch;
     public Stopwatch? TurnStopwatch => _turnStopwatch;
     public Stopwatch? FirstAudioLatencyStopwatch => _firstAudioLatencyStopwatch;
+
+    public TurnMetricsTracker() { }
 
     public void StartTurn(double sttProcessingDurationMs)
     {
@@ -133,61 +138,21 @@ internal struct TurnMetricsTracker
         return _firstAudioLatencyMs;
     }
 
-    public void StartLlmStopwatch()
+    public void StartStopwatch(MetricPhase phase)
     {
-        _llmStopwatch = Stopwatch.StartNew();
+        _stopwatches[phase] = Stopwatch.StartNew();
     }
 
-    public double? StopLlmStopwatch()
+    public double? StopStopwatch(MetricPhase phase)
     {
-        if (_llmStopwatch == null)
+        if (!_stopwatches.Remove(phase, out var sw))
         {
             return null;
         }
 
-        _llmStopwatch.Stop();
-        var duration = _llmStopwatch.Elapsed.TotalMilliseconds;
-        _llmStopwatch = null;
+        sw.Stop();
 
-        return duration;
-    }
-
-    public void StartTtsStopwatch()
-    {
-        _ttsStopwatch ??= Stopwatch.StartNew();
-    }
-
-    public double? StopTtsStopwatch()
-    {
-        if (_ttsStopwatch == null)
-        {
-            return null;
-        }
-
-        _ttsStopwatch.Stop();
-        var duration = _ttsStopwatch.Elapsed.TotalMilliseconds;
-        _ttsStopwatch = null;
-
-        return duration;
-    }
-
-    public void StartAudioPlaybackStopwatch()
-    {
-        _audioPlaybackStopwatch = Stopwatch.StartNew();
-    }
-
-    public double? StopAudioPlaybackStopwatch()
-    {
-        if (_audioPlaybackStopwatch == null)
-        {
-            return null;
-        }
-
-        _audioPlaybackStopwatch.Stop();
-        var duration = _audioPlaybackStopwatch.Elapsed.TotalMilliseconds;
-        _audioPlaybackStopwatch = null;
-
-        return duration;
+        return sw.Elapsed.TotalMilliseconds;
     }
 
     public double? StopTurnStopwatch()
@@ -217,9 +182,9 @@ internal struct TurnMetricsTracker
             _firstLlmTokenLatencyMs,
             _firstTtsChunkLatencyMs,
             _firstAudioLatencyMs,
-            _llmStopwatch?.Elapsed.TotalMilliseconds,
-            _ttsStopwatch?.Elapsed.TotalMilliseconds,
-            _audioPlaybackStopwatch?.Elapsed.TotalMilliseconds,
+            _stopwatches.GetValueOrDefault(MetricPhase.Llm)?.Elapsed.TotalMilliseconds,
+            _stopwatches.GetValueOrDefault(MetricPhase.Tts)?.Elapsed.TotalMilliseconds,
+            _stopwatches.GetValueOrDefault(MetricPhase.AudioPlayback)?.Elapsed.TotalMilliseconds,
             LlmFinishReason,
             TtsFinishReason,
             AudioFinishReason
@@ -233,17 +198,18 @@ internal struct TurnMetricsTracker
     public void Reset()
     {
         _turnStopwatch?.Stop();
-        _llmStopwatch?.Stop();
-        _ttsStopwatch?.Stop();
-        _audioPlaybackStopwatch?.Stop();
         _firstAudioLatencyStopwatch?.Stop();
         _firstLlmTokenLatencyStopwatch?.Stop();
         _firstTtsChunkLatencyStopwatch?.Stop();
 
+        foreach (var sw in _stopwatches.Values)
+        {
+            sw.Stop();
+        }
+
+        _stopwatches.Clear();
+
         _turnStopwatch = null;
-        _llmStopwatch = null;
-        _ttsStopwatch = null;
-        _audioPlaybackStopwatch = null;
         _firstAudioLatencyStopwatch = null;
         _firstLlmTokenLatencyStopwatch = null;
         _firstTtsChunkLatencyStopwatch = null;

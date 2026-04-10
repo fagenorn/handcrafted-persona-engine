@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.IO;
+using PersonaEngine.Lib.Utils.Pooling;
 using A2FModels = PersonaEngine.Lib.IO.ModelType.Audio2Face;
 
 namespace PersonaEngine.Lib.TTS.Synthesis.LipSync.Audio2Face;
@@ -203,9 +204,10 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
                     var savedSmoother = _smoother.Save();
 
                     var frameStartIdx = _sentenceFrames.Count;
-                    var padded = new float[WindowSize];
-                    buf.Slice(_nextWindowOffset, available).CopyTo(padded);
-                    InferAndAppend(padded);
+                    using var padded = PooledArray<float>.Rent(WindowSize);
+                    padded.Span.Clear();
+                    buf.Slice(_nextWindowOffset, available).CopyTo(padded.Span);
+                    InferAndAppend(padded.Span);
 
                     _inference.RestoreGruState(savedGru);
                     _solver.RestoreTemporal(savedSolver);
