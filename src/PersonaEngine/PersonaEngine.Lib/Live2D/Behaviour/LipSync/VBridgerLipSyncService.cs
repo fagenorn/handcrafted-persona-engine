@@ -513,9 +513,30 @@ public sealed class VBridgerLipSyncService : AnimationServiceBase
         }
         else if (chunk.Tokens.Count > 0)
         {
-            // Same sentence — append phonemes from the new word token(s).
-            // Timings are slice-relative, so offset by cumulative time.
-            AppendPhonemes(chunk, _cumulativeTimeOffset);
+            // Same sentence — only append if the new tokens extend coverage.
+            // Partial CTC results that cover less time than existing phonemes are skipped
+            // to preserve the higher-quality alignment data already loaded.
+            var newMaxEnd = chunk
+                .Tokens.Where(t => t.EndTs.HasValue)
+                .Select(t => t.EndTs!.Value + _cumulativeTimeOffset)
+                .DefaultIfEmpty(0.0)
+                .Max();
+            var existingMaxEnd =
+                _activePhonemes.Count > 0 ? _activePhonemes[^1].EndTime : 0.0;
+
+            if (newMaxEnd >= existingMaxEnd)
+            {
+                AppendPhonemes(chunk, _cumulativeTimeOffset);
+            }
+            else
+            {
+                Logger.LogTrace(
+                    "Sentence {SentenceId}: skipping chunk with shorter coverage ({NewEnd:F3}s < {ExistingEnd:F3}s)",
+                    chunk.SentenceId,
+                    newMaxEnd,
+                    existingMaxEnd
+                );
+            }
         }
         else
         {
