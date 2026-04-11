@@ -1,11 +1,12 @@
-﻿using System.Buffers;
-using System.Numerics;
+﻿using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
-using PersonaEngine.Lib.Utils;
+using PersonaEngine.Lib.Utils.Numerics;
+using PersonaEngine.Lib.Utils.Onnx;
+using PersonaEngine.Lib.Utils.Pooling;
 
 namespace PersonaEngine.Lib.TTS.RVC;
 
@@ -55,20 +56,11 @@ public class CrepeOnnxSimd : IF0Predictor, IDisposable
         // Determine vector size based on hardware capabilities
         _vectorSize = Vector<float>.Count;
 
-        var options = new SessionOptions
-        {
-            EnableMemoryPattern = true,
-            ExecutionMode = ExecutionMode.ORT_PARALLEL,
-            InterOpNumThreads = Environment.ProcessorCount,
-            IntraOpNumThreads = Environment.ProcessorCount,
-            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL,
-        };
-
-        // Use hardware specific optimizations if available
-        options.AppendExecutionProvider_CPU();
-
-        _session = new InferenceSession(modelPath, options);
+        _session = OnnxSessionFactory.Create(
+            modelPath,
+            ExecutionProvider.Cpu,
+            logLevel: OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL
+        );
 
         // Initialize preallocated buffers
         _inputBatchBuffer = new float[BATCH_SIZE * WINDOW_SIZE];
@@ -106,23 +98,16 @@ public class CrepeOnnxSimd : IF0Predictor, IDisposable
         }
 
         // Rent buffer from pool for periodicity data
-        var pdBuffer = ArrayPool<float>.Shared.Rent(length);
-        try
-        {
-            var pdSpan = pdBuffer.AsSpan(0, length);
-            var wavSpan = wav.Span;
-            var f0Span = f0Output.Span.Slice(0, length);
+        using var pdBuffer = PooledArray<float>.Rent(length);
+        var pdSpan = pdBuffer.Span;
+        var wavSpan = wav.Span;
+        var f0Span = f0Output.Span.Slice(0, length);
 
-            // Process audio to extract F0
-            Crepe(wavSpan, f0Span, pdSpan);
+        // Process audio to extract F0
+        Crepe(wavSpan, f0Span, pdSpan);
 
-            // Apply post-processing with SIMD
-            ApplyPeriodicityThreshold(f0Span, pdSpan, length);
-        }
-        finally
-        {
-            ArrayPool<float>.Shared.Return(pdBuffer);
-        }
+        // Apply post-processing with SIMD
+        ApplyPeriodicityThreshold(f0Span, pdSpan, length);
     }
 
     private void Crepe(ReadOnlySpan<float> x, Span<float> f0, Span<float> pd)
@@ -669,83 +654,68 @@ public class CrepeOnnxSimd : IF0Predictor, IDisposable
             );
         }
 
-        var original = ArrayPool<float>.Shared.Rent(data.Length);
-        var result = ArrayPool<float>.Shared.Rent(data.Length);
-        try
-        {
-            data.CopyTo(original.AsSpan(0, data.Length));
-            var radius = windowSize / 2;
-            var length = data.Length;
+        using var original = PooledArray<float>.Rent(data.Length);
+        using var result = PooledArray<float>.Rent(data.Length);
+        data.CopyTo(original.Span);
+        var radius = windowSize / 2;
+        var length = data.Length;
 
-            // Use thread-local window buffers for parallel processing
-            Parallel.For(
-                0,
-                length,
-                i =>
+        // Use thread-local window buffers for parallel processing
+        Parallel.For(
+            0,
+            length,
+            i =>
+            {
+                // Allocate a local median buffer for each thread
+                var localMedianBuffer = new float[windowSize];
+
+                // Get window values
+                for (var j = 0; j < windowSize; j++)
                 {
-                    // Allocate a local median buffer for each thread
-                    var localMedianBuffer = new float[windowSize];
-
-                    // Get window values
-                    for (var j = 0; j < windowSize; j++)
-                    {
-                        var k = i + j - radius;
-                        k = Math.Clamp(k, 0, length - 1);
-                        localMedianBuffer[j] = original[k];
-                    }
-
-                    // Simple sort for small window
-                    Array.Sort(localMedianBuffer, 0, windowSize);
-                    result[i] = localMedianBuffer[radius];
+                    var k = i + j - radius;
+                    k = Math.Clamp(k, 0, length - 1);
+                    localMedianBuffer[j] = original.Array[k];
                 }
-            );
 
-            // Copy results back to the span
-            new Span<float>(result, 0, data.Length).CopyTo(data);
-        }
-        finally
-        {
-            ArrayPool<float>.Shared.Return(original);
-            ArrayPool<float>.Shared.Return(result);
-        }
+                // Simple sort for small window
+                Array.Sort(localMedianBuffer, 0, windowSize);
+                result.Array[i] = localMedianBuffer[radius];
+            }
+        );
+
+        // Copy results back to the span
+        result.Span.CopyTo(data);
     }
 
     private void MeanFilter(Span<float> data, int windowSize)
     {
-        var original = ArrayPool<float>.Shared.Rent(data.Length);
-        var result = ArrayPool<float>.Shared.Rent(data.Length);
-        try
-        {
-            // Copy to array for processing
-            data.CopyTo(original.AsSpan(0, data.Length));
-            var radius = windowSize / 2;
-            var length = data.Length;
+        using var original = PooledArray<float>.Rent(data.Length);
+        using var result = PooledArray<float>.Rent(data.Length);
 
-            // Use arrays instead of spans for parallel processing
-            Parallel.For(
-                0,
-                length,
-                i =>
+        // Copy to array for processing
+        data.CopyTo(original.Span);
+        var radius = windowSize / 2;
+        var length = data.Length;
+
+        // Use arrays instead of spans for parallel processing
+        Parallel.For(
+            0,
+            length,
+            i =>
+            {
+                float sum = 0;
+                for (var j = -radius; j <= radius; j++)
                 {
-                    float sum = 0;
-                    for (var j = -radius; j <= radius; j++)
-                    {
-                        var k = Math.Clamp(i + j, 0, length - 1);
-                        sum += original[k];
-                    }
-
-                    result[i] = sum / windowSize;
+                    var k = Math.Clamp(i + j, 0, length - 1);
+                    sum += original.Array[k];
                 }
-            );
 
-            // Copy back to span
-            new Span<float>(result, 0, data.Length).CopyTo(data);
-        }
-        finally
-        {
-            ArrayPool<float>.Shared.Return(original);
-            ArrayPool<float>.Shared.Return(result);
-        }
+                result.Array[i] = sum / windowSize;
+            }
+        );
+
+        // Copy back to span
+        result.Span.CopyTo(data);
     }
 
     private void InitializeTransitionMatrix(float[] transitionMatrix)

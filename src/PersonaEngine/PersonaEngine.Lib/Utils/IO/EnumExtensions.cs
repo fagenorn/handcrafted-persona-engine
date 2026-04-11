@@ -2,7 +2,7 @@
 using System.ComponentModel;
 using System.Reflection;
 
-namespace PersonaEngine.Lib.Utils;
+namespace PersonaEngine.Lib.Utils.IO;
 
 public static class EnumExtensions
 {

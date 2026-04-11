@@ -10,6 +10,8 @@ public record AvatarAppConfig
 
     public TtsConfiguration Tts { get; set; } = new();
 
+    public LipSyncOptions LipSync { get; set; } = new();
+
     public AsrConfiguration Asr { get; set; } = new();
 
     public MicrophoneConfiguration Microphone { get; set; } = new();

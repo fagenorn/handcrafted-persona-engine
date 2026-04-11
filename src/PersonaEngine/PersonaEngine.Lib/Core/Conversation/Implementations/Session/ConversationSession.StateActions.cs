@@ -199,22 +199,12 @@ public partial class ConversationSession
             SessionId
         );
 
-        foreach (var adapter in _inputAdapters)
-        {
-            try
-            {
-                await adapter.StopAsync(_sessionCts.Token);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "{SessionId} | Error stopping input adapter {AdapterId} during pause.",
-                    SessionId,
-                    adapter.AdapterId
-                );
-            }
-        }
+        await ForEachAdapterAsync(
+            _inputAdapters,
+            (adapter, ct) => adapter.StopAsync(ct),
+            "pause",
+            _sessionCts.Token
+        );
     }
 
     private async Task ResumeActivitiesAsync()
@@ -224,19 +214,35 @@ public partial class ConversationSession
             SessionId
         );
 
-        foreach (var adapter in _inputAdapters)
+        await ForEachAdapterAsync(
+            _inputAdapters,
+            (adapter, ct) => adapter.StartAsync(ct),
+            "resume",
+            _sessionCts.Token
+        );
+    }
+
+    private async Task ForEachAdapterAsync<T>(
+        IEnumerable<T> adapters,
+        Func<T, CancellationToken, ValueTask> action,
+        string operationName,
+        CancellationToken ct = default
+    )
+    {
+        foreach (var adapter in adapters)
         {
             try
             {
-                await adapter.StartAsync(_sessionCts.Token);
+                await action(adapter, ct);
             }
             catch (Exception ex)
             {
                 _logger.LogError(
                     ex,
-                    "{SessionId} | Error starting input adapter {AdapterId} during resume.",
+                    "{SessionId} | Error during {Operation} for {Adapter}",
                     SessionId,
-                    adapter.AdapterId
+                    operationName,
+                    adapter
                 );
             }
         }
@@ -540,7 +546,7 @@ public partial class ConversationSession
 
         CommitChanges(false);
 
-        _pipeline.TryCompleteAllChannels();
+        _pipeline.CompleteAllChannels();
     }
 
     private void CommitChanges(bool interrupted)

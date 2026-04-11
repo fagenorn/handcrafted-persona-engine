@@ -1,4 +1,4 @@
-namespace PersonaEngine.Lib.Utils;
+namespace PersonaEngine.Lib.Utils.Pooling;
 
 /// <summary>
 ///     Configuration for the ArrayPools used in the library.

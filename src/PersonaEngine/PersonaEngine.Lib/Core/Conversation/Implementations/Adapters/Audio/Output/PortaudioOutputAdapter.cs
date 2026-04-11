@@ -319,14 +319,7 @@ public class PortaudioOutputAdapter(
 
                 if (_currentBuffer != null)
                 {
-                    progressWriter.TryWrite(
-                        new AudioChunkPlaybackEndedEvent(
-                            _sessionId,
-                            turnId,
-                            DateTimeOffset.UtcNow,
-                            _currentBuffer.Segment
-                        )
-                    );
+                    progressWriter.TryWrite(CreateChunkEndedEvent(turnId));
                 }
 
                 progressWriter.TryComplete();
@@ -378,14 +371,7 @@ public class PortaudioOutputAdapter(
 
             if (_currentBuffer.IsFinished)
             {
-                progressWriter.TryWrite(
-                    new AudioChunkPlaybackEndedEvent(
-                        _sessionId,
-                        turnId,
-                        DateTimeOffset.UtcNow,
-                        _currentBuffer.Segment
-                    )
-                );
+                progressWriter.TryWrite(CreateChunkEndedEvent(turnId));
                 _framesOfChunkPlayed = 0;
                 _currentBuffer = null;
             }
@@ -402,14 +388,7 @@ public class PortaudioOutputAdapter(
             completionSource?.TrySetResult(true);
             if (_currentBuffer != null)
             {
-                progressWriter.TryWrite(
-                    new AudioChunkPlaybackEndedEvent(
-                        _sessionId,
-                        turnId,
-                        DateTimeOffset.UtcNow,
-                        _currentBuffer.Segment
-                    )
-                );
+                progressWriter.TryWrite(CreateChunkEndedEvent(turnId));
             }
 
             progressWriter.TryComplete();
@@ -422,14 +401,7 @@ public class PortaudioOutputAdapter(
             completionSource?.TrySetResult(false);
             if (_currentBuffer != null)
             {
-                progressWriter.TryWrite(
-                    new AudioChunkPlaybackEndedEvent(
-                        _sessionId,
-                        turnId,
-                        DateTimeOffset.UtcNow,
-                        _currentBuffer.Segment
-                    )
-                );
+                progressWriter.TryWrite(CreateChunkEndedEvent(turnId));
             }
 
             progressWriter.TryComplete();
@@ -449,6 +421,9 @@ public class PortaudioOutputAdapter(
             Marshal.Copy(_frameBuffer, 0, output, framesRequested);
         }
     }
+
+    private AudioChunkPlaybackEndedEvent CreateChunkEndedEvent(Guid turnId) =>
+        new(_sessionId, turnId, DateTimeOffset.UtcNow, _currentBuffer!.Segment);
 
     private sealed class AudioBuffer(Memory<float> data, AudioSegment segment)
     {

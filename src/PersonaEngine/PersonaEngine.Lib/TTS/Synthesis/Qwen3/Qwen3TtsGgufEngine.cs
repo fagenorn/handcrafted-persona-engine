@@ -5,7 +5,9 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
 using PersonaEngine.Lib.IO;
+using PersonaEngine.Lib.TTS.Synthesis;
 using PersonaEngine.Lib.TTS.Synthesis.Alignment;
+using PersonaEngine.Lib.Utils.Onnx;
 
 namespace PersonaEngine.Lib.TTS.Synthesis.Qwen3;
 
@@ -93,17 +95,10 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
         logger?.LogInformation("LLamaSharp models loaded in {Elapsed}ms", sw.ElapsedMilliseconds);
 
         // Load streaming audio decoder (ONNX, GPU-accelerated)
-        var decoderOpts = new SessionOptions
-        {
-            EnableMemoryPattern = true,
-            ExecutionMode = ExecutionMode.ORT_SEQUENTIAL,
-            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR,
-        };
-        decoderOpts.AppendExecutionProvider_CUDA();
-        var decoderSession = new InferenceSession(
+        var decoderSession = OnnxSessionFactory.Create(
             modelProvider.GetModelPath(IO.ModelType.Qwen3.Decoder),
-            decoderOpts
+            ExecutionProvider.Cuda,
+            SessionProfile.Sequential
         );
 
         logger?.LogInformation("All models loaded in {Elapsed}ms total", sw.ElapsedMilliseconds);
@@ -434,7 +429,7 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
 
         var absoluteTimings = new (double Start, double End)?[ctcWords.Length];
 
-        var accumulatedAudio = new List<float[]>();
+        var accumulatedAudio = new List<float>(OutputSampleRate);
         var totalSamplesEmitted = 0;
         var lastAlignAt = 0;
         var confirmedWordCount = 0;
@@ -459,7 +454,7 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
             )
         )
         {
-            accumulatedAudio.Add(audioChunk);
+            accumulatedAudio.AddRange(audioChunk);
             totalSamplesEmitted += audioChunk.Length;
 
             if (totalSamplesEmitted - lastAlignAt < alignInterval)
@@ -475,8 +470,8 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                 var winLength = totalSamplesEmitted - winStart;
                 var windowStartTimeSec = winStart / (double)OutputSampleRate;
 
-                var allAudio = ConcatAudio(accumulatedAudio, totalSamplesEmitted);
-                var audioWindow = allAudio.AsSpan(winStart, winLength);
+                var allAudio = CollectionsMarshal.AsSpan(accumulatedAudio);
+                var audioWindow = allAudio.Slice(winStart, winLength);
 
                 using var result = _aligner.AlignSpokenWindowed(
                     audioWindow,
@@ -508,8 +503,6 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
 
             lastAlignAt = totalSamplesEmitted;
 
-            var fullAudio = ConcatAudio(accumulatedAudio, totalSamplesEmitted);
-
             for (var w = lastEmittedWordCount; w < confirmedWordCount; w++)
             {
                 var wordEndSample = Math.Min(
@@ -521,15 +514,20 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                 {
                     var sliceStartSec = lastEmittedSample / (double)OutputSampleRate;
                     var emitLength = wordEndSample - lastEmittedSample;
-                    var audioToEmit = fullAudio.AsSpan(lastEmittedSample, emitLength).ToArray();
+                    var audioToEmit = CollectionsMarshal
+                        .AsSpan(accumulatedAudio)
+                        .Slice(lastEmittedSample, emitLength)
+                        .ToArray();
 
                     var (tokStart, tokCount) = wordToTokenRange[w];
-                    ApplyTimingToTokenRange(
+                    TokenTimingUtils.DistributeTimings(
                         tokens,
                         tokStart,
                         tokCount,
-                        absoluteTimings[w]!.Value,
-                        sliceStartSec
+                        absoluteTimings[w]!.Value.Start,
+                        absoluteTimings[w]!.Value.End,
+                        sliceStartSec,
+                        t => t.Text.Length
                     );
 
                     var tokenSlice = new ArraySegment<Token>(tokens, tokStart, tokCount);
@@ -549,9 +547,11 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
         // Final full CTC alignment for best accuracy
         if (totalSamplesEmitted > 0)
         {
-            var finalAudio = ConcatAudio(accumulatedAudio, totalSamplesEmitted);
-
-            using var finalResult = _aligner.Align(finalAudio, alignText, OutputSampleRate);
+            using var finalResult = _aligner.Align(
+                CollectionsMarshal.AsSpan(accumulatedAudio),
+                alignText,
+                OutputSampleRate
+            );
             for (var i = 0; i < finalResult.Count && i < ctcWords.Length; i++)
             {
                 absoluteTimings[i] = (
@@ -571,15 +571,20 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                 {
                     var sliceStartSec = lastEmittedSample / (double)OutputSampleRate;
                     var emitLen = wordEndSample - lastEmittedSample;
-                    var audioSlice = finalAudio.AsSpan(lastEmittedSample, emitLen).ToArray();
+                    var audioSlice = CollectionsMarshal
+                        .AsSpan(accumulatedAudio)
+                        .Slice(lastEmittedSample, emitLen)
+                        .ToArray();
 
                     var (tokStart, tokCount) = wordToTokenRange[w];
-                    ApplyTimingToTokenRange(
+                    TokenTimingUtils.DistributeTimings(
                         tokens,
                         tokStart,
                         tokCount,
-                        absoluteTimings[w]!.Value,
-                        sliceStartSec
+                        absoluteTimings[w]!.Value.Start,
+                        absoluteTimings[w]!.Value.End,
+                        sliceStartSec,
+                        t => t.Text.Length
                     );
 
                     var tokenSlice = new ArraySegment<Token>(tokens, tokStart, tokCount);
@@ -597,7 +602,10 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
             if (totalSamplesEmitted > lastEmittedSample)
             {
                 var tailLength = totalSamplesEmitted - lastEmittedSample;
-                var tailAudio = finalAudio.AsSpan(lastEmittedSample, tailLength).ToArray();
+                var tailAudio = CollectionsMarshal
+                    .AsSpan(accumulatedAudio)
+                    .Slice(lastEmittedSample, tailLength)
+                    .ToArray();
 
                 yield return new AudioSegment(
                     tailAudio.AsMemory(),
@@ -647,45 +655,6 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
         return mapping;
     }
 
-    /// <summary>
-    ///     Applies CTC word timing to a range of phonemizer tokens by distributing
-    ///     the duration proportionally across the tokens in the range.
-    /// </summary>
-    private static void ApplyTimingToTokenRange(
-        Token[] tokens,
-        int start,
-        int count,
-        (double Start, double End) timing,
-        double sliceOffset
-    )
-    {
-        if (count == 1)
-        {
-            tokens[start].StartTs = timing.Start - sliceOffset;
-            tokens[start].EndTs = timing.End - sliceOffset;
-            return;
-        }
-
-        // Distribute timing proportionally by text length
-        var totalLen = 0;
-        for (var i = start; i < start + count; i++)
-        {
-            totalLen += Math.Max(1, tokens[i].Text.Length);
-        }
-
-        var duration = timing.End - timing.Start;
-        var cursor = timing.Start;
-
-        for (var i = start; i < start + count; i++)
-        {
-            var fraction = (double)Math.Max(1, tokens[i].Text.Length) / totalLen;
-            var tokenDuration = duration * fraction;
-            tokens[i].StartTs = cursor - sliceOffset;
-            tokens[i].EndTs = cursor + tokenDuration - sliceOffset;
-            cursor += tokenDuration;
-        }
-    }
-
     public void Dispose()
     {
         if (_disposed)
@@ -696,19 +665,6 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
         _llama.Dispose();
         _decoderSession.Dispose();
         _disposed = true;
-    }
-
-    private static float[] ConcatAudio(List<float[]> chunks, int totalSamples)
-    {
-        var result = new float[totalSamples];
-        var offset = 0;
-        foreach (var chunk in chunks)
-        {
-            Array.Copy(chunk, 0, result, offset, chunk.Length);
-            offset += chunk.Length;
-        }
-
-        return result;
     }
 
     private IEnumerable<int[]> GenerateCodeFrames(

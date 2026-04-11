@@ -1,7 +1,7 @@
-using System.Buffers;
 using System.Runtime.CompilerServices;
 using PersonaEngine.Lib.Audio;
-using PersonaEngine.Lib.Utils;
+using PersonaEngine.Lib.Utils.Audio;
+using PersonaEngine.Lib.Utils.Pooling;
 
 namespace PersonaEngine.Lib.ASR.VAD;
 
@@ -61,19 +61,20 @@ internal class SileroVadDetector : IVadDetector
         )
         {
             Memory<float> slice;
-            float[]? rentedMemory = null;
+            PooledArray<float>? rentedMemory = null;
             try
             {
                 if (i == 0)
                 {
-                    rentedMemory = ArrayPool<float>.Shared.Rent(
+                    var pooled = PooledArray<float>.Rent(
                         SileroConstants.ContextSize + SileroConstants.BatchSize
                     );
-                    Array.Clear(rentedMemory, 0, SileroConstants.ContextSize);
+                    rentedMemory = pooled;
+                    Array.Clear(pooled.Array, 0, SileroConstants.ContextSize);
                     samples
                         .Span[..SileroConstants.BatchSize]
-                        .CopyTo(rentedMemory.AsSpan(SileroConstants.ContextSize));
-                    slice = rentedMemory.AsMemory(
+                        .CopyTo(pooled.Array.AsSpan(SileroConstants.ContextSize));
+                    slice = pooled.Array.AsMemory(
                         0,
                         SileroConstants.BatchSize + SileroConstants.ContextSize
                     );
@@ -144,10 +145,7 @@ internal class SileroVadDetector : IVadDetector
             }
             finally
             {
-                if (rentedMemory != null)
-                {
-                    ArrayPool<float>.Shared.Return(rentedMemory, ArrayPoolConfig.ClearOnReturn);
-                }
+                rentedMemory?.Dispose();
             }
         }
 
@@ -172,18 +170,6 @@ internal class SileroVadDetector : IVadDetector
 
     private static void ValidateSource(IAudioSource source)
     {
-        if (source.ChannelCount != 1)
-        {
-            throw new NotSupportedException(
-                "Only mono-channel audio is supported. Consider one channel aggregation on the audio source."
-            );
-        }
-
-        if (source.SampleRate != 16000)
-        {
-            throw new NotSupportedException(
-                "Only 16 kHz audio is supported. Consider resampling before calling this transcriptor."
-            );
-        }
+        AudioValidation.RequireMono16kHz(source);
     }
 }

@@ -1,6 +1,7 @@
 ﻿using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using Microsoft.ML.Tokenizers;
+using PersonaEngine.Lib.Utils.Onnx;
 
 namespace PersonaEngine.Lib.TTS.Profanity;
 
@@ -22,19 +23,11 @@ public class ProfanityDetectorOnnx : IDisposable
             vocabPath = ModelUtils.GetModelPath(ModelType.TinyToxicVocab);
         }
 
-        var options = new SessionOptions
-        {
-            EnableMemoryPattern = true,
-            ExecutionMode = ExecutionMode.ORT_PARALLEL,
-            InterOpNumThreads = Environment.ProcessorCount,
-            IntraOpNumThreads = Environment.ProcessorCount,
-            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL,
-        };
-
-        options.AppendExecutionProvider_CPU();
-
-        _session = new InferenceSession(modelPath, options);
+        _session = OnnxSessionFactory.Create(
+            modelPath,
+            ExecutionProvider.Cpu,
+            logLevel: OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL
+        );
 
         using Stream vocabStream = File.OpenRead(vocabPath);
         _tokenizer = BertTokenizer.Create(vocabStream);

@@ -58,4 +58,28 @@ public static class ModelType
             "mel_band_roformer/melbandroformer_optimized.onnx"
         );
     }
+
+    public static class Audio2Face
+    {
+        public static readonly ModelId Network = new("audio2face/network.onnx");
+        public static readonly ModelId NetworkInfo = new("audio2face/network_info.json");
+        public static readonly ModelId SkinClaire = new("audio2face/bs_skin_Claire.npz");
+        public static readonly ModelId SkinConfigClaire = new(
+            "audio2face/bs_skin_config_Claire.json"
+        );
+        public static readonly ModelId ModelDataClaire = new("audio2face/model_data_Claire.npz");
+        public static readonly ModelId SkinJames = new("audio2face/bs_skin_James.npz");
+        public static readonly ModelId SkinConfigJames = new(
+            "audio2face/bs_skin_config_James.json"
+        );
+        public static readonly ModelId ModelDataJames = new("audio2face/model_data_James.npz");
+        public static readonly ModelId SkinMark = new("audio2face/bs_skin_Mark.npz");
+        public static readonly ModelId SkinConfigMark = new("audio2face/bs_skin_config_Mark.json");
+        public static readonly ModelId ModelDataMark = new("audio2face/model_data_Mark.npz");
+        public static readonly ModelId ModelConfigClaire = new(
+            "audio2face/model_config_Claire.json"
+        );
+        public static readonly ModelId ModelConfigJames = new("audio2face/model_config_James.json");
+        public static readonly ModelId ModelConfigMark = new("audio2face/model_config_Mark.json");
+    }
 }

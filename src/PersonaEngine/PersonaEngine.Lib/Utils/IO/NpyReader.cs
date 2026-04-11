@@ -1,8 +1,9 @@
-using System.Buffers;
 using System.Buffers.Binary;
+using System.Runtime.InteropServices;
 using System.Text;
+using PersonaEngine.Lib.Utils.Pooling;
 
-namespace PersonaEngine.Lib.Utils;
+namespace PersonaEngine.Lib.Utils.IO;
 
 /// <summary>
 ///     Reads NumPy .npy files into typed arrays.
@@ -18,29 +19,64 @@ internal static class NpyReader
     public static (float[] Data, int[] Shape) ReadFloat32(string path)
     {
         using var stream = File.OpenRead(path);
+
+        return ReadFloat32(stream, path);
+    }
+
+    /// <summary>
+    ///     Reads a .npy stream containing float32 data.
+    /// </summary>
+    public static (float[] Data, int[] Shape) ReadFloat32(Stream stream, string? sourceName = null)
+    {
         var (dtype, shape) = ReadHeader(stream);
 
         if (dtype is not ("<f4" or "f4"))
         {
             throw new InvalidDataException(
-                $"Expected float32 dtype ('<f4'), got '{dtype}' in {path}"
+                $"Expected float32 dtype ('<f4'), got '{dtype}' in {sourceName ?? "stream"}"
             );
         }
 
         var totalElements = ComputeTotalElements(shape);
         var data = new float[totalElements];
-        var byteBuffer = ArrayPool<byte>.Shared.Rent(totalElements * sizeof(float));
 
-        try
-        {
-            stream.ReadExactly(byteBuffer, 0, totalElements * sizeof(float));
+        using var byteBuffer = PooledArray<byte>.Rent(totalElements * sizeof(float));
+        stream.ReadExactly(byteBuffer.Array, 0, totalElements * sizeof(float));
+        Buffer.BlockCopy(byteBuffer.Array, 0, data, 0, totalElements * sizeof(float));
 
-            Buffer.BlockCopy(byteBuffer, 0, data, 0, totalElements * sizeof(float));
-        }
-        finally
+        return (data, shape);
+    }
+
+    /// <summary>
+    ///     Reads a .npy file containing int32 data.
+    /// </summary>
+    public static (int[] Data, int[] Shape) ReadInt32(string path)
+    {
+        using var stream = File.OpenRead(path);
+
+        return ReadInt32(stream, path);
+    }
+
+    /// <summary>
+    ///     Reads a .npy stream containing int32 data.
+    /// </summary>
+    public static (int[] Data, int[] Shape) ReadInt32(Stream stream, string? sourceName = null)
+    {
+        var (dtype, shape) = ReadHeader(stream);
+
+        if (dtype is not ("<i4" or "i4"))
         {
-            ArrayPool<byte>.Shared.Return(byteBuffer);
+            throw new InvalidDataException(
+                $"Expected int32 dtype ('<i4'), got '{dtype}' in {sourceName ?? "stream"}"
+            );
         }
+
+        var totalElements = ComputeTotalElements(shape);
+        var data = new int[totalElements];
+
+        using var byteBuffer = PooledArray<byte>.Rent(totalElements * sizeof(int));
+        stream.ReadExactly(byteBuffer.Array, 0, totalElements * sizeof(int));
+        Buffer.BlockCopy(byteBuffer.Array, 0, data, 0, totalElements * sizeof(int));
 
         return (data, shape);
     }
@@ -68,24 +104,8 @@ internal static class NpyReader
             );
         }
 
-        var byteBuffer = ArrayPool<byte>.Shared.Rent(totalElements * sizeof(float));
-
-        try
-        {
-            stream.ReadExactly(byteBuffer, 0, totalElements * sizeof(float));
-
-            Buffer.BlockCopy(
-                byteBuffer,
-                0,
-                destination.ToArray(),
-                0,
-                totalElements * sizeof(float)
-            );
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(byteBuffer);
-        }
+        var destBytes = MemoryMarshal.AsBytes(destination[..totalElements]);
+        stream.ReadExactly(destBytes);
 
         return shape;
     }
@@ -122,19 +142,11 @@ internal static class NpyReader
                 );
         }
 
-        var headerBytes = ArrayPool<byte>.Shared.Rent(headerLen);
+        using var headerBytes = PooledArray<byte>.Rent(headerLen);
+        stream.ReadExactly(headerBytes.Array, 0, headerLen);
+        var header = Encoding.ASCII.GetString(headerBytes.Array, 0, headerLen).Trim();
 
-        try
-        {
-            stream.ReadExactly(headerBytes, 0, headerLen);
-            var header = Encoding.ASCII.GetString(headerBytes, 0, headerLen).Trim();
-
-            return ParseHeader(header);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(headerBytes);
-        }
+        return ParseHeader(header);
     }
 
     private static (string Dtype, int[] Shape) ParseHeader(string header)

@@ -1,5 +1,6 @@
 ﻿using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
+using PersonaEngine.Lib.Utils.Onnx;
 
 namespace PersonaEngine.Lib.TTS.RVC;
 
@@ -9,19 +10,11 @@ public class ContentVec : IDisposable
 
     public ContentVec(string modelPath)
     {
-        var options = new SessionOptions
-        {
-            EnableMemoryPattern = true,
-            ExecutionMode = ExecutionMode.ORT_PARALLEL,
-            InterOpNumThreads = Environment.ProcessorCount,
-            IntraOpNumThreads = Environment.ProcessorCount,
-            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL,
-        };
-
-        options.AppendExecutionProvider_CPU();
-
-        _model = new InferenceSession(modelPath, options);
+        _model = OnnxSessionFactory.Create(
+            modelPath,
+            ExecutionProvider.Cpu,
+            logLevel: OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL
+        );
     }
 
     public void Dispose()

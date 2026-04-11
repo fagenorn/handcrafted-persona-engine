@@ -1,5 +1,4 @@
-﻿using System.Buffers;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Audio;
@@ -7,6 +6,7 @@ using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.IO;
 using PersonaEngine.Lib.TTS.Synthesis;
 using PersonaEngine.Lib.TTS.Synthesis.Audio;
+using PersonaEngine.Lib.Utils.Pooling;
 
 namespace PersonaEngine.Lib.TTS.RVC;
 
@@ -189,69 +189,47 @@ public class RVCFilter : IBufferedAudioFilter, IDisposable
         var resampleRatioToProcessing = (double)ProcessingSampleRate / originalSampleRate;
         var resampledInputSize = (int)Math.Ceiling(inputChunk.Length * resampleRatioToProcessing);
 
-        var resampledInput = ArrayPool<float>.Shared.Rent(resampledInputSize);
-        try
-        {
-            var inputSampleCount = AudioConverter.ResampleFloat(
-                inputChunk,
-                resampledInput,
-                1,
-                originalSampleRate,
-                ProcessingSampleRate
-            );
+        using var resampledInput = PooledArray<float>.Rent(resampledInputSize);
+        var inputSampleCount = AudioConverter.ResampleFloat(
+            inputChunk,
+            resampledInput.Array,
+            1,
+            originalSampleRate,
+            ProcessingSampleRate
+        );
 
-            // Step 2: Process with RVC model
-            var voiceOutputRate = _voiceOutputSampleRate;
-            var maxInputSamples = voiceOutputRate * MaxInputDuration;
-            var outputBufferSize = maxInputSamples + 2 * options.HopSize;
+        // Step 2: Process with RVC model
+        var voiceOutputRate = _voiceOutputSampleRate;
+        var maxInputSamples = voiceOutputRate * MaxInputDuration;
+        var outputBufferSize = maxInputSamples + 2 * options.HopSize;
 
-            var processingBuffer = ArrayPool<float>.Shared.Rent(outputBufferSize);
-            try
-            {
-                var processedSampleCount = _rvcModel!.ProcessAudio(
-                    resampledInput.AsMemory(0, inputSampleCount),
-                    processingBuffer,
-                    _f0Predictor!,
-                    options.SpeakerId,
-                    options.F0UpKey
-                );
+        using var processingBuffer = PooledArray<float>.Rent(outputBufferSize);
+        var processedSampleCount = _rvcModel!.ProcessAudio(
+            resampledInput.Array.AsMemory(0, inputSampleCount),
+            processingBuffer.Array,
+            _f0Predictor!,
+            options.SpeakerId,
+            options.F0UpKey
+        );
 
-                // Step 3: Resample from voice output rate back to original sample rate
-                var resampleRatioToFinal = (double)originalSampleRate / voiceOutputRate;
-                var finalOutputSize = (int)
-                    Math.Ceiling(processedSampleCount * resampleRatioToFinal);
+        // Step 3: Resample from voice output rate back to original sample rate
+        var resampleRatioToFinal = (double)originalSampleRate / voiceOutputRate;
+        var finalOutputSize = (int)Math.Ceiling(processedSampleCount * resampleRatioToFinal);
 
-                var resampledOutput = ArrayPool<float>.Shared.Rent(finalOutputSize);
-                try
-                {
-                    var finalSampleCount = AudioConverter.ResampleFloat(
-                        processingBuffer.AsMemory(0, processedSampleCount),
-                        resampledOutput,
-                        1,
-                        (uint)voiceOutputRate,
-                        originalSampleRate
-                    );
+        using var resampledOutput = PooledArray<float>.Rent(finalOutputSize);
+        var finalSampleCount = AudioConverter.ResampleFloat(
+            processingBuffer.Array.AsMemory(0, processedSampleCount),
+            resampledOutput.Array,
+            1,
+            (uint)voiceOutputRate,
+            originalSampleRate
+        );
 
-                    // Create final buffer for this chunk
-                    var finalBuffer = new float[finalSampleCount];
-                    Array.Copy(resampledOutput, finalBuffer, finalSampleCount);
+        // Create final buffer for this chunk
+        var finalBuffer = new float[finalSampleCount];
+        Array.Copy(resampledOutput.Array, finalBuffer, finalSampleCount);
 
-                    return finalBuffer.AsMemory();
-                }
-                finally
-                {
-                    ArrayPool<float>.Shared.Return(resampledOutput);
-                }
-            }
-            finally
-            {
-                ArrayPool<float>.Shared.Return(processingBuffer);
-            }
-        }
-        finally
-        {
-            ArrayPool<float>.Shared.Return(resampledInput);
-        }
+        return finalBuffer.AsMemory();
     }
 
     private Memory<float> CombineChunks(List<Memory<float>> chunks)

@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace PersonaEngine.Lib.Utils;
+namespace PersonaEngine.Lib.Utils.Text;
 
 public static class TextExtensions
 {

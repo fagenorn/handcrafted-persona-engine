@@ -5,6 +5,7 @@ using MathNet.Numerics.IntegralTransforms;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using PersonaEngine.Lib.Music.MDX;
+using PersonaEngine.Lib.Utils.Onnx;
 
 internal struct ProcessedBatch
 {
@@ -37,27 +38,7 @@ public class OnnxMDX : IDisposable
     {
         _params = parameters;
 
-        var options = new SessionOptions
-        {
-            EnableMemoryPattern = true,
-            ExecutionMode = ExecutionMode.ORT_PARALLEL,
-            InterOpNumThreads = Environment.ProcessorCount,
-            IntraOpNumThreads = Environment.ProcessorCount,
-            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR,
-        };
-
-        // Try CUDA first, fall back to CPU if not available
-        try
-        {
-            options.AppendExecutionProvider_CUDA();
-        }
-        catch
-        {
-            options.AppendExecutionProvider_CPU();
-        }
-
-        _model = new InferenceSession(modelPath, options);
+        _model = OnnxSessionFactory.Create(modelPath, ExecutionProvider.CudaWithCpuFallback);
 
         // Warm up the model
         var dummyInput = new DenseTensor<float>(new[] { 1, 4, _params.DimF, _params.DimT });

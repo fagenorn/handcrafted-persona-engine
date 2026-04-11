@@ -34,7 +34,7 @@ public partial class ConversationSession : IConversationSession
 
     // Collaborators
     private readonly TurnPipelineCoordinator _pipeline;
-    private TurnMetricsTracker _metricsTracker;
+    private TurnMetricsTracker _metricsTracker = new();
 
     // Communication Channels (Session-level)
     private readonly Channel<IInputEvent> _inputChannel;
