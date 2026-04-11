@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
-namespace PersonaEngine.Lib.Utils;
+namespace PersonaEngine.Lib.Utils.Numerics;
 
 public static class SpanMathExtensions
 {

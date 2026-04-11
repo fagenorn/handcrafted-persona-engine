@@ -1,6 +1,7 @@
-﻿using System.Buffers;
-using Microsoft.ML.OnnxRuntime;
+﻿using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
+using PersonaEngine.Lib.Utils.Onnx;
+using PersonaEngine.Lib.Utils.Pooling;
 
 namespace PersonaEngine.Lib.TTS.RVC;
 
@@ -44,19 +45,11 @@ public class CrepeOnnx : IF0Predictor
 
     public CrepeOnnx(string modelPath)
     {
-        var options = new SessionOptions
-        {
-            EnableMemoryPattern = true,
-            ExecutionMode = ExecutionMode.ORT_PARALLEL,
-            InterOpNumThreads = Environment.ProcessorCount,
-            IntraOpNumThreads = Environment.ProcessorCount,
-            GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-            LogSeverityLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL,
-        };
-
-        options.AppendExecutionProvider_CPU();
-
-        _session = new InferenceSession(modelPath, options);
+        _session = OnnxSessionFactory.Create(
+            modelPath,
+            ExecutionProvider.Cpu,
+            logLevel: OrtLoggingLevel.ORT_LOGGING_LEVEL_FATAL
+        );
 
         // Preallocate buffers
         _inputBatchBuffer = new float[BATCH_SIZE * WINDOW_SIZE];
@@ -96,26 +89,19 @@ public class CrepeOnnx : IF0Predictor
         }
 
         // Preallocate periodicity data buffer
-        var pdBuffer = ArrayPool<float>.Shared.Rent(length);
-        try
+        using var pdBuffer = PooledArray<float>.Rent(length);
+        var pdSpan = pdBuffer.Span;
+
+        // Process the audio to extract F0
+        Crepe(wavSpan, outputSpan.Slice(0, length), pdSpan);
+
+        // Apply post-processing
+        for (var i = 0; i < length; i++)
         {
-            var pdSpan = new Span<float>(pdBuffer, 0, length);
-
-            // Process the audio to extract F0
-            Crepe(wavSpan, outputSpan.Slice(0, length), pdSpan);
-
-            // Apply post-processing
-            for (var i = 0; i < length; i++)
+            if (pdSpan[i] < 0.1)
             {
-                if (pdSpan[i] < 0.1)
-                {
-                    outputSpan[i] = 0;
-                }
+                outputSpan[i] = 0;
             }
-        }
-        finally
-        {
-            ArrayPool<float>.Shared.Return(pdBuffer);
         }
     }
 
@@ -434,82 +420,68 @@ public class CrepeOnnx : IF0Predictor
         }
 
         // Create a copy of the original data
-        var original = ArrayPool<float>.Shared.Rent(data.Length);
-        try
+        using var original = PooledArray<float>.Rent(data.Length);
+        data.CopyTo(original.Span);
+
+        for (var i = 0; i < data.Length; i++)
         {
-            data.CopyTo(original);
-
-            for (var i = 0; i < data.Length; i++)
+            // Fill the window buffer
+            for (var j = 0; j < windowSize; j++)
             {
-                // Fill the window buffer
-                for (var j = 0; j < windowSize; j++)
+                var k = i + j - windowSize / 2;
+
+                // Handle boundary conditions
+                if (k < 0)
                 {
-                    var k = i + j - windowSize / 2;
-
-                    // Handle boundary conditions
-                    if (k < 0)
-                    {
-                        k = 0;
-                    }
-
-                    if (k >= data.Length)
-                    {
-                        k = data.Length - 1;
-                    }
-
-                    _medianBuffer[j] = original[k];
+                    k = 0;
                 }
 
-                // Sort the window
-                Array.Sort(_medianBuffer, 0, windowSize);
+                if (k >= data.Length)
+                {
+                    k = data.Length - 1;
+                }
 
-                // Set the median value
-                data[i] = _medianBuffer[windowSize / 2];
+                _medianBuffer[j] = original.Array[k];
             }
-        }
-        finally
-        {
-            ArrayPool<float>.Shared.Return(original);
+
+            // Sort the window
+            Array.Sort(_medianBuffer, 0, windowSize);
+
+            // Set the median value
+            data[i] = _medianBuffer[windowSize / 2];
         }
     }
 
     private void MeanFilter(Span<float> data, int windowSize)
     {
         // Create a copy of the original data
-        var original = ArrayPool<float>.Shared.Rent(data.Length);
-        try
+        using var original = PooledArray<float>.Rent(data.Length);
+        data.CopyTo(original.Span);
+
+        for (var i = 0; i < data.Length; i++)
         {
-            data.CopyTo(original);
+            float sum = 0;
 
-            for (var i = 0; i < data.Length; i++)
+            for (var j = 0; j < windowSize; j++)
             {
-                float sum = 0;
+                var k = i + j - windowSize / 2;
 
-                for (var j = 0; j < windowSize; j++)
+                // Handle boundary conditions
+                if (k < 0)
                 {
-                    var k = i + j - windowSize / 2;
-
-                    // Handle boundary conditions
-                    if (k < 0)
-                    {
-                        k = 0;
-                    }
-
-                    if (k >= data.Length)
-                    {
-                        k = data.Length - 1;
-                    }
-
-                    sum += original[k];
+                    k = 0;
                 }
 
-                // Set the mean value
-                data[i] = sum / windowSize;
+                if (k >= data.Length)
+                {
+                    k = data.Length - 1;
+                }
+
+                sum += original.Array[k];
             }
-        }
-        finally
-        {
-            ArrayPool<float>.Shared.Return(original);
+
+            // Set the mean value
+            data[i] = sum / windowSize;
         }
     }
 }

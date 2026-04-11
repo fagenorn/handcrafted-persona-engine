@@ -1,7 +1,6 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Adapters;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
-using PersonaEngine.Lib.Live2D.App;
 using PersonaEngine.Lib.Live2D.Framework.Motion;
 
 namespace PersonaEngine.Lib.Live2D.Behaviour.Emotion;
@@ -23,15 +22,15 @@ namespace PersonaEngine.Lib.Live2D.Behaviour.Emotion;
 ///     It requires an <see cref="IEmotionService" /> for timed emotion data and an
 ///     <see cref="IAudioProgressNotifier" /> for playback state and time.
 /// </remarks>
-public class EmotionAnimationService : ILive2DAnimationService
+public class EmotionAnimationService : AnimationServiceBase
 {
     public EmotionAnimationService(
         ILogger<EmotionAnimationService> logger,
         IAudioProgressNotifier audioProgressNotifier,
         IEmotionService emotionService
     )
+        : base(logger)
     {
-        _logger = logger;
         _audioProgressNotifier = audioProgressNotifier;
         _emotionService = emotionService;
 
@@ -94,8 +93,6 @@ public class EmotionAnimationService : ILive2DAnimationService
 
     #region Dependencies
 
-    private readonly ILogger<EmotionAnimationService> _logger;
-
     private readonly IAudioProgressNotifier _audioProgressNotifier;
 
     private readonly IEmotionService _emotionService;
@@ -103,8 +100,6 @@ public class EmotionAnimationService : ILive2DAnimationService
     #endregion
 
     #region State
-
-    private LAppModel? _model;
 
     private readonly List<EmotionTiming> _activeEmotions = new();
 
@@ -124,20 +119,14 @@ public class EmotionAnimationService : ILive2DAnimationService
 
     private CubismMotionQueueEntry? _neutralTalkingMotionEntry = null;
 
-    private bool _isStarted = false;
-
     private bool _isPlaying = false;
-
-    private bool _disposed = false;
 
     #endregion
 
-    #region ILive2DAnimationService Implementation
+    #region Lifecycle Hooks
 
     private void SubscribeToAudioProgressNotifier()
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-
         UnsubscribeFromCurrentNotifier();
 
         _audioProgressNotifier.ChunkPlaybackStarted += HandleChunkStarted;
@@ -152,33 +141,32 @@ public class EmotionAnimationService : ILive2DAnimationService
         _audioProgressNotifier.PlaybackProgress -= HandleProgress;
     }
 
-    public void Start(LAppModel model)
+    protected override void OnStarting()
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-
-        _model = model;
-
         ValidateModelAssets();
-
-        _isStarted = true;
         ResetEmotionState(true);
-        _logger.LogInformation("EmotionAnimationService started for model.");
     }
 
-    public void Stop()
+    protected override void OnStopping()
     {
-        _isStarted = false;
         ResetEmotionState(true);
-        _logger.LogInformation("EmotionAnimationService stopped.");
+    }
+
+    protected override void OnDisposing()
+    {
+        UnsubscribeFromCurrentNotifier();
+        _activeEmotions.Clear();
+        _availableExpressions.Clear();
+        _availableMotionGroups.Clear();
     }
 
     #endregion
 
     #region Update Logic
 
-    public void Update(float deltaTime)
+    public override void Update(float deltaTime)
     {
-        if (deltaTime <= 0.0f || _disposed || !_isStarted || _model == null)
+        if (deltaTime <= 0.0f || !IsStarted || Model == null)
         {
             return;
         }
@@ -208,7 +196,7 @@ public class EmotionAnimationService : ILive2DAnimationService
             return;
         }
 
-        _logger.LogTrace(
+        Logger.LogTrace(
             "Expression '{ExpressionId}' hold time expired ({HoldDuration}s). Reverting to neutral.",
             _activeExpressionId,
             EXPRESSION_HOLD_DURATION_SECONDS
@@ -219,7 +207,7 @@ public class EmotionAnimationService : ILive2DAnimationService
 
     private void ManageNeutralTalkingMotion()
     {
-        if (_model == null)
+        if (Model == null)
         {
             return;
         }
@@ -250,17 +238,17 @@ public class EmotionAnimationService : ILive2DAnimationService
             return;
         }
 
-        _logger.LogTrace(
+        Logger.LogTrace(
             "Starting neutral talking motion (group: {MotionGroup}).",
             NEUTRAL_TALKING_MOTION_GROUP
         );
-        _neutralTalkingMotionEntry = _model.StartRandomMotion(
+        _neutralTalkingMotionEntry = Model.StartRandomMotion(
             NEUTRAL_TALKING_MOTION_GROUP,
             NEUTRAL_TALKING_MOTION_PRIORITY
         );
         if (_neutralTalkingMotionEntry == null)
         {
-            _logger.LogDebug(
+            Logger.LogDebug(
                 "Could not start neutral talking motion for group '{MotionGroup}'.",
                 NEUTRAL_TALKING_MOTION_GROUP
             );
@@ -289,7 +277,7 @@ public class EmotionAnimationService : ILive2DAnimationService
 
         if (targetEmotionIndex != -1 && targetEmotionIndex != _currentEmotionIndex)
         {
-            _logger.LogTrace(
+            Logger.LogTrace(
                 "Emotion change detected at T={CurrentTime:F3}. New index: {NewIndex}, Old index: {OldIndex}",
                 currentTime,
                 targetEmotionIndex,
@@ -306,7 +294,7 @@ public class EmotionAnimationService : ILive2DAnimationService
 
     private void ApplyEmotion(string? emotionEmoji)
     {
-        if (!_isStarted || _model == null)
+        if (!IsStarted || Model == null)
         {
             return;
         }
@@ -316,7 +304,7 @@ public class EmotionAnimationService : ILive2DAnimationService
             return;
         }
 
-        _logger.LogDebug(
+        Logger.LogDebug(
             "Applying triggered emotion: {Emotion}",
             emotionEmoji ?? "Neutral (explicit)"
         );
@@ -340,13 +328,13 @@ public class EmotionAnimationService : ILive2DAnimationService
         {
             if (_availableMotionGroups.Contains(targetMotionGroup))
             {
-                _logger.LogTrace(
+                Logger.LogTrace(
                     "Attempting to start emotion motion from group: {MotionGroup} with priority {Priority}.",
                     targetMotionGroup,
                     EMOTION_MOTION_PRIORITY
                 );
 
-                var newMotionEntry = _model.StartRandomMotion(
+                var newMotionEntry = Model.StartRandomMotion(
                     targetMotionGroup,
                     EMOTION_MOTION_PRIORITY
                 );
@@ -354,11 +342,11 @@ public class EmotionAnimationService : ILive2DAnimationService
                 {
                     _currentEmotionMotionEntry = newMotionEntry;
                     _neutralTalkingMotionEntry = null;
-                    _logger.LogTrace("Emotion motion started successfully.");
+                    Logger.LogTrace("Emotion motion started successfully.");
                 }
                 else
                 {
-                    _logger.LogWarning(
+                    Logger.LogWarning(
                         "Could not start motion for group '{MotionGroup}'. Is the group empty or definition invalid?",
                         targetMotionGroup
                     );
@@ -367,7 +355,7 @@ public class EmotionAnimationService : ILive2DAnimationService
             }
             else
             {
-                _logger.LogWarning(
+                Logger.LogWarning(
                     "Motion group '{MotionGroup}' for emotion '{Emotion}' not found in the current model.",
                     targetMotionGroup,
                     emotionEmoji
@@ -378,7 +366,7 @@ public class EmotionAnimationService : ILive2DAnimationService
         else
         {
             _currentEmotionMotionEntry = null;
-            _logger.LogTrace(
+            Logger.LogTrace(
                 "No specific motion group mapped for emotion '{Emotion}'.",
                 emotionEmoji ?? "Neutral"
             );
@@ -387,7 +375,7 @@ public class EmotionAnimationService : ILive2DAnimationService
 
     private void SetExpression(string? expressionId)
     {
-        if (!_isStarted || _model == null)
+        if (!IsStarted || Model == null)
         {
             return;
         }
@@ -415,14 +403,14 @@ public class EmotionAnimationService : ILive2DAnimationService
         }
         else if (_availableExpressions.Contains(actualExpressionId!))
         {
-            _logger.LogTrace("Setting expression: {ExpressionId}", actualExpressionId);
-            _model.SetExpression(actualExpressionId!);
+            Logger.LogTrace("Setting expression: {ExpressionId}", actualExpressionId);
+            Model.SetExpression(actualExpressionId!);
             _activeExpressionId = actualExpressionId;
             _timeSinceExpressionSet = 0.0f;
         }
         else
         {
-            _logger.LogWarning(
+            Logger.LogWarning(
                 "Expression '{ExpressionId}' not found in model. Applying neutral instead.",
                 actualExpressionId
             );
@@ -432,7 +420,7 @@ public class EmotionAnimationService : ILive2DAnimationService
 
     private void ApplyNeutralExpression()
     {
-        if (!_isStarted || _model == null)
+        if (!IsStarted || Model == null)
         {
             return;
         }
@@ -445,7 +433,7 @@ public class EmotionAnimationService : ILive2DAnimationService
         {
             if (neutralToApply != null || _activeExpressionId != null) // Avoid logging null -> null
             {
-                _logger.LogTrace(
+                Logger.LogTrace(
                     "Setting neutral expression (was: {PreviousExpression}).",
                     _activeExpressionId ?? "model default"
                 );
@@ -455,11 +443,11 @@ public class EmotionAnimationService : ILive2DAnimationService
             {
                 if (_availableExpressions.Contains(neutralToApply))
                 {
-                    _model.SetExpression(neutralToApply);
+                    Model.SetExpression(neutralToApply);
                 }
                 else
                 {
-                    _logger.LogError(
+                    Logger.LogError(
                         "Configured NEUTRAL_EXPRESSION_ID '{NeutralId}' is not available in the model, cannot apply.",
                         NEUTRAL_EXPRESSION_ID
                     );
@@ -468,7 +456,7 @@ public class EmotionAnimationService : ILive2DAnimationService
             }
             else
             {
-                _logger.LogTrace("No neutral expression configured. Model may revert to default.");
+                Logger.LogTrace("No neutral expression configured. Model may revert to default.");
             }
 
             _activeExpressionId = neutralToApply;
@@ -483,12 +471,12 @@ public class EmotionAnimationService : ILive2DAnimationService
 
     private void HandleChunkStarted(object? sender, AudioChunkPlaybackStartedEvent e)
     {
-        if (!_isStarted || _model == null)
+        if (!IsStarted || Model == null)
         {
             return;
         }
 
-        _logger.LogTrace("Audio Chunk Playback Started for segment {SegmentId}.", e.Chunk.Id);
+        Logger.LogTrace("Audio Chunk Playback Started for segment {SegmentId}.", e.Chunk.Id);
         _isPlaying = true;
         ResetEmotionState(false);
 
@@ -499,7 +487,7 @@ public class EmotionAnimationService : ILive2DAnimationService
             if (emotions.Any())
             {
                 _activeEmotions.AddRange(emotions.OrderBy(em => em.Timestamp));
-                _logger.LogDebug(
+                Logger.LogDebug(
                     "Loaded {Count} timed emotions for the segment.",
                     _activeEmotions.Count
                 );
@@ -508,12 +496,12 @@ public class EmotionAnimationService : ILive2DAnimationService
             }
             else
             {
-                _logger.LogDebug("No timed emotions found for segment {SegmentId}.", e.Chunk.Id);
+                Logger.LogDebug("No timed emotions found for segment {SegmentId}.", e.Chunk.Id);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(
+            Logger.LogError(
                 ex,
                 "Error retrieving or processing emotions for audio segment {SegmentId}.",
                 e.Chunk.Id
@@ -523,12 +511,12 @@ public class EmotionAnimationService : ILive2DAnimationService
 
     private void HandleChunkEnded(object? sender, AudioChunkPlaybackEndedEvent e)
     {
-        if (!_isStarted)
+        if (!IsStarted)
         {
             return;
         }
 
-        _logger.LogTrace("Audio Chunk Playback Ended.");
+        Logger.LogTrace("Audio Chunk Playback Ended.");
         _isPlaying = false;
         _activeEmotions.Clear();
         _currentEmotionIndex = -1;
@@ -542,7 +530,7 @@ public class EmotionAnimationService : ILive2DAnimationService
 
     private void HandleProgress(object? sender, AudioPlaybackProgressEvent e)
     {
-        if (!_isStarted || !_isPlaying || _model == null)
+        if (!IsStarted || !_isPlaying || Model == null)
         {
             return;
         }
@@ -571,12 +559,12 @@ public class EmotionAnimationService : ILive2DAnimationService
 
         if (forceNeutral)
         {
-            _logger.LogTrace("Forcing neutral state on reset.");
+            Logger.LogTrace("Forcing neutral state on reset.");
             ApplyNeutralExpression();
             _triggeredEmotionEmoji = null;
         }
 
-        _logger.LogTrace(
+        Logger.LogTrace(
             "Emotion state reset (Active emotions cleared. Forced neutral: {ForceNeutral}).",
             forceNeutral
         );
@@ -584,32 +572,30 @@ public class EmotionAnimationService : ILive2DAnimationService
 
     private void ValidateModelAssets()
     {
-        if (_model == null)
+        if (Model == null)
         {
             return;
         }
 
-        _logger.LogDebug("Validating configured emotion mappings against model assets...");
+        Logger.LogDebug("Validating configured emotion mappings against model assets...");
 
         _availableExpressions.Clear();
         _availableMotionGroups.Clear();
 
-        var modelExpressions = new HashSet<string>(
-            _model.Expressions ?? Enumerable.Empty<string>()
-        );
-        _logger.LogTrace("Model contains {Count} expressions.", modelExpressions.Count);
+        var modelExpressions = new HashSet<string>(Model.Expressions ?? Enumerable.Empty<string>());
+        Logger.LogTrace("Model contains {Count} expressions.", modelExpressions.Count);
 
         var modelMotionGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var motionKey in _model.Motions ?? Enumerable.Empty<string>())
+        foreach (var motionKey in Model.Motions ?? Enumerable.Empty<string>())
         {
-            var groupName = LAppModel.GetMotionGroupName(motionKey); // Use static helper
+            var groupName = App.LAppModel.GetMotionGroupName(motionKey); // Use static helper
             if (!string.IsNullOrEmpty(groupName))
             {
                 modelMotionGroups.Add(groupName);
             }
         }
 
-        _logger.LogTrace(
+        Logger.LogTrace(
             "Model contains {Count} unique motion groups (e.g., {Examples}).",
             modelMotionGroups.Count,
             string.Join(", ", modelMotionGroups.Take(5))
@@ -626,7 +612,7 @@ public class EmotionAnimationService : ILive2DAnimationService
                 }
                 else
                 {
-                    _logger.LogWarning(
+                    Logger.LogWarning(
                         "Validation: Expression '{ExpressionId}' (for emotion '{Emotion}') not found.",
                         mapping.ExpressionId,
                         emotion
@@ -645,7 +631,7 @@ public class EmotionAnimationService : ILive2DAnimationService
             }
             else
             {
-                _logger.LogWarning(
+                Logger.LogWarning(
                     "Validation: Motion group '{MotionGroup}' (for emotion '{Emotion}') not found.",
                     mapping.MotionGroup,
                     emotion
@@ -661,7 +647,7 @@ public class EmotionAnimationService : ILive2DAnimationService
             }
             else
             {
-                _logger.LogWarning(
+                Logger.LogWarning(
                     "Configured NEUTRAL_EXPRESSION_ID ('{NeutralId}') not found!",
                     NEUTRAL_EXPRESSION_ID
                 );
@@ -676,53 +662,18 @@ public class EmotionAnimationService : ILive2DAnimationService
             }
             else
             {
-                _logger.LogWarning(
+                Logger.LogWarning(
                     "Configured NEUTRAL_TALKING_MOTION_GROUP ('{Group}') not found.",
                     NEUTRAL_TALKING_MOTION_GROUP
                 );
             }
         }
 
-        _logger.LogDebug(
+        Logger.LogDebug(
             "Validation complete. Usable Expressions: {ExprCount}, Usable Motion Groups: {MotionCount}",
             _availableExpressions.Count,
             _availableMotionGroups.Count
         );
-    }
-
-    #endregion
-
-    #region IDisposable Implementation
-
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
-    protected virtual void Dispose(bool disposing)
-    {
-        if (!_disposed)
-        {
-            if (disposing)
-            {
-                _logger.LogDebug("Disposing EmotionAnimationService...");
-                Stop();
-                UnsubscribeFromCurrentNotifier();
-                _activeEmotions.Clear();
-                _availableExpressions.Clear();
-                _availableMotionGroups.Clear();
-                _model = null;
-                _logger.LogInformation("EmotionAnimationService disposed.");
-            }
-
-            _disposed = true;
-        }
-    }
-
-    ~EmotionAnimationService()
-    {
-        Dispose(false);
     }
 
     #endregion

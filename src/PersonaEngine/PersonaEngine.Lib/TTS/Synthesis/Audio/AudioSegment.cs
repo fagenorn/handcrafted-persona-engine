@@ -1,4 +1,6 @@
-﻿namespace PersonaEngine.Lib.TTS.Synthesis;
+﻿using PersonaEngine.Lib.TTS.Synthesis.LipSync;
+
+namespace PersonaEngine.Lib.TTS.Synthesis;
 
 public record AudioSegment
 {
@@ -23,4 +25,6 @@ public record AudioSegment
     public IReadOnlyList<Token> Tokens { get; }
 
     public int Channels { get; }
+
+    public LipSyncTimeline? LipSync { get; set; }
 }

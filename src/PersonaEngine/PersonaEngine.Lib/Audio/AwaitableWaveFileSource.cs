@@ -1,4 +1,4 @@
-using PersonaEngine.Lib.Utils;
+using PersonaEngine.Lib.Utils.Audio;
 
 namespace PersonaEngine.Lib.Audio;
 
@@ -58,7 +58,7 @@ public class AwaitableWaveFileSource(
                 headerChunks.AddChunk(data);
             }
 
-            var headerParseResult = WaveFileUtils.ParseHeader(headerChunks);
+            var headerParseResult = WavFileHandler.ParseHeader(headerChunks);
             if (headerParseResult.IsIncomplete)
             {
                 // Need more data for header

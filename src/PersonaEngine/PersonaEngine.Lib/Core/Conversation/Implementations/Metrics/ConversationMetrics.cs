@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Common;
 
@@ -97,88 +97,28 @@ public sealed class ConversationMetrics : IDisposable
         Guid sessionId,
         Guid turnId,
         CompletionReason reason
-    )
-    {
-        if (!_endToEndTurnDurationMs.Enabled)
-        {
-            return;
-        }
-
-        var tags = new TagList
-        {
-            { "SessionId", sessionId.ToString() },
-            { "TurnId", turnId.ToString() },
-            { "FinishReason", reason.ToString() },
-        };
-
-        _endToEndTurnDurationMs.Record(durationMs, tags);
-    }
+    ) => RecordDuration(_endToEndTurnDurationMs, durationMs, sessionId, turnId, reason);
 
     public void RecordLlmDuration(
         double durationMs,
         Guid sessionId,
         Guid turnId,
         CompletionReason reason
-    )
-    {
-        if (!_llmResponseDurationMs.Enabled)
-        {
-            return;
-        }
-
-        var tags = new TagList
-        {
-            { "SessionId", sessionId.ToString() },
-            { "TurnId", turnId.ToString() },
-            { "FinishReason", reason.ToString() },
-        };
-
-        _llmResponseDurationMs.Record(durationMs, tags);
-    }
+    ) => RecordDuration(_llmResponseDurationMs, durationMs, sessionId, turnId, reason);
 
     public void RecordTtsDuration(
         double durationMs,
         Guid sessionId,
         Guid turnId,
         CompletionReason reason
-    )
-    {
-        if (!_ttsSynthesisDurationMs.Enabled)
-        {
-            return;
-        }
-
-        var tags = new TagList
-        {
-            { "SessionId", sessionId.ToString() },
-            { "TurnId", turnId.ToString() },
-            { "FinishReason", reason.ToString() },
-        };
-
-        _ttsSynthesisDurationMs.Record(durationMs, tags);
-    }
+    ) => RecordDuration(_ttsSynthesisDurationMs, durationMs, sessionId, turnId, reason);
 
     public void RecordAudioPlaybackDuration(
         double durationMs,
         Guid sessionId,
         Guid turnId,
         CompletionReason reason
-    )
-    {
-        if (!_audioPlaybackDurationMs.Enabled)
-        {
-            return;
-        }
-
-        var tags = new TagList
-        {
-            { "SessionId", sessionId.ToString() },
-            { "TurnId", turnId.ToString() },
-            { "FinishReason", reason.ToString() },
-        };
-
-        _audioPlaybackDurationMs.Record(durationMs, tags);
-    }
+    ) => RecordDuration(_audioPlaybackDurationMs, durationMs, sessionId, turnId, reason);
 
     public void RecordSttSegmentDuration(double durationMs, Guid sessionId, string participantId)
     {
@@ -257,5 +197,28 @@ public sealed class ConversationMetrics : IDisposable
         };
 
         _firstAudioLatencyMs.Record(durationMs, tags);
+    }
+
+    private void RecordDuration(
+        Histogram<double> histogram,
+        double durationMs,
+        Guid sessionId,
+        Guid turnId,
+        CompletionReason reason
+    )
+    {
+        if (!histogram.Enabled)
+        {
+            return;
+        }
+
+        var tags = new TagList
+        {
+            { "SessionId", sessionId.ToString() },
+            { "TurnId", turnId.ToString() },
+            { "FinishReason", reason.ToString() },
+        };
+
+        histogram.Record(durationMs, tags);
     }
 }

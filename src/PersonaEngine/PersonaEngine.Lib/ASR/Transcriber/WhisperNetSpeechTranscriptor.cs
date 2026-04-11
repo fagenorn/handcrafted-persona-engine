@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using PersonaEngine.Lib.Audio;
+using PersonaEngine.Lib.Utils.Audio;
 using Whisper.net;
 
 namespace PersonaEngine.Lib.ASR.Transcriber;
@@ -12,19 +13,7 @@ internal class WhisperNetSpeechTranscriptor(WhisperProcessor whisperProcessor) :
         [EnumeratorCancellation] CancellationToken cancellationToken
     )
     {
-        if (source.ChannelCount != 1)
-        {
-            throw new NotSupportedException(
-                "Only mono-channel audio is supported. Consider one channel aggregation on the audio source."
-            );
-        }
-
-        if (source.SampleRate != 16000)
-        {
-            throw new NotSupportedException(
-                "Only 16 kHz audio is supported. Consider resampling before calling this transcriptor."
-            );
-        }
+        AudioValidation.RequireMono16kHz(source);
 
         var samples = await source.GetSamplesAsync(0, cancellationToken: cancellationToken);
 

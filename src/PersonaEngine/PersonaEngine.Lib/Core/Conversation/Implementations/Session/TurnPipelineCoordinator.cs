@@ -116,8 +116,7 @@ internal sealed class TurnPipelineCoordinator : IAsyncDisposable
         _ttsTask = null;
         _audioTask = null;
 
-        _llmChannel?.Writer.TryComplete(new OperationCanceledException());
-        _ttsChannel?.Writer.TryComplete(new OperationCanceledException());
+        CompleteAllChannels(new OperationCanceledException());
 
         _llmChannel = null;
         _ttsChannel = null;
@@ -233,22 +232,14 @@ internal sealed class TurnPipelineCoordinator : IAsyncDisposable
         await writer.WriteAsync(chunk, cancellationToken);
     }
 
-    public void CompleteLlmChannel()
-    {
-        _llmChannel?.Writer.TryComplete();
-    }
+    public void CompleteLlmChannel() => _llmChannel?.Writer.TryComplete();
 
-    public void CompleteTtsChannel()
-    {
-        _ttsChannel?.Writer.TryComplete();
-    }
+    public void CompleteTtsChannel() => _ttsChannel?.Writer.TryComplete();
 
-    public void TryCompleteAllChannels()
+    public void CompleteAllChannels(Exception? exception = null)
     {
-        _llmChannel?.Writer.TryComplete();
-        _ttsChannel?.Writer.TryComplete();
-        _llmChannel = null;
-        _ttsChannel = null;
+        _llmChannel?.Writer.TryComplete(exception);
+        _ttsChannel?.Writer.TryComplete(exception);
     }
 
     private async Task WaitForTaskCancellationAsync(

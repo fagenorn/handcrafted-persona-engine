@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using PersonaEngine.Lib.Utils;
+using PersonaEngine.Lib.Utils.Numerics;
 
 namespace PersonaEngine.Lib.TTS.Synthesis.Qwen3;
 

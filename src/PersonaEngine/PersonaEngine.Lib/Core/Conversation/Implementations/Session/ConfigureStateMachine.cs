@@ -55,6 +55,12 @@ public partial class ConversationSession
         _stateMachine
             .Configure(ConversationState.Idle)
             .OnEntry(HandleIdle, "Handle Idle State")
+            .Ignore(ConversationTrigger.LlmStreamChunkReceived)
+            .Ignore(ConversationTrigger.TtsStreamChunkReceived)
+            .Ignore(ConversationTrigger.LlmStreamStarted)
+            .Ignore(ConversationTrigger.TtsRequestSent)
+            .Ignore(ConversationTrigger.TtsStreamStarted)
+            .Ignore(ConversationTrigger.AudioStreamStarted)
             .Ignore(ConversationTrigger.LlmStreamEnded)
             .Ignore(ConversationTrigger.TtsStreamEnded)
             .Ignore(ConversationTrigger.AudioStreamEnded)
@@ -95,6 +101,12 @@ public partial class ConversationSession
                 PrepareLlmRequestAsync,
                 "Process Input and Call LLM"
             )
+            .Ignore(ConversationTrigger.LlmStreamChunkReceived)
+            .Ignore(ConversationTrigger.TtsStreamChunkReceived)
+            .Ignore(ConversationTrigger.LlmStreamStarted)
+            .Ignore(ConversationTrigger.TtsRequestSent)
+            .Ignore(ConversationTrigger.TtsStreamStarted)
+            .Ignore(ConversationTrigger.AudioStreamStarted)
             .Ignore(ConversationTrigger.LlmStreamEnded)
             .Ignore(ConversationTrigger.TtsStreamEnded)
             .Ignore(ConversationTrigger.AudioStreamEnded)
@@ -107,6 +119,13 @@ public partial class ConversationSession
             .SubstateOf(ConversationState.ActiveTurn)
             .OnEntryFrom(ConversationTrigger.LlmRequestSent, HandleLlmStreamRequested, "Start LLM")
             .InternalTransition(ConversationTrigger.TtsRequestSent, HandleTtsStreamRequest)
+            .Ignore(ConversationTrigger.LlmStreamChunkReceived)
+            .Ignore(ConversationTrigger.TtsStreamChunkReceived)
+            .Ignore(ConversationTrigger.TtsStreamStarted)
+            .Ignore(ConversationTrigger.AudioStreamStarted)
+            .Ignore(ConversationTrigger.LlmStreamEnded)
+            .Ignore(ConversationTrigger.TtsStreamEnded)
+            .Ignore(ConversationTrigger.AudioStreamEnded)
             .Permit(ConversationTrigger.LlmStreamStarted, ConversationState.StreamingResponse)
             .Permit(ConversationTrigger.StopRequested, ConversationState.Ended)
             .Permit(ConversationTrigger.ErrorOccurred, ConversationState.Error);
@@ -198,7 +217,7 @@ public partial class ConversationSession
                     return;
                 }
 
-                if (unmetGuards.Count != 0 && unmetGuards.First() == "Barge-In")
+                if (unmetGuards is { Count: not 0 } && unmetGuards.First() == "Barge-In")
                 {
                     return;
                 }

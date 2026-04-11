@@ -151,7 +151,7 @@ public partial class ConversationSession
                     switch (outputEvent)
                     {
                         case LlmStreamStartEvent:
-                            _metricsTracker.StartLlmStopwatch();
+                            _metricsTracker.StartStopwatch(MetricPhase.Llm);
 
                             break;
                         case LlmStreamEndEvent ev:
@@ -159,7 +159,7 @@ public partial class ConversationSession
                             if (!_pipeline.IsAudioOutput)
                             {
                                 _metricsTracker.LlmFinishReason = ev.FinishReason;
-                                var llmDuration = _metricsTracker.StopLlmStopwatch();
+                                var llmDuration = _metricsTracker.StopStopwatch(MetricPhase.Llm);
                                 if (llmDuration.HasValue)
                                 {
                                     _metrics.RecordLlmDuration(
@@ -189,13 +189,13 @@ public partial class ConversationSession
                             break;
                         }
                         case TtsStreamStartEvent:
-                            _metricsTracker.StartTtsStopwatch();
+                            _metricsTracker.StartStopwatch(MetricPhase.Tts);
 
                             break;
                         case TtsStreamEndEvent ev:
                         {
                             _metricsTracker.TtsFinishReason = ev.FinishReason;
-                            var ttsDuration = _metricsTracker.StopTtsStopwatch();
+                            var ttsDuration = _metricsTracker.StopStopwatch(MetricPhase.Tts);
                             if (ttsDuration.HasValue)
                             {
                                 _metrics.RecordTtsDuration(
@@ -220,14 +220,16 @@ public partial class ConversationSession
                                 );
                             }
 
-                            _metricsTracker.StartAudioPlaybackStopwatch();
+                            _metricsTracker.StartStopwatch(MetricPhase.AudioPlayback);
 
                             break;
                         }
                         case AudioPlaybackEndedEvent ev:
                         {
                             _metricsTracker.AudioFinishReason = ev.FinishReason;
-                            var audioDuration = _metricsTracker.StopAudioPlaybackStopwatch();
+                            var audioDuration = _metricsTracker.StopStopwatch(
+                                MetricPhase.AudioPlayback
+                            );
                             if (audioDuration.HasValue)
                             {
                                 _metrics.RecordAudioPlaybackDuration(

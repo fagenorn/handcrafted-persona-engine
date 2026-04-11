@@ -1,4 +1,4 @@
-namespace PersonaEngine.Lib.Utils;
+namespace PersonaEngine.Lib.Utils.Text;
 
 public static class StringDistanceExtensions
 {

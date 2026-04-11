@@ -542,18 +542,7 @@ public class LAppModel : CubismUserModel
             }
 
             motion = new CubismMotion(path, onFinishedMotionHandler);
-            var fadeTime = item.FadeInTime;
-            if (fadeTime >= 0.0f)
-            {
-                motion.FadeInSeconds = fadeTime;
-            }
-
-            fadeTime = item.FadeOutTime;
-            if (fadeTime >= 0.0f)
-            {
-                motion.FadeOutSeconds = fadeTime;
-            }
-
+            ApplyFadeTimes(motion, item);
             motion.SetEffectIds(_eyeBlinkIds, _lipSyncIds);
         }
         else
@@ -772,20 +761,7 @@ public class LAppModel : CubismUserModel
             // モーションデータの読み込み
             var tmpMotion = new CubismMotion(path);
 
-            // フェードインの時間を取得
-            var fadeTime = item.FadeInTime;
-            if (fadeTime >= 0.0f)
-            {
-                tmpMotion.FadeInSeconds = fadeTime;
-            }
-
-            // フェードアウトの時間を取得
-            fadeTime = item.FadeOutTime;
-            if (fadeTime >= 0.0f)
-            {
-                tmpMotion.FadeOutSeconds = fadeTime;
-            }
-
+            ApplyFadeTimes(tmpMotion, item);
             tmpMotion.SetEffectIds(_eyeBlinkIds, _lipSyncIds);
 
             if (_motions.ContainsKey(name))
@@ -796,6 +772,22 @@ public class LAppModel : CubismUserModel
             {
                 _motions.Add(name, tmpMotion);
             }
+        }
+    }
+
+    private static void ApplyFadeTimes(
+        CubismMotion motion,
+        ModelSettingObj.FileReference.Motion item
+    )
+    {
+        if (item.FadeInTime >= 0.0f)
+        {
+            motion.FadeInSeconds = item.FadeInTime;
+        }
+
+        if (item.FadeOutTime >= 0.0f)
+        {
+            motion.FadeOutSeconds = item.FadeOutTime;
         }
     }
 }
