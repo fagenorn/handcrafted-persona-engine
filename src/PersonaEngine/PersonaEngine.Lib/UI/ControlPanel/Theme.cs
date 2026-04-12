@@ -54,7 +54,10 @@ public static class Theme
         // ── Borders ───────────────────────────────────────────────────────────
         style.WindowBorderSize = 0f;
         style.ChildBorderSize = 1f;
-        style.FrameBorderSize = 0f;
+        style.FrameBorderSize = 1f;
+
+        // ── Disabled ──────────────────────────────────────────────────────────
+        style.DisabledAlpha = 0.35f;
 
         // ── Colors ────────────────────────────────────────────────────────────
         var c = style.Colors;
@@ -108,7 +111,7 @@ public static class Theme
         c[(int)ImGuiCol.TextDisabled] = TextSecondary;
         c[(int)ImGuiCol.TextSelectedBg] = AccentSecondary with { W = 0.4f };
 
-        c[(int)ImGuiCol.Border] = SurfaceHover;
+        c[(int)ImGuiCol.Border] = SurfaceHover with { W = 0.5f };
         c[(int)ImGuiCol.BorderShadow] = Vector4.Zero;
 
         c[(int)ImGuiCol.PlotLines] = AccentSecondary;
