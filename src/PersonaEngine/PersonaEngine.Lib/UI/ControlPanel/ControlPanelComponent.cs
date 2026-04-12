@@ -88,11 +88,9 @@ public sealed class ControlPanelComponent : IRenderComponent
         ImGui.SetNextWindowPos(viewport.Pos);
         ImGui.SetNextWindowSize(viewport.Size);
 
-        // The fullscreen host window needs zero padding/rounding/spacing so children
-        // tile edge-to-edge.  Each child pushes its own padding before BeginChild.
+        // Zero padding + rounding for the fullscreen host window only.
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 0f);
-        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, Vector2.Zero);
 
         var windowFlags =
             ImGuiWindowFlags.NoTitleBar
@@ -106,9 +104,13 @@ public sealed class ControlPanelComponent : IRenderComponent
 
         ImGui.Begin("##ControlPanel", windowFlags);
 
-        // Pop rounding only — keep zero padding + zero spacing active so every
-        // BeginChild below inherits them and children tile without gaps.
-        ImGui.PopStyleVar(1); // WindowRounding
+        // Pop both — back to theme defaults.  From here we control everything
+        // explicitly: zero ItemSpacing for the tiling grid, per-child padding.
+        ImGui.PopStyleVar(2);
+
+        // Zero item spacing so children tile edge-to-edge with no gaps.
+        // This makes the height/width math exact: no hidden spacing to account for.
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, Vector2.Zero);
 
         var availableWidth = ImGui.GetContentRegionAvail().X;
         var availableHeight = ImGui.GetContentRegionAvail().Y;
@@ -138,14 +140,14 @@ public sealed class ControlPanelComponent : IRenderComponent
         }
 
         ImGui.EndChild();
-        ImGui.PopStyleVar(2); // ItemSpacing + WindowPadding
+        ImGui.PopStyleVar(2); // ItemSpacing(10,8) + WindowPadding(16,16)
 
         // ── Control bar (full width, fixed height, minimal padding) ─────────
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8f, 0f));
         _controlBar.Render(availableWidth);
         ImGui.PopStyleVar();
 
-        ImGui.PopStyleVar(2); // WindowPadding(Zero) + ItemSpacing(Zero)
+        ImGui.PopStyleVar(); // ItemSpacing(Zero)
 
         RenderSavedIndicator();
 
