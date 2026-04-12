@@ -41,6 +41,24 @@ public class FontProvider : IStartupTask
         _texture2DManager = new Texture2DManager(gl);
     }
 
+    public IReadOnlyList<string> GetAvailableFonts()
+    {
+        if (!Directory.Exists(FONTS_DIR))
+        {
+            _logger.LogWarning("Fonts directory not found: {Path}", FONTS_DIR);
+            return [];
+        }
+
+        var fontFiles = Directory.GetFiles(FONTS_DIR, "*.ttf");
+        var fontNames = new string[fontFiles.Length];
+        for (var i = 0; i < fontFiles.Length; i++)
+        {
+            fontNames[i] = Path.GetFileName(fontFiles[i]);
+        }
+
+        return fontNames;
+    }
+
     public Task<IReadOnlyList<string>> GetAvailableFontsAsync(
         CancellationToken cancellationToken = default
     )
