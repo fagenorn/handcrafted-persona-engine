@@ -42,6 +42,14 @@ public static class Easing
     public static float EaseOutCubic(float t) => 1f - MathF.Pow(1f - t, 3);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static float EaseOutBack(float t)
+    {
+        const float c1 = 1.70158f;
+        const float c3 = c1 + 1f;
+        return 1f + c3 * MathF.Pow(t - 1f, 3) + c1 * MathF.Pow(t - 1f, 2);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static float EaseInOutQuad(float t) =>
         t < 0.5f ? 2f * t * t : 1f - MathF.Pow(-2f * t + 2f, 2) / 2f;
 
@@ -116,4 +124,25 @@ public struct OneShotAnimation
         _active = false;
         Progress = 0f;
     }
+}
+
+/// <summary>
+/// Generates a continuous sine wave oscillation around a center value.
+/// </summary>
+public readonly struct SineOscillator
+{
+    public readonly float Center;
+    public readonly float Amplitude;
+    public readonly float FrequencyHz;
+
+    public SineOscillator(float center, float amplitude, float frequencyHz)
+    {
+        Center = center;
+        Amplitude = amplitude;
+        FrequencyHz = frequencyHz;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public float Sample(float elapsed) =>
+        Center + Amplitude * MathF.Sin(elapsed * FrequencyHz * MathF.Tau);
 }
