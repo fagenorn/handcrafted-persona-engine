@@ -29,9 +29,6 @@ public static class ImGuiHelpers
     /// </summary>
     public static void SectionHeader(string label)
     {
-        ImGui.Spacing();
-        ImGui.Spacing();
-
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.AccentPrimary);
         ImGui.TextUnformatted(label);
         ImGui.PopStyleColor();
@@ -46,25 +43,34 @@ public static class ImGuiHelpers
             new Vector2(cursor.X + 40f, cursor.Y + 1f),
             underlineColor
         );
-        ImGui.Dummy(new Vector2(0f, 4f));
-
-        ImGui.Spacing();
+        ImGui.Dummy(new Vector2(0f, 2f));
     }
 
     /// <summary>
     ///     Draws a filled colored circle and advances the layout cursor by the dot's bounding box.
+    ///     Optionally renders a larger glow halo behind the dot.
     /// </summary>
     /// <param name="color">The fill color for the dot.</param>
     /// <param name="radius">The circle radius in pixels (default 5).</param>
-    public static void StatusDot(Vector4 color, float radius = 5f)
+    /// <param name="glowAlpha">Glow halo opacity (0 = no glow). Halo uses the same color at this alpha.</param>
+    public static void StatusDot(Vector4 color, float radius = 5f, float glowAlpha = 0f)
     {
         var drawList = ImGui.GetWindowDrawList();
         var cursor = ImGui.GetCursorScreenPos();
-        var center = new Vector2(cursor.X + radius, cursor.Y + radius);
-        var col = ImGui.ColorConvertFloat4ToU32(color);
+        var textH = ImGui.GetTextLineHeight();
+        var center = new Vector2(cursor.X + radius, cursor.Y + textH * 0.5f);
 
+        // Optional pulsing glow halo behind the dot
+        if (glowAlpha > 0f)
+        {
+            var glowColor = color with { W = glowAlpha };
+            var glowCol = ImGui.ColorConvertFloat4ToU32(glowColor);
+            ImGui.AddCircleFilled(drawList, center, 12f, glowCol);
+        }
+
+        var col = ImGui.ColorConvertFloat4ToU32(color);
         ImGui.AddCircleFilled(drawList, center, radius, col);
-        ImGui.Dummy(new Vector2(radius * 2f, radius * 2f));
+        ImGui.Dummy(new Vector2(radius * 2f, textH));
     }
 
     /// <summary>
