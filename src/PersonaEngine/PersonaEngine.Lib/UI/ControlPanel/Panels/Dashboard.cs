@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Numerics;
 using Hexa.NET.ImGui;
 using OpenAI.Chat;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
@@ -29,10 +28,6 @@ public sealed class Dashboard(IConversationOrchestrator orchestrator)
 
     public void Render()
     {
-        // Zero item spacing so Rows tile edge-to-edge — the LayoutContext
-        // height math assumes no gaps between children.
-        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, Vector2.Zero);
-
         using (Ui.Row(Sz.Fixed(HealthSectionHeight)))
             RenderSystemHealth();
 
@@ -41,43 +36,32 @@ public sealed class Dashboard(IConversationOrchestrator orchestrator)
 
         using (Ui.Row(Sz.Fixed(StatsSectionHeight)))
             RenderSessionStats();
-
-        ImGui.PopStyleVar();
     }
 
     // ── System Health ────────────────────────────────────────────────────────────
 
-    private static void RenderSystemHealth()
+    private void RenderSystemHealth()
     {
         ImGuiHelpers.SectionHeader("System Health");
 
-        const float cardGap = 8f;
-        var availableWidth = ImGui.GetContentRegionAvail().X;
-        var gaps = (_healthCards.Length - 1) * cardGap;
-        var cardWidth = MathF.Max(1f, (availableWidth - gaps) / _healthCards.Length);
+        using var cols = Ui.EqualCols(
+            _healthCards.Length,
+            64f,
+            gap: 8f,
+            childFlags: ImGuiChildFlags.Borders
+        );
 
         for (var i = 0; i < _healthCards.Length; i++)
         {
-            if (i > 0)
+            if (cols.NextCol())
             {
-                ImGui.SameLine(0f, cardGap);
+                RenderHealthCard(_healthCards[i].Name, _healthCards[i].StatusText);
             }
-
-            RenderHealthCard(_healthCards[i].Name, _healthCards[i].StatusText, cardWidth);
         }
     }
 
-    private static void RenderHealthCard(string name, string statusText, float cardWidth)
+    private static void RenderHealthCard(string name, string statusText)
     {
-        var cardSize = new Vector2(cardWidth, 64f);
-
-        if (!ImGui.BeginChild(name, cardSize, ImGuiChildFlags.Borders))
-        {
-            ImGui.EndChild();
-
-            return;
-        }
-
         ImGui.Spacing();
 
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
@@ -88,8 +72,6 @@ public sealed class Dashboard(IConversationOrchestrator orchestrator)
         ImGuiHelpers.StatusDot(Theme.Success);
 
         ImGui.TextUnformatted(statusText);
-
-        ImGui.EndChild();
     }
 
     // ── Conversation Transcript ──────────────────────────────────────────────────

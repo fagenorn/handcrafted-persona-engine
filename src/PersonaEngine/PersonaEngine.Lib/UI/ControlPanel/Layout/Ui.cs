@@ -28,6 +28,17 @@ public static class Ui
         Style rightStyle = default
     ) => new(id, height, initialLeft, minLeft, minRight, leftStyle, rightStyle);
 
+    /// <summary>
+    ///     Creates N equal-width columns side by side. Call <see cref="EqualColsScope.NextCol"/>
+    ///     for each column to render into it.
+    /// </summary>
+    public static EqualColsScope EqualCols(
+        int count,
+        float height,
+        float gap = 8f,
+        ImGuiChildFlags childFlags = ImGuiChildFlags.None
+    ) => new(count, height, gap, childFlags);
+
     /// <summary>Peeks the current layout context's available space.</summary>
     public static (float Width, float Height) PeekContext() => LayoutContext.Peek();
 }

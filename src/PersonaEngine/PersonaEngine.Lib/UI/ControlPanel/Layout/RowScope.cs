@@ -31,6 +31,10 @@ public ref struct RowScope
         resolvedHeight = MathF.Max(0f, resolvedHeight);
         LayoutContext.ConsumeHeight(resolvedHeight);
 
+        // Zero item spacing on the PARENT so consecutive rows tile edge-to-edge
+        // regardless of the parent context's spacing.  This is popped after EndChild.
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, Vector2.Zero);
+
         _stylePushToken = style.Push();
 
         ImGui.BeginChild(
@@ -53,5 +57,6 @@ public ref struct RowScope
         LayoutContext.Pop();
         ImGui.EndChild();
         Style.Pop(_stylePushToken);
+        ImGui.PopStyleVar(); // parent zero ItemSpacing
     }
 }
