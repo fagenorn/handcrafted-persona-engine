@@ -9,9 +9,9 @@ public static class Styles
     public static readonly Style None = default;
 
     public static readonly Style StatusBar = new(
-        padding: new Vector2(12f, 6f),
+        padding: new Vector2(16f, 6f),
         itemSpacing: new Vector2(12f, 0f),
-        childBg: Theme.Surface1
+        childBg: Theme.Surface2
     );
 
     public static readonly Style Sidebar = new(
@@ -22,7 +22,8 @@ public static class Styles
 
     public static readonly Style Content = new(
         padding: new Vector2(24f, 20f),
-        itemSpacing: new Vector2(12f, 10f)
+        itemSpacing: new Vector2(12f, 10f),
+        childBg: Theme.Base
     );
 
     public static readonly Style ControlBar = new(
