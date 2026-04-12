@@ -27,9 +27,11 @@ public sealed class ConfigWriter : IConfigWriter
 
     private readonly Lock _timerLock = new();
 
+    private readonly SemaphoreSlim _flushLock = new(1, 1);
+
     private Timer? _debounceTimer;
 
-    private bool _disposed;
+    private volatile bool _disposed;
 
     public DateTime? LastSaveTime { get; private set; }
 
@@ -82,10 +84,24 @@ public sealed class ConfigWriter : IConfigWriter
             _debounceTimer = null;
         }
 
-        // Flush any remaining pending sections synchronously
+        // Flush any remaining pending sections synchronously.
+        // Acquire _flushLock to wait for any in-flight timer callback to finish first.
         if (!_pendingSections.IsEmpty)
         {
-            FlushToDisk();
+            _flushLock.Wait();
+            try
+            {
+                FlushToDisk();
+            }
+            finally
+            {
+                _flushLock.Release();
+                _flushLock.Dispose();
+            }
+        }
+        else
+        {
+            _flushLock.Dispose();
         }
     }
 
@@ -95,7 +111,25 @@ public sealed class ConfigWriter : IConfigWriter
         {
             if (_debounceTimer is null)
             {
-                _debounceTimer = new Timer(_ => FlushToDisk(), null, _debounceMs, Timeout.Infinite);
+                _debounceTimer = new Timer(
+                    _ =>
+                    {
+                        if (!_flushLock.Wait(0))
+                            return;
+
+                        try
+                        {
+                            FlushToDisk();
+                        }
+                        finally
+                        {
+                            _flushLock.Release();
+                        }
+                    },
+                    null,
+                    _debounceMs,
+                    Timeout.Infinite
+                );
             }
             else
             {
@@ -158,7 +192,11 @@ public sealed class ConfigWriter : IConfigWriter
                 _pendingSections.TryAdd(path, node);
             }
 
-            ResetDebounceTimer();
+            // Do not reset the timer after disposal — that would create an orphaned timer
+            if (!_disposed)
+            {
+                ResetDebounceTimer();
+            }
         }
     }
 
