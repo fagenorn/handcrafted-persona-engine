@@ -20,7 +20,7 @@ public sealed class Subtitles(
     private string[] _fonts = [];
     private bool _initialized;
 
-    public void Render()
+    public void Render(float deltaTime)
     {
         EnsureInitialized();
         RenderFontSection();

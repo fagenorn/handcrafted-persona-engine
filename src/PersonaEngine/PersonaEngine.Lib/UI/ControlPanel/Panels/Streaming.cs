@@ -24,7 +24,7 @@ public sealed class Streaming(
         _initialized = true;
     }
 
-    public void Render()
+    public void Render(float deltaTime)
     {
         EnsureInitialized();
         RenderSpoutOutputs();

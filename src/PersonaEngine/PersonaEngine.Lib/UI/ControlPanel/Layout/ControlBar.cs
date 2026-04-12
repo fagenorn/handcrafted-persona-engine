@@ -11,7 +11,7 @@ public sealed class ControlBar(IConversationOrchestrator orchestrator)
     private bool _isMuted;
     private bool _isPaused;
 
-    public void Render()
+    public void Render(float deltaTime)
     {
         var (_, barHeight) = Ui.PeekContext();
         ImGui.SetCursorPosY((barHeight - ImGui.GetFrameHeight()) * 0.5f);

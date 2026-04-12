@@ -30,7 +30,7 @@ public sealed class Listening(
     private string[] _devices = [];
     private bool _initialized;
 
-    public void Render()
+    public void Render(float deltaTime)
     {
         EnsureInitialized();
         RenderMicrophone();

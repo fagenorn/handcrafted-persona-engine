@@ -15,20 +15,23 @@ public sealed class ScreenAwareness(
     private VisionConfig _vision;
     private bool _initialized;
 
+    private AnimatedFloat _enabledKnob;
+
     private void EnsureInitialized()
     {
         if (_initialized)
             return;
 
         _vision = visionOptions.CurrentValue;
+        _enabledKnob = new AnimatedFloat(_vision.Enabled ? 1f : 0f);
         _initialized = true;
     }
 
-    public void Render()
+    public void Render(float deltaTime)
     {
         EnsureInitialized();
         RenderInfo();
-        RenderSettings();
+        RenderSettings(deltaTime);
     }
 
     // ── Info ─────────────────────────────────────────────────────────────────────
@@ -50,7 +53,7 @@ public sealed class ScreenAwareness(
 
     // ── Settings ─────────────────────────────────────────────────────────────────
 
-    private void RenderSettings()
+    private void RenderSettings(float dt)
     {
         // Enable toggle
         {
@@ -61,7 +64,7 @@ public sealed class ScreenAwareness(
                 "Turn screen awareness on or off. Requires a vision-capable LLM endpoint."
             );
 
-            if (ImGui.Checkbox("##VisionEnabled", ref enabled))
+            if (ImGuiHelpers.ToggleSwitch("##VisionEnabled", ref enabled, ref _enabledKnob, dt))
             {
                 _vision = _vision with { Enabled = enabled };
                 configWriter.Write(_vision);

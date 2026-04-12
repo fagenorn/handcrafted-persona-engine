@@ -23,7 +23,7 @@ public sealed class Personality(
     private string _topicsBuffer = string.Empty;
     private bool _initialized;
 
-    public void Render()
+    public void Render(float deltaTime)
     {
         EnsureInitialized();
         RenderSystemPrompt();

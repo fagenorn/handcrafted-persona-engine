@@ -34,12 +34,16 @@ public sealed class Voice(
     private string[] _rvcVoices = [];
     private bool _initialized;
 
-    public void Render()
+    private AnimatedFloat _britishEnglishKnob;
+    private AnimatedFloat _trimSilenceKnob;
+    private AnimatedFloat _rvcEnabledKnob;
+
+    public void Render(float deltaTime)
     {
         EnsureInitialized();
         RenderEngineSelector();
-        RenderEngineSettings();
-        RenderVoiceCloning();
+        RenderEngineSettings(deltaTime);
+        RenderVoiceCloning(deltaTime);
     }
 
     // ── Initialization ───────────────────────────────────────────────────────────
@@ -57,6 +61,11 @@ public sealed class Voice(
         _kokoroVoices = kokoroVoiceProvider.GetAvailableVoices().ToArray();
         _qwen3Speakers = qwen3VoiceProvider.GetAvailableSpeakers().ToArray();
         _rvcVoices = rvcVoiceProvider.GetAvailableVoices().ToArray();
+
+        _britishEnglishKnob = new AnimatedFloat(_kokoro.UseBritishEnglish ? 1f : 0f);
+        _trimSilenceKnob = new AnimatedFloat(_kokoro.TrimSilence ? 1f : 0f);
+        _rvcEnabledKnob = new AnimatedFloat(_rvc.Enabled ? 1f : 0f);
+
         _initialized = true;
     }
 
@@ -81,11 +90,11 @@ public sealed class Voice(
 
     // ── Engine settings dispatcher ───────────────────────────────────────────────
 
-    private void RenderEngineSettings()
+    private void RenderEngineSettings(float dt)
     {
         if (string.Equals(_tts.ActiveEngine, "kokoro", StringComparison.OrdinalIgnoreCase))
         {
-            RenderKokoroSettings();
+            RenderKokoroSettings(dt);
         }
         else if (string.Equals(_tts.ActiveEngine, "qwen3", StringComparison.OrdinalIgnoreCase))
         {
@@ -95,7 +104,7 @@ public sealed class Voice(
 
     // ── Kokoro settings ──────────────────────────────────────────────────────────
 
-    private void RenderKokoroSettings()
+    private void RenderKokoroSettings(float dt)
     {
         ImGuiHelpers.SectionHeader("Kokoro Settings");
 
@@ -140,7 +149,14 @@ public sealed class Voice(
 
             ImGuiHelpers.SettingLabel("British English", "Use British English phoneme variants.");
 
-            if (ImGui.Checkbox("##BritishEnglish", ref british))
+            if (
+                ImGuiHelpers.ToggleSwitch(
+                    "##BritishEnglish",
+                    ref british,
+                    ref _britishEnglishKnob,
+                    dt
+                )
+            )
             {
                 _kokoro = _kokoro with { UseBritishEnglish = british };
                 configWriter.Write(_kokoro);
@@ -156,7 +172,7 @@ public sealed class Voice(
                 "Strip leading and trailing silence from each audio segment."
             );
 
-            if (ImGui.Checkbox("##TrimSilence", ref trim))
+            if (ImGuiHelpers.ToggleSwitch("##TrimSilence", ref trim, ref _trimSilenceKnob, dt))
             {
                 _kokoro = _kokoro with { TrimSilence = trim };
                 configWriter.Write(_kokoro);
@@ -269,7 +285,7 @@ public sealed class Voice(
 
     // ── Voice cloning (RVC) ──────────────────────────────────────────────────────
 
-    private void RenderVoiceCloning()
+    private void RenderVoiceCloning(float dt)
     {
         ImGuiHelpers.SectionHeader("Voice Cloning (RVC)");
 
@@ -279,7 +295,7 @@ public sealed class Voice(
 
             ImGuiHelpers.SettingLabel("Enable", "Apply RVC voice conversion to synthesised audio.");
 
-            if (ImGui.Checkbox("##RvcEnabled", ref enabled))
+            if (ImGuiHelpers.ToggleSwitch("##RvcEnabled", ref enabled, ref _rvcEnabledKnob, dt))
             {
                 _rvc = _rvc with { Enabled = enabled };
                 configWriter.Write(_rvc);

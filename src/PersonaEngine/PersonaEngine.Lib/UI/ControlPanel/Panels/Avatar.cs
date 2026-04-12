@@ -27,11 +27,13 @@ public sealed class Avatar(
     private string _a2fIdentityBuffer = string.Empty;
     private bool _initialized;
 
-    public void Render()
+    private AnimatedFloat _useGpuKnob;
+
+    public void Render(float deltaTime)
     {
         EnsureInitialized();
         RenderLive2DModel();
-        RenderLipSync();
+        RenderLipSync(deltaTime);
     }
 
     // ── Initialization ───────────────────────────────────────────────────────────
@@ -47,6 +49,8 @@ public sealed class Avatar(
         _modelNameBuffer = _live2d.ModelName;
         _modelPathBuffer = _live2d.ModelPath;
         _a2fIdentityBuffer = _lipSync.Audio2Face.Identity;
+
+        _useGpuKnob = new AnimatedFloat(_lipSync.Audio2Face.UseGpu ? 1f : 0f);
 
         _initialized = true;
     }
@@ -123,7 +127,7 @@ public sealed class Avatar(
 
     // ── Lip Sync ─────────────────────────────────────────────────────────────────
 
-    private void RenderLipSync()
+    private void RenderLipSync(float dt)
     {
         ImGuiHelpers.SectionHeader("Lip Sync");
 
@@ -178,7 +182,7 @@ public sealed class Avatar(
 
             ImGuiHelpers.SettingLabel("Use GPU", "Run Audio2Face inference on the GPU.");
 
-            if (ImGui.Checkbox("##A2FUseGpu", ref useGpu))
+            if (ImGuiHelpers.ToggleSwitch("##A2FUseGpu", ref useGpu, ref _useGpuKnob, dt))
             {
                 _lipSync.Audio2Face.UseGpu = useGpu;
                 configWriter.Write(CloneLipSync(_lipSync));

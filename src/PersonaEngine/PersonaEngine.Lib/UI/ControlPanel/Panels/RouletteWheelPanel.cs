@@ -24,13 +24,16 @@ public sealed class RouletteWheelPanel(
 
     private RouletteWheelOptions _opts;
 
-    public void Render()
+    private AnimatedFloat _animateToggleKnob;
+    private AnimatedFloat _enabledKnob;
+
+    public void Render(float deltaTime)
     {
         EnsureInitialized();
         RenderPlaygroundSection();
         RenderSectionsSection();
         RenderSizeSection();
-        RenderSpinBehaviorSection();
+        RenderSpinBehaviorSection(deltaTime);
         RenderTextStyleSection();
     }
 
@@ -43,6 +46,10 @@ public sealed class RouletteWheelPanel(
 
         _opts = wheelOptions.CurrentValue;
         _fonts = fontProvider.GetAvailableFonts().ToArray();
+
+        _animateToggleKnob = new AnimatedFloat(_opts.AnimateToggle ? 1f : 0f);
+        _enabledKnob = new AnimatedFloat(_opts.Enabled ? 1f : 0f);
+
         _initialized = true;
     }
 
@@ -198,7 +205,7 @@ public sealed class RouletteWheelPanel(
 
     // ── Spin Behavior section ────────────────────────────────────────────────────
 
-    private void RenderSpinBehaviorSection()
+    private void RenderSpinBehaviorSection(float dt)
     {
         ImGuiHelpers.SectionHeader("Spin Behavior");
 
@@ -247,7 +254,14 @@ public sealed class RouletteWheelPanel(
                 "Smoothly animate the wheel when showing or hiding it."
             );
 
-            if (ImGui.Checkbox("##WheelAnimateToggle", ref animate))
+            if (
+                ImGuiHelpers.ToggleSwitch(
+                    "##WheelAnimateToggle",
+                    ref animate,
+                    ref _animateToggleKnob,
+                    dt
+                )
+            )
             {
                 _opts = _opts with { AnimateToggle = animate };
                 configWriter.Write(_opts);
@@ -263,7 +277,7 @@ public sealed class RouletteWheelPanel(
                 "Whether the wheel starts visible when the application launches."
             );
 
-            if (ImGui.Checkbox("##WheelEnabled", ref enabled))
+            if (ImGuiHelpers.ToggleSwitch("##WheelEnabled", ref enabled, ref _enabledKnob, dt))
             {
                 _opts = _opts with { Enabled = enabled };
                 configWriter.Write(_opts);

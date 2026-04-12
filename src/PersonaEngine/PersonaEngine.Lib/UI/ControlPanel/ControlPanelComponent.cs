@@ -19,12 +19,16 @@ public sealed class ControlPanelComponent : IRenderComponent
     private const float StatusBarHeight = 46f;
     private const float ControlBarHeight = 44f;
     private const float SavedIndicatorDuration = 2f;
+    private const float PanelTransitionDuration = 0.18f;
 
     private readonly ControlBar _controlBar;
     private readonly IConfigWriter _configWriter;
     private readonly Navigation _navigation = new();
-    private readonly Dictionary<NavSection, Action> _panelRenderers = new();
+    private readonly Dictionary<NavSection, Action<float>> _panelRenderers = new();
     private readonly StatusBar _statusBar;
+
+    private NavSection _lastSection;
+    private OneShotAnimation _panelTransition;
 
     public ControlPanelComponent(
         StatusBar statusBar,
@@ -47,17 +51,17 @@ public sealed class ControlPanelComponent : IRenderComponent
         _controlBar = controlBar;
         _configWriter = configWriter;
 
-        RegisterPanel(NavSection.Dashboard, dashboard.Render);
-        RegisterPanel(NavSection.Voice, voice.Render);
-        RegisterPanel(NavSection.Personality, personality.Render);
-        RegisterPanel(NavSection.Listening, listening.Render);
-        RegisterPanel(NavSection.Avatar, avatar.Render);
-        RegisterPanel(NavSection.Subtitles, subtitles.Render);
-        RegisterPanel(NavSection.RouletteWheel, rouletteWheelPanel.Render);
-        RegisterPanel(NavSection.ScreenAwareness, screenAwareness.Render);
-        RegisterPanel(NavSection.Streaming, streaming.Render);
-        RegisterPanel(NavSection.LlmConnection, llmConnection.Render);
-        RegisterPanel(NavSection.Application, application.Render);
+        RegisterPanel(NavSection.Dashboard, dt => dashboard.Render(dt));
+        RegisterPanel(NavSection.Voice, dt => voice.Render(dt));
+        RegisterPanel(NavSection.Personality, dt => personality.Render(dt));
+        RegisterPanel(NavSection.Listening, dt => listening.Render(dt));
+        RegisterPanel(NavSection.Avatar, dt => avatar.Render(dt));
+        RegisterPanel(NavSection.Subtitles, dt => subtitles.Render(dt));
+        RegisterPanel(NavSection.RouletteWheel, dt => rouletteWheelPanel.Render(dt));
+        RegisterPanel(NavSection.ScreenAwareness, dt => screenAwareness.Render(dt));
+        RegisterPanel(NavSection.Streaming, dt => streaming.Render(dt));
+        RegisterPanel(NavSection.LlmConnection, dt => llmConnection.Render(dt));
+        RegisterPanel(NavSection.Application, dt => application.Render(dt));
     }
 
     public bool UseSpout => false;
@@ -78,7 +82,7 @@ public sealed class ControlPanelComponent : IRenderComponent
     ///     Registers a renderer for the given navigation section.
     ///     Call this before the first frame to wire up panel content.
     /// </summary>
-    public void RegisterPanel(NavSection section, Action renderer) =>
+    public void RegisterPanel(NavSection section, Action<float> renderer) =>
         _panelRenderers[section] = renderer;
 
     public void Render(float deltaTime)
@@ -101,23 +105,42 @@ public sealed class ControlPanelComponent : IRenderComponent
             )
             {
                 using (split.Left())
-                    _navigation.Render();
+                    _navigation.Render(deltaTime);
                 using (split.Right())
-                    RenderActivePanel();
+                    RenderActivePanel(deltaTime);
             }
 
             using (Ui.Row(Sz.Fixed(ControlBarHeight), Styles.ControlBar))
-                _controlBar.Render();
+                _controlBar.Render(deltaTime);
         }
 
         RenderSavedIndicator();
     }
 
-    private void RenderActivePanel()
+    private void RenderActivePanel(float deltaTime)
     {
-        if (_panelRenderers.TryGetValue(_navigation.ActiveSection, out var renderer))
+        var current = _navigation.ActiveSection;
+
+        if (current != _lastSection)
         {
-            renderer();
+            _panelTransition.Start(PanelTransitionDuration);
+            _lastSection = current;
+        }
+
+        _panelTransition.Update(deltaTime);
+
+        var t = _panelTransition.IsActive
+            ? Easing.EaseOutCubic(_panelTransition.Progress)
+            : 1f;
+
+        ImGui.PushStyleVar(ImGuiStyleVar.Alpha, t);
+
+        var offsetY = (1f - t) * 10f;
+        ImGui.SetCursorPosY(ImGui.GetCursorPosY() + offsetY);
+
+        if (_panelRenderers.TryGetValue(current, out var renderer))
+        {
+            renderer(deltaTime);
         }
         else
         {
@@ -125,6 +148,8 @@ public sealed class ControlPanelComponent : IRenderComponent
             ImGui.TextUnformatted("Coming soon...");
             ImGui.PopStyleColor();
         }
+
+        ImGui.PopStyleVar();
     }
 
     private void RenderSavedIndicator()

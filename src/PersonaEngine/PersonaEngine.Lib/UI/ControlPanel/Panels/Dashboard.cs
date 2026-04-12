@@ -27,7 +27,7 @@ public sealed class Dashboard(IConversationOrchestrator orchestrator)
 
     private readonly Stopwatch _uptime = Stopwatch.StartNew();
 
-    public void Render()
+    public void Render(float deltaTime)
     {
         using var rows = Ui.Rows(
             12f,

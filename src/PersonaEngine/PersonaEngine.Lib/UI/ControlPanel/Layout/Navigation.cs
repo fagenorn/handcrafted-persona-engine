@@ -40,7 +40,7 @@ public sealed class Navigation
 
     public NavSection ActiveSection { get; private set; } = NavSection.Dashboard;
 
-    public void Render()
+    public void Render(float deltaTime)
     {
         var drawList = ImGui.GetWindowDrawList();
 

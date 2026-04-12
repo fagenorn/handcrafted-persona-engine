@@ -15,12 +15,15 @@ public sealed class Application(
     private WindowConfiguration _window = null!;
     private bool _initialized;
 
+    private AnimatedFloat _fullscreenKnob;
+
     private void EnsureInitialized()
     {
         if (_initialized)
             return;
 
         _window = CloneWindow(appOptions.CurrentValue.Window);
+        _fullscreenKnob = new AnimatedFloat(_window.Fullscreen ? 1f : 0f);
         _initialized = true;
     }
 
@@ -33,15 +36,15 @@ public sealed class Application(
             Fullscreen = src.Fullscreen,
         };
 
-    public void Render()
+    public void Render(float deltaTime)
     {
         EnsureInitialized();
-        RenderWindow();
+        RenderWindow(deltaTime);
     }
 
     // ── Window ───────────────────────────────────────────────────────────────────
 
-    private void RenderWindow()
+    private void RenderWindow(float dt)
     {
         ImGuiHelpers.SectionHeader("Window");
 
@@ -79,7 +82,7 @@ public sealed class Application(
 
             ImGuiHelpers.SettingLabel("Fullscreen", "Run the application in fullscreen mode.");
 
-            if (ImGui.Checkbox("##Fullscreen", ref fullscreen))
+            if (ImGuiHelpers.ToggleSwitch("##Fullscreen", ref fullscreen, ref _fullscreenKnob, dt))
             {
                 _window.Fullscreen = fullscreen;
                 configWriter.Write(CloneWindow(_window));

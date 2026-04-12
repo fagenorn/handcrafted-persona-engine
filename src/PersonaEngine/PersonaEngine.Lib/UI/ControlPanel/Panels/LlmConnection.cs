@@ -24,7 +24,7 @@ public sealed class LlmConnection(
         _initialized = true;
     }
 
-    public void Render()
+    public void Render(float deltaTime)
     {
         EnsureInitialized();
         RenderTextLlm();
