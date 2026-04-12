@@ -53,13 +53,19 @@ public static class ImGuiHelpers
 
     /// <summary>
     ///     Renders a left-aligned label with an optional inline (?) tooltip marker,
-    ///     then positions the cursor at <paramref name="labelWidth"/> for the following widget.
+    ///     then positions the cursor at a proportional offset for the following widget.
     /// </summary>
     /// <param name="label">The label text.</param>
     /// <param name="tooltip">Optional tooltip shown when hovering the (?) marker.</param>
-    /// <param name="labelWidth">Horizontal offset at which the next widget begins (default 180).</param>
-    public static void SettingLabel(string label, string? tooltip, float labelWidth = 180f)
+    /// <param name="labelWidth">
+    ///     Explicit horizontal offset. When <see langword="null"/>, calculated as 30% of
+    ///     available width clamped to [130, 240].
+    /// </param>
+    public static void SettingLabel(string label, string? tooltip, float? labelWidth = null)
     {
+        var width = labelWidth
+            ?? Math.Clamp(ImGui.GetContentRegionAvail().X * 0.30f, 130f, 240f);
+
         ImGui.TextUnformatted(label);
 
         if (tooltip is not null)
@@ -71,7 +77,7 @@ public static class ImGuiHelpers
             Tooltip(tooltip);
         }
 
-        ImGui.SameLine(labelWidth);
+        ImGui.SameLine(width);
         ImGui.SetNextItemWidth(-1f);
     }
 
@@ -151,6 +157,33 @@ public static class ImGuiHelpers
 
         // Draw glow behind the slider (use same rounding as FrameRounding)
         ImGui.AddRectFilled(drawList, min, max, col, ImGui.GetStyle().FrameRounding);
+    }
+
+    /// <summary>
+    ///     Renders an accent-colored button for primary actions.
+    /// </summary>
+    public static bool PrimaryButton(string label)
+    {
+        ImGui.PushStyleColor(ImGuiCol.Button, Theme.AccentPrimary with { W = 0.7f });
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, Theme.AccentPrimary with { W = 0.85f });
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, Theme.AccentPrimary);
+        ImGui.PushStyleColor(ImGuiCol.Text, Theme.Background);
+        var clicked = ImGui.Button(label);
+        ImGui.PopStyleColor(4);
+        return clicked;
+    }
+
+    /// <summary>
+    ///     Renders an error-colored button for destructive actions.
+    /// </summary>
+    public static bool DangerButton(string label)
+    {
+        ImGui.PushStyleColor(ImGuiCol.Button, Theme.Error with { W = 0.6f });
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, Theme.Error with { W = 0.8f });
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, Theme.Error);
+        var clicked = ImGui.Button(label);
+        ImGui.PopStyleColor(3);
+        return clicked;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────
