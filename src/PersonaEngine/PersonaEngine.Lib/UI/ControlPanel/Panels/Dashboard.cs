@@ -83,11 +83,7 @@ public sealed class Dashboard(IConversationOrchestrator orchestrator)
     {
         ImGuiHelpers.SectionHeader("Conversation");
 
-        // Bordered child fills remaining space inside this row.
-        // The section header is above the border, messages are inside it.
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new System.Numerics.Vector2(8f, 8f));
-
-        if (ImGui.BeginChild("##Messages", ImGui.GetContentRegionAvail(), ImGuiChildFlags.Borders))
+        using (Ui.FillChild("##Messages", ImGuiChildFlags.Borders, padding: 8f))
         {
             var session = TryGetActiveSession();
 
@@ -105,9 +101,6 @@ public sealed class Dashboard(IConversationOrchestrator orchestrator)
             if (ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - 20f)
                 ImGui.SetScrollHereY(1f);
         }
-
-        ImGui.EndChild();
-        ImGui.PopStyleVar();
     }
 
     private static void RenderHistory(IConversationContext context)

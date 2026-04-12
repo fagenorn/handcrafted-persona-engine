@@ -45,6 +45,16 @@ public static class Ui
         ImGuiChildFlags childFlags = ImGuiChildFlags.None
     ) => new(count, height, gap, childFlags);
 
+    /// <summary>
+    ///     Creates a child window that fills all remaining space in the current context.
+    ///     Useful after a header or other content to fill the rest of a row.
+    /// </summary>
+    public static FillChildScope FillChild(
+        string id,
+        ImGuiChildFlags childFlags = ImGuiChildFlags.None,
+        float padding = 0f
+    ) => new(id, new System.Numerics.Vector2(padding, padding), childFlags);
+
     /// <summary>Peeks the current layout context's available space.</summary>
     public static (float Width, float Height) PeekContext() => LayoutContext.Peek();
 }
