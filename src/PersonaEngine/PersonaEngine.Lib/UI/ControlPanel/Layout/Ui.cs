@@ -29,6 +29,12 @@ public static class Ui
     ) => new(id, height, initialLeft, minLeft, minRight, leftStyle, rightStyle);
 
     /// <summary>
+    ///     Pre-resolves a sequence of row sizes so Fill rows correctly account for all
+    ///     sibling Fixed rows. Call <see cref="RowGroupScope.Next"/> for each row in order.
+    /// </summary>
+    public static RowGroupScope Rows(params Sz[] sizes) => new(sizes);
+
+    /// <summary>
     ///     Creates N equal-width columns side by side. Call <see cref="EqualColsScope.NextCol"/>
     ///     for each column to render into it.
     /// </summary>

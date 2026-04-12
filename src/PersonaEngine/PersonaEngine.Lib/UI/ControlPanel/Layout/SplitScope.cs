@@ -110,21 +110,40 @@ public ref struct SplitScope
 
 /// <summary>
 ///     One side of a <see cref="SplitScope"/>. Manages its own child window and style.
+///     Uses two-phase push: container (padding, bg) before BeginChild,
+///     content (item spacing) after BeginChild.
 /// </summary>
 public ref struct SplitChildScope
 {
-    private int _stylePushToken;
+    private int _containerVarCount;
+    private int _containerColorCount;
     private bool _disposed;
 
     internal SplitChildScope(string id, float width, float height, Style style)
     {
         _disposed = false;
-        _stylePushToken = style.Push();
+        _containerVarCount = 0;
+        _containerColorCount = 0;
+
+        var padding = style.Padding;
+
+        // Phase 1: Container style before BeginChild
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, padding);
+        _containerVarCount++;
+
+        if (style.ChildBg is { } bg)
+        {
+            ImGui.PushStyleColor(ImGuiCol.ChildBg, bg);
+            _containerColorCount++;
+        }
 
         ImGui.BeginChild(id, new Vector2(width, height));
 
-        var innerWidth = MathF.Max(0f, width - style.Padding.X * 2f);
-        var innerHeight = MathF.Max(0f, height - style.Padding.Y * 2f);
+        // Phase 2: Content style after BeginChild
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, style.ItemSpacing);
+
+        var innerWidth = MathF.Max(0f, width - padding.X * 2f);
+        var innerHeight = MathF.Max(0f, height - padding.Y * 2f);
         LayoutContext.Push(innerWidth, innerHeight);
     }
 
@@ -135,7 +154,10 @@ public ref struct SplitChildScope
         _disposed = true;
 
         LayoutContext.Pop();
+        ImGui.PopStyleVar(); // inner ItemSpacing
         ImGui.EndChild();
-        Style.Pop(_stylePushToken);
+        if (_containerColorCount > 0)
+            ImGui.PopStyleColor(_containerColorCount);
+        ImGui.PopStyleVar(_containerVarCount); // WP
     }
 }

@@ -28,13 +28,19 @@ public sealed class Dashboard(IConversationOrchestrator orchestrator)
 
     public void Render()
     {
-        using (Ui.Row(Sz.Fixed(HealthSectionHeight)))
+        using var rows = Ui.Rows(
+            Sz.Fixed(HealthSectionHeight),
+            Sz.Fill(),
+            Sz.Fixed(StatsSectionHeight)
+        );
+
+        using (rows.Next())
             RenderSystemHealth();
 
-        using (Ui.Row(Sz.Fill(), childFlags: ImGuiChildFlags.Borders))
+        using (rows.Next(childFlags: ImGuiChildFlags.Borders))
             RenderTranscript();
 
-        using (Ui.Row(Sz.Fixed(StatsSectionHeight)))
+        using (rows.Next())
             RenderSessionStats();
     }
 

@@ -20,6 +20,10 @@ public readonly struct Style
         ChildBg = childBg;
     }
 
+    /// <summary>True when the struct is default-initialized (no style to push).</summary>
+    public bool IsDefault =>
+        Padding == Vector2.Zero && ItemSpacing == Vector2.Zero && ChildBg is null;
+
     /// <summary>Pushes style vars to ImGui. Returns a token encoding the push count.</summary>
     public int Push()
     {
