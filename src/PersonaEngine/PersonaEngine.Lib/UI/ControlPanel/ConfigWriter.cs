@@ -236,6 +236,7 @@ public sealed class ConfigWriter : IConfigWriter
     private static FrozenDictionary<Type, string> DiscoverPaths(Type rootType, string rootPath)
     {
         var result = new Dictionary<Type, string>();
+        result.TryAdd(rootType, rootPath);
         Walk(rootType, rootPath, result, []);
         return result.ToFrozenDictionary();
     }

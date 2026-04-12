@@ -41,10 +41,9 @@ public sealed class Personality(
         _context = contextOptions.CurrentValue;
         _systemPromptBuffer = _context.SystemPrompt ?? string.Empty;
         _currentContextBuffer = _context.CurrentContext ?? string.Empty;
-        _topicsBuffer =
-            _context.Topics is { Count: > 0 }
-                ? string.Join(", ", _context.Topics)
-                : string.Empty;
+        _topicsBuffer = _context.Topics is { Count: > 0 }
+            ? string.Join(", ", _context.Topics)
+            : string.Empty;
 
         _initialized = true;
     }

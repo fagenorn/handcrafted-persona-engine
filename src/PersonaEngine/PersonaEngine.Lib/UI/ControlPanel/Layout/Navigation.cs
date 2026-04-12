@@ -68,14 +68,7 @@ public sealed class Navigation
                 ImGui.PushStyleColor(ImGuiCol.HeaderActive, Theme.ActiveSelected);
             }
 
-            if (
-                ImGui.Selectable(
-                    label,
-                    isActive,
-                    ImGuiSelectableFlags.None,
-                    new Vector2(0f, 0f)
-                )
-            )
+            if (ImGui.Selectable(label, isActive, ImGuiSelectableFlags.None, new Vector2(0f, 0f)))
             {
                 ActiveSection = section;
             }

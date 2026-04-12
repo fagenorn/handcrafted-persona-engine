@@ -63,8 +63,7 @@ public static class ImGuiHelpers
     /// </param>
     public static void SettingLabel(string label, string? tooltip, float? labelWidth = null)
     {
-        var width = labelWidth
-            ?? Math.Clamp(ImGui.GetContentRegionAvail().X * 0.30f, 130f, 240f);
+        var width = labelWidth ?? Math.Clamp(ImGui.GetContentRegionAvail().X * 0.30f, 130f, 240f);
 
         ImGui.TextUnformatted(label);
 
