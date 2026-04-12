@@ -50,9 +50,13 @@ public sealed class Navigation
 
             if (isActive)
             {
-                ImGui.PushStyleColor(ImGuiCol.Header, Theme.ActiveSelected);
-                ImGui.PushStyleColor(ImGuiCol.HeaderHovered, Theme.ActiveSelected);
-                ImGui.PushStyleColor(ImGuiCol.HeaderActive, Theme.ActiveSelected);
+                ImGui.PushStyleColor(ImGuiCol.Header, Theme.Surface2);
+                ImGui.PushStyleColor(ImGuiCol.HeaderHovered, Theme.Surface2);
+                ImGui.PushStyleColor(ImGuiCol.HeaderActive, Theme.Surface2);
+            }
+            else
+            {
+                ImGui.PushStyleColor(ImGuiCol.HeaderHovered, Theme.SurfaceHover);
             }
 
             if (ImGui.Selectable(label, isActive, ImGuiSelectableFlags.None, new Vector2(0f, 0f)))
@@ -60,14 +64,14 @@ public sealed class Navigation
                 ActiveSection = section;
             }
 
+            ImGui.PopStyleColor(isActive ? 3 : 1);
+
             if (isActive)
             {
-                ImGui.PopStyleColor(3);
-
                 var itemMin = ImGui.GetItemRectMin();
                 var itemMax = ImGui.GetItemRectMax();
                 var accentMin = itemMin;
-                var accentMax = new Vector2(itemMin.X + 3f, itemMax.Y);
+                var accentMax = new Vector2(itemMin.X + 4f, itemMax.Y);
                 var accentCol = ImGui.ColorConvertFloat4ToU32(Theme.AccentPrimary);
 
                 ImGui.AddRectFilled(drawList, accentMin, accentMax, accentCol);

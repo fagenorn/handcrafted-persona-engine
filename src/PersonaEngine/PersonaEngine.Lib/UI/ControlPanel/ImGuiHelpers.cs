@@ -24,14 +24,30 @@ public static class ImGuiHelpers
     }
 
     /// <summary>
-    ///     Renders a visually distinct section header using an accent-colored separator.
+    ///     Renders a visually distinct section header with an accent-colored label
+    ///     and a short decorative underline.
     /// </summary>
     public static void SectionHeader(string label)
     {
         ImGui.Spacing();
-        ImGui.PushStyleColor(ImGuiCol.Text, Theme.AccentSecondary);
-        ImGui.SeparatorText(label);
+        ImGui.Spacing();
+
+        ImGui.PushStyleColor(ImGuiCol.Text, Theme.AccentPrimary);
+        ImGui.TextUnformatted(label);
         ImGui.PopStyleColor();
+
+        // Short accent underline (40px wide, 1px tall)
+        var cursor = ImGui.GetCursorScreenPos();
+        var drawList = ImGui.GetWindowDrawList();
+        var underlineColor = ImGui.ColorConvertFloat4ToU32(Theme.AccentPrimary with { W = 0.6f });
+        ImGui.AddRectFilled(
+            drawList,
+            cursor,
+            new Vector2(cursor.X + 40f, cursor.Y + 1f),
+            underlineColor
+        );
+        ImGui.Dummy(new Vector2(0f, 4f));
+
         ImGui.Spacing();
     }
 

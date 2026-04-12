@@ -15,7 +15,7 @@ public sealed class Dashboard(IConversationOrchestrator orchestrator)
 {
     private const float HealthSectionHeight = 100f;
     private const float StatsSectionHeight = 100f;
-    private const float CardHeight = 48f;
+    private const float CardHeight = 56f;
 
     private static readonly (string Name, string StatusText)[] _healthCards =
     [
@@ -54,7 +54,6 @@ public sealed class Dashboard(IConversationOrchestrator orchestrator)
         using var cols = Ui.EqualCols(
             _healthCards.Length,
             CardHeight,
-            gap: 8f,
             childFlags: ImGuiChildFlags.Borders
         );
 
