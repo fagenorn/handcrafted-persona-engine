@@ -86,7 +86,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         using (Ui.Window("##ControlPanel"))
         {
             using (Ui.Row(Sz.Fixed(StatusBarHeight), Styles.StatusBar))
-                _statusBar.Render();
+                _statusBar.Render(deltaTime);
 
             using (
                 var split = Ui.HSplit(
