@@ -9,21 +9,25 @@ public static class Styles
     public static readonly Style None = default;
 
     public static readonly Style StatusBar = new(
-        padding: new Vector2(8f, 0f),
-        itemSpacing: new Vector2(8f, 0f),
-        childBg: Theme.SidebarBackground);
+        padding: new Vector2(12f, 6f),
+        itemSpacing: new Vector2(12f, 0f),
+        childBg: Theme.Surface1
+    );
 
     public static readonly Style Sidebar = new(
-        padding: new Vector2(8f, 8f),
-        itemSpacing: new Vector2(8f, 6f),
-        childBg: Theme.SidebarBackground);
+        padding: new Vector2(12f, 12f),
+        itemSpacing: new Vector2(10f, 10f),
+        childBg: Theme.Surface1
+    );
 
     public static readonly Style Content = new(
-        padding: new Vector2(16f, 16f),
-        itemSpacing: new Vector2(10f, 8f));
+        padding: new Vector2(24f, 20f),
+        itemSpacing: new Vector2(12f, 10f)
+    );
 
     public static readonly Style ControlBar = new(
-        padding: new Vector2(8f, 0f),
-        itemSpacing: new Vector2(8f, 0f),
-        childBg: Theme.SidebarBackground);
+        padding: new Vector2(12f, 6f),
+        itemSpacing: new Vector2(12f, 0f),
+        childBg: Theme.Surface1
+    );
 }
