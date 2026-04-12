@@ -59,8 +59,8 @@ public ref struct RowGroupScope
 /// </summary>
 public ref struct RowItemScope
 {
-    private int _containerVarCount;
-    private int _containerColorCount;
+    private int _outerVarCount;
+    private int _outerColorCount;
     private bool _disposed;
 
     internal RowItemScope(
@@ -72,27 +72,25 @@ public ref struct RowItemScope
     )
     {
         _disposed = false;
-        _containerVarCount = 0;
-        _containerColorCount = 0;
+        _outerVarCount = 0;
+        _outerColorCount = 0;
 
-        // Zero spacing on parent so rows tile edge-to-edge.
+        var padding = style.IsDefault ? Vector2.Zero : style.Padding;
+        var innerSpacing = style.IsDefault ? parentSpacing : style.ItemSpacing;
+
+        // ── Before BeginChild ───────────────────────────────────────────
+        // Zero IS so rows tile edge-to-edge.
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, Vector2.Zero);
-        _containerVarCount++;
+        _outerVarCount++;
 
-        // Phase 1: Container style before BeginChild.
-        var padding = Vector2.Zero;
+        // ALWAYS set WP explicitly — never let the parent's WP leak in.
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, padding);
+        _outerVarCount++;
 
-        if (!style.IsDefault)
+        if (style.ChildBg is { } bg)
         {
-            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, style.Padding);
-            _containerVarCount++;
-            padding = style.Padding;
-
-            if (style.ChildBg is { } bg)
-            {
-                ImGui.PushStyleColor(ImGuiCol.ChildBg, bg);
-                _containerColorCount++;
-            }
+            ImGui.PushStyleColor(ImGuiCol.ChildBg, bg);
+            _outerColorCount++;
         }
 
         ImGui.BeginChild(
@@ -101,10 +99,11 @@ public ref struct RowItemScope
             childFlags
         );
 
-        // Phase 2: Content style after BeginChild.
-        // Default → inherit parent's spacing.  Explicit → use style's spacing.
-        var innerSpacing = style.IsDefault ? parentSpacing : style.ItemSpacing;
+        // ── After BeginChild ────────────────────────────────────────────
+        // Set content spacing for items inside this row.
+        // Reset WP to zero so nested BeginChild calls don't inherit our padding.
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, innerSpacing);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
 
         var innerWidth = MathF.Max(0f, width - padding.X * 2f);
         var innerHeight = MathF.Max(0f, height - padding.Y * 2f);
@@ -118,10 +117,10 @@ public ref struct RowItemScope
         _disposed = true;
 
         LayoutContext.Pop();
-        ImGui.PopStyleVar(); // inner ItemSpacing
+        ImGui.PopStyleVar(2); // inner WP reset + inner IS
         ImGui.EndChild();
-        if (_containerColorCount > 0)
-            ImGui.PopStyleColor(_containerColorCount);
-        ImGui.PopStyleVar(_containerVarCount); // zero IS + optional WP
+        if (_outerColorCount > 0)
+            ImGui.PopStyleColor(_outerColorCount);
+        ImGui.PopStyleVar(_outerVarCount); // outer IS(0) + outer WP
     }
 }

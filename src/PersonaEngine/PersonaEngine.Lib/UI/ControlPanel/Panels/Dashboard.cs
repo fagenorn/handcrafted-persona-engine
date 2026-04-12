@@ -13,8 +13,9 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels;
 /// </summary>
 public sealed class Dashboard(IConversationOrchestrator orchestrator)
 {
-    private const float HealthSectionHeight = 110f;
-    private const float StatsSectionHeight = 80f;
+    private const float HealthSectionHeight = 100f;
+    private const float StatsSectionHeight = 70f;
+    private const float CardHeight = 48f;
 
     private static readonly (string Name, string StatusText)[] _healthCards =
     [
@@ -52,7 +53,7 @@ public sealed class Dashboard(IConversationOrchestrator orchestrator)
 
         using var cols = Ui.EqualCols(
             _healthCards.Length,
-            64f,
+            CardHeight,
             gap: 8f,
             childFlags: ImGuiChildFlags.Borders
         );
@@ -60,16 +61,12 @@ public sealed class Dashboard(IConversationOrchestrator orchestrator)
         for (var i = 0; i < _healthCards.Length; i++)
         {
             if (cols.NextCol())
-            {
                 RenderHealthCard(_healthCards[i].Name, _healthCards[i].StatusText);
-            }
         }
     }
 
     private static void RenderHealthCard(string name, string statusText)
     {
-        ImGui.Spacing();
-
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
         ImGui.TextUnformatted(name);
         ImGui.PopStyleColor();
@@ -99,11 +96,8 @@ public sealed class Dashboard(IConversationOrchestrator orchestrator)
             RenderHistory(session.Context);
         }
 
-        // Auto-scroll to bottom when near bottom
         if (ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - 20f)
-        {
             ImGui.SetScrollHereY(1f);
-        }
     }
 
     private static void RenderHistory(IConversationContext context)

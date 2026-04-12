@@ -12,55 +12,36 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Layout;
 /// </summary>
 public ref struct RowScope
 {
-    private int _containerVarCount;
-    private int _containerColorCount;
+    private int _outerVarCount;
+    private int _outerColorCount;
     private bool _disposed;
 
     internal RowScope(Sz height, Style style, ImGuiChildFlags childFlags)
     {
         _disposed = false;
-        _containerVarCount = 0;
-        _containerColorCount = 0;
+        _outerVarCount = 0;
+        _outerColorCount = 0;
 
         var parentWidth = LayoutContext.Width();
-        float resolvedHeight;
-
-        if (height.IsFixed)
-        {
-            resolvedHeight = height.Value;
-        }
-        else
-        {
-            resolvedHeight = LayoutContext.RemainingHeight();
-        }
-
+        float resolvedHeight = height.IsFixed ? height.Value : LayoutContext.RemainingHeight();
         resolvedHeight = MathF.Max(0f, resolvedHeight);
         LayoutContext.ConsumeHeight(resolvedHeight);
 
-        // Capture the parent's item spacing BEFORE we zero it for tiling.
-        // We'll restore this inside the child if no explicit style is given.
         var parentSpacing = ImGui.GetStyle().ItemSpacing;
+        var padding = style.IsDefault ? Vector2.Zero : style.Padding;
+        var innerSpacing = style.IsDefault ? parentSpacing : style.ItemSpacing;
 
-        // Zero spacing on parent so consecutive rows tile edge-to-edge.
+        // ── Before BeginChild ───────────────────────────────────────────
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, Vector2.Zero);
-        _containerVarCount++;
+        _outerVarCount++;
 
-        // ── Phase 1: Container style (before BeginChild) ────────────────
-        // WindowPadding and ChildBg must be set before BeginChild so the
-        // child window captures them for its content region.
-        var padding = Vector2.Zero;
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, padding);
+        _outerVarCount++;
 
-        if (!style.IsDefault)
+        if (style.ChildBg is { } bg)
         {
-            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, style.Padding);
-            _containerVarCount++;
-            padding = style.Padding;
-
-            if (style.ChildBg is { } bg)
-            {
-                ImGui.PushStyleColor(ImGuiCol.ChildBg, bg);
-                _containerColorCount++;
-            }
+            ImGui.PushStyleColor(ImGuiCol.ChildBg, bg);
+            _outerColorCount++;
         }
 
         ImGui.BeginChild(
@@ -69,12 +50,9 @@ public ref struct RowScope
             childFlags
         );
 
-        // ── Phase 2: Content style (after BeginChild) ───────────────────
-        // ItemSpacing is set INSIDE the child so content lays out properly.
-        // Default style → inherit parent's spacing (transparent behavior).
-        // Explicit style → use the style's specified spacing.
-        var innerSpacing = style.IsDefault ? parentSpacing : style.ItemSpacing;
+        // ── After BeginChild ────────────────────────────────────────────
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, innerSpacing);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
 
         var innerWidth = MathF.Max(0f, parentWidth - padding.X * 2f);
         var innerHeight = MathF.Max(0f, resolvedHeight - padding.Y * 2f);
@@ -88,10 +66,10 @@ public ref struct RowScope
         _disposed = true;
 
         LayoutContext.Pop();
-        ImGui.PopStyleVar(); // inner ItemSpacing
+        ImGui.PopStyleVar(2); // inner WP reset + inner IS
         ImGui.EndChild();
-        if (_containerColorCount > 0)
-            ImGui.PopStyleColor(_containerColorCount);
-        ImGui.PopStyleVar(_containerVarCount); // parent zero IS + optional WP
+        if (_outerColorCount > 0)
+            ImGui.PopStyleColor(_outerColorCount);
+        ImGui.PopStyleVar(_outerVarCount);
     }
 }

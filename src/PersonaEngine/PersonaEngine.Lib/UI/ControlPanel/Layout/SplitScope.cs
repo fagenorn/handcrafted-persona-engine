@@ -115,32 +115,35 @@ public ref struct SplitScope
 /// </summary>
 public ref struct SplitChildScope
 {
-    private int _containerVarCount;
-    private int _containerColorCount;
+    private int _outerVarCount;
+    private int _outerColorCount;
     private bool _disposed;
 
     internal SplitChildScope(string id, float width, float height, Style style)
     {
         _disposed = false;
-        _containerVarCount = 0;
-        _containerColorCount = 0;
+        _outerVarCount = 0;
+        _outerColorCount = 0;
 
         var padding = style.Padding;
 
-        // Phase 1: Container style before BeginChild
+        // ── Before BeginChild ───────────────────────────────────────────
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, padding);
-        _containerVarCount++;
+        _outerVarCount++;
 
         if (style.ChildBg is { } bg)
         {
             ImGui.PushStyleColor(ImGuiCol.ChildBg, bg);
-            _containerColorCount++;
+            _outerColorCount++;
         }
 
         ImGui.BeginChild(id, new Vector2(width, height));
 
-        // Phase 2: Content style after BeginChild
+        // ── After BeginChild ────────────────────────────────────────────
+        // Set content spacing. Reset WP to zero so nested children
+        // don't inherit this scope's padding.
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, style.ItemSpacing);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
 
         var innerWidth = MathF.Max(0f, width - padding.X * 2f);
         var innerHeight = MathF.Max(0f, height - padding.Y * 2f);
@@ -154,10 +157,10 @@ public ref struct SplitChildScope
         _disposed = true;
 
         LayoutContext.Pop();
-        ImGui.PopStyleVar(); // inner ItemSpacing
+        ImGui.PopStyleVar(2); // inner WP reset + inner IS
         ImGui.EndChild();
-        if (_containerColorCount > 0)
-            ImGui.PopStyleColor(_containerColorCount);
-        ImGui.PopStyleVar(_containerVarCount); // WP
+        if (_outerColorCount > 0)
+            ImGui.PopStyleColor(_outerColorCount);
+        ImGui.PopStyleVar(_outerVarCount);
     }
 }

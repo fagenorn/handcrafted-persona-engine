@@ -44,7 +44,9 @@ public ref struct EqualColsScope
         if (_childOpen)
         {
             LayoutContext.Pop();
+            ImGui.PopStyleVar(); // inner WP reset
             ImGui.EndChild();
+            ImGui.PopStyleVar(); // outer WP(0,0)
             _childOpen = false;
         }
 
@@ -56,18 +58,20 @@ public ref struct EqualColsScope
         if (_currentCol > 0)
             ImGui.SameLine(0f, _gap);
 
+        // Explicitly set WP(0,0) so columns don't inherit parent's padding.
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
+
         var visible = ImGui.BeginChild(
             $"##EqCol_{_currentCol}_{_height:F0}",
             new Vector2(_colWidth, _height),
             _childFlags
         );
 
-        _childOpen = true;
+        // Reset WP inside too, so any nested children also get zero padding.
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
 
-        var style = ImGui.GetStyle();
-        var innerWidth = MathF.Max(0f, _colWidth - style.WindowPadding.X * 2f);
-        var innerHeight = MathF.Max(0f, _height - style.WindowPadding.Y * 2f);
-        LayoutContext.Push(innerWidth, innerHeight);
+        _childOpen = true;
+        LayoutContext.Push(_colWidth, _height);
 
         return visible;
     }
@@ -81,7 +85,9 @@ public ref struct EqualColsScope
         if (_childOpen)
         {
             LayoutContext.Pop();
+            ImGui.PopStyleVar(); // inner WP reset
             ImGui.EndChild();
+            ImGui.PopStyleVar(); // outer WP(0,0)
         }
     }
 }
