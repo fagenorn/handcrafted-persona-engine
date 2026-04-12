@@ -14,7 +14,7 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels;
 public sealed class Dashboard(IConversationOrchestrator orchestrator)
 {
     private const float HealthSectionHeight = 100f;
-    private const float StatsSectionHeight = 70f;
+    private const float StatsSectionHeight = 100f;
     private const float CardHeight = 48f;
 
     private static readonly (string Name, string StatusText)[] _healthCards =
@@ -38,7 +38,7 @@ public sealed class Dashboard(IConversationOrchestrator orchestrator)
         using (rows.Next())
             RenderSystemHealth();
 
-        using (rows.Next(childFlags: ImGuiChildFlags.Borders))
+        using (rows.Next())
             RenderTranscript();
 
         using (rows.Next())
@@ -83,21 +83,31 @@ public sealed class Dashboard(IConversationOrchestrator orchestrator)
     {
         ImGuiHelpers.SectionHeader("Conversation");
 
-        var session = TryGetActiveSession();
+        // Bordered child fills remaining space inside this row.
+        // The section header is above the border, messages are inside it.
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new System.Numerics.Vector2(8f, 8f));
 
-        if (session is null)
+        if (ImGui.BeginChild("##Messages", ImGui.GetContentRegionAvail(), ImGuiChildFlags.Borders))
         {
-            ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
-            ImGui.TextUnformatted("No active conversation.");
-            ImGui.PopStyleColor();
-        }
-        else
-        {
-            RenderHistory(session.Context);
+            var session = TryGetActiveSession();
+
+            if (session is null)
+            {
+                ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
+                ImGui.TextUnformatted("No active conversation.");
+                ImGui.PopStyleColor();
+            }
+            else
+            {
+                RenderHistory(session.Context);
+            }
+
+            if (ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - 20f)
+                ImGui.SetScrollHereY(1f);
         }
 
-        if (ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - 20f)
-            ImGui.SetScrollHereY(1f);
+        ImGui.EndChild();
+        ImGui.PopStyleVar();
     }
 
     private static void RenderHistory(IConversationContext context)
