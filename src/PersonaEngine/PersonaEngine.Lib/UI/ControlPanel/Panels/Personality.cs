@@ -16,32 +16,37 @@ public sealed class Personality(
     private const int CurrentContextBufferSize = 4096;
     private const int TopicsBufferSize = 2048;
 
+    private ConversationContextOptions _context;
+
     private string _systemPromptBuffer = string.Empty;
     private string _currentContextBuffer = string.Empty;
     private string _topicsBuffer = string.Empty;
-    private bool _buffersInitialized;
+    private bool _initialized;
 
     public void Render()
     {
-        EnsureBuffersInitialized();
+        EnsureInitialized();
         RenderSystemPrompt();
         RenderCurrentContext();
         RenderTopics();
     }
 
-    // ── Buffer initialization ────────────────────────────────────────────────────
+    // ── Initialization ───────────────────────────────────────────────────────────
 
-    private void EnsureBuffersInitialized()
+    private void EnsureInitialized()
     {
-        if (_buffersInitialized)
+        if (_initialized)
             return;
 
-        var ctx = contextOptions.CurrentValue;
-        _systemPromptBuffer = ctx.SystemPrompt ?? string.Empty;
-        _currentContextBuffer = ctx.CurrentContext ?? string.Empty;
-        _topicsBuffer = ctx.Topics is { Count: > 0 } ? string.Join(", ", ctx.Topics) : string.Empty;
+        _context = contextOptions.CurrentValue;
+        _systemPromptBuffer = _context.SystemPrompt ?? string.Empty;
+        _currentContextBuffer = _context.CurrentContext ?? string.Empty;
+        _topicsBuffer =
+            _context.Topics is { Count: > 0 }
+                ? string.Join(", ", _context.Topics)
+                : string.Empty;
 
-        _buffersInitialized = true;
+        _initialized = true;
     }
 
     // ── System Prompt ────────────────────────────────────────────────────────────
@@ -50,12 +55,10 @@ public sealed class Personality(
     {
         ImGuiHelpers.SectionHeader("System Prompt");
 
-        var ctx = contextOptions.CurrentValue;
-
-        if (!string.IsNullOrWhiteSpace(ctx.SystemPromptFile))
+        if (!string.IsNullOrWhiteSpace(_context.SystemPromptFile))
         {
             ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
-            ImGui.TextUnformatted($"Also loading from file: {ctx.SystemPromptFile}");
+            ImGui.TextUnformatted($"Also loading from file: {_context.SystemPromptFile}");
             ImGui.PopStyleColor();
             ImGui.Spacing();
         }
@@ -77,7 +80,8 @@ public sealed class Personality(
             )
         )
         {
-            configWriter.Write(ctx with { SystemPrompt = _systemPromptBuffer });
+            _context = _context with { SystemPrompt = _systemPromptBuffer };
+            configWriter.Write(_context);
         }
     }
 
@@ -86,8 +90,6 @@ public sealed class Personality(
     private void RenderCurrentContext()
     {
         ImGuiHelpers.SectionHeader("Current Context");
-
-        var ctx = contextOptions.CurrentValue;
 
         ImGuiHelpers.SettingLabel(
             "Context",
@@ -106,7 +108,8 @@ public sealed class Personality(
             )
         )
         {
-            configWriter.Write(ctx with { CurrentContext = _currentContextBuffer });
+            _context = _context with { CurrentContext = _currentContextBuffer };
+            configWriter.Write(_context);
         }
     }
 
@@ -115,8 +118,6 @@ public sealed class Personality(
     private void RenderTopics()
     {
         ImGuiHelpers.SectionHeader("Topics");
-
-        var ctx = contextOptions.CurrentValue;
 
         ImGuiHelpers.SettingLabel(
             "Topics",
@@ -129,7 +130,8 @@ public sealed class Personality(
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .ToList();
 
-            configWriter.Write(ctx with { Topics = topics });
+            _context = _context with { Topics = topics };
+            configWriter.Write(_context);
         }
     }
 }

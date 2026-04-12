@@ -16,15 +16,17 @@ public sealed class RouletteWheelPanel(
 )
 {
     private string[] _fonts = [];
-    private bool _fontsLoaded;
+    private bool _initialized;
 
     // Playground state
     private int _playgroundTargetIndex;
     private string _newLabelBuffer = string.Empty;
 
+    private RouletteWheelOptions _opts;
+
     public void Render()
     {
-        EnsureFontsLoaded();
+        EnsureInitialized();
         RenderPlaygroundSection();
         RenderSectionsSection();
         RenderSizeSection();
@@ -32,15 +34,16 @@ public sealed class RouletteWheelPanel(
         RenderTextStyleSection();
     }
 
-    // ── Font loading ─────────────────────────────────────────────────────────────
+    // ── Initialization ───────────────────────────────────────────────────────────
 
-    private void EnsureFontsLoaded()
+    private void EnsureInitialized()
     {
-        if (_fontsLoaded)
+        if (_initialized)
             return;
 
-        _fonts = fontProvider.GetAvailableFontsAsync().GetAwaiter().GetResult().ToArray();
-        _fontsLoaded = true;
+        _opts = wheelOptions.CurrentValue;
+        _fonts = fontProvider.GetAvailableFonts().ToArray();
+        _initialized = true;
     }
 
     // ── Playground section ───────────────────────────────────────────────────────
@@ -49,8 +52,7 @@ public sealed class RouletteWheelPanel(
     {
         ImGuiHelpers.SectionHeader("Playground");
 
-        var opts = wheelOptions.CurrentValue;
-        var labels = opts.SectionLabels;
+        var labels = _opts.SectionLabels;
 
         // Target section combo
         {
@@ -81,7 +83,7 @@ public sealed class RouletteWheelPanel(
             ImGui.BeginDisabled();
 
         // Spin to target
-        if (ImGui.Button("Spin to Target"))
+        if (ImGuiHelpers.PrimaryButton("Spin to Target"))
         {
             _ = wheel.SpinAsync(_playgroundTargetIndex);
         }
@@ -101,8 +103,8 @@ public sealed class RouletteWheelPanel(
         if (ImGui.Button(toggleLabel))
         {
             wheel.Toggle();
-            var updated = opts with { Enabled = !opts.Enabled };
-            configWriter.Write(updated);
+            _opts = _opts with { Enabled = !_opts.Enabled };
+            configWriter.Write(_opts);
         }
 
         if (spinning || noLabels)
@@ -123,8 +125,7 @@ public sealed class RouletteWheelPanel(
     {
         ImGuiHelpers.SectionHeader("Sections");
 
-        var opts = wheelOptions.CurrentValue;
-        var labels = opts.SectionLabels.ToList();
+        var labels = _opts.SectionLabels.ToList();
         var changed = false;
 
         for (var i = 0; i < labels.Count; i++)
@@ -140,18 +141,14 @@ public sealed class RouletteWheelPanel(
 
             ImGui.SameLine();
 
-            ImGui.PushStyleColor(ImGuiCol.Button, Theme.Error with { W = 0.6f });
-            if (ImGui.Button($"X##WheelRemove{i}"))
+            if (ImGuiHelpers.DangerButton($"X##WheelRemove{i}"))
             {
                 labels.RemoveAt(i);
                 if (_playgroundTargetIndex >= labels.Count && labels.Count > 0)
                     _playgroundTargetIndex = labels.Count - 1;
                 changed = true;
-                ImGui.PopStyleColor();
                 break; // indices invalidated — re-render next frame
             }
-
-            ImGui.PopStyleColor();
         }
 
         ImGui.Spacing();
@@ -161,7 +158,7 @@ public sealed class RouletteWheelPanel(
         ImGui.InputText("##WheelNewLabel", ref _newLabelBuffer, 128);
         ImGui.SameLine();
 
-        if (ImGui.Button("Add##WheelAdd"))
+        if (ImGuiHelpers.PrimaryButton("Add##WheelAdd"))
         {
             var newLabel = _newLabelBuffer.Trim();
             if (!string.IsNullOrEmpty(newLabel))
@@ -174,7 +171,8 @@ public sealed class RouletteWheelPanel(
 
         if (changed)
         {
-            configWriter.Write(opts with { SectionLabels = [.. labels] });
+            _opts = _opts with { SectionLabels = [.. labels] };
+            configWriter.Write(_opts);
         }
     }
 
@@ -184,31 +182,31 @@ public sealed class RouletteWheelPanel(
     {
         ImGuiHelpers.SectionHeader("Size");
 
-        var opts = wheelOptions.CurrentValue;
-
         // Width
         {
-            var width = opts.Width;
+            var width = _opts.Width;
 
             ImGuiHelpers.SettingLabel("Width", "Width of the wheel output in pixels.");
 
             if (ImGui.InputInt("##WheelWidth", ref width))
             {
                 width = Math.Max(1, width);
-                configWriter.Write(opts with { Width = width });
+                _opts = _opts with { Width = width };
+                configWriter.Write(_opts);
             }
         }
 
         // Height
         {
-            var height = opts.Height;
+            var height = _opts.Height;
 
             ImGuiHelpers.SettingLabel("Height", "Height of the wheel output in pixels.");
 
             if (ImGui.InputInt("##WheelHeight", ref height))
             {
                 height = Math.Max(1, height);
-                configWriter.Write(opts with { Height = height });
+                _opts = _opts with { Height = height };
+                configWriter.Write(_opts);
             }
         }
     }
@@ -219,11 +217,9 @@ public sealed class RouletteWheelPanel(
     {
         ImGuiHelpers.SectionHeader("Spin Behavior");
 
-        var opts = wheelOptions.CurrentValue;
-
         // Spin Duration
         {
-            var duration = opts.SpinDuration;
+            var duration = _opts.SpinDuration;
 
             ImGuiHelpers.SettingLabel(
                 "Spin Duration",
@@ -232,7 +228,8 @@ public sealed class RouletteWheelPanel(
 
             if (ImGui.SliderFloat("##WheelSpinDuration", ref duration, 1f, 15f, "%.1f s"))
             {
-                configWriter.Write(opts with { SpinDuration = duration });
+                _opts = _opts with { SpinDuration = duration };
+                configWriter.Write(_opts);
             }
 
             ImGuiHelpers.SliderGlow();
@@ -240,7 +237,7 @@ public sealed class RouletteWheelPanel(
 
         // Min Rotations
         {
-            var minRotations = opts.MinRotations;
+            var minRotations = _opts.MinRotations;
 
             ImGuiHelpers.SettingLabel(
                 "Min Rotations",
@@ -249,7 +246,8 @@ public sealed class RouletteWheelPanel(
 
             if (ImGui.SliderFloat("##WheelMinRot", ref minRotations, 1f, 20f, "%.0f"))
             {
-                configWriter.Write(opts with { MinRotations = minRotations });
+                _opts = _opts with { MinRotations = minRotations };
+                configWriter.Write(_opts);
             }
 
             ImGuiHelpers.SliderGlow();
@@ -257,7 +255,7 @@ public sealed class RouletteWheelPanel(
 
         // Animate Show/Hide
         {
-            var animate = opts.AnimateToggle;
+            var animate = _opts.AnimateToggle;
 
             ImGuiHelpers.SettingLabel(
                 "Animate Show/Hide",
@@ -266,13 +264,14 @@ public sealed class RouletteWheelPanel(
 
             if (ImGui.Checkbox("##WheelAnimateToggle", ref animate))
             {
-                configWriter.Write(opts with { AnimateToggle = animate });
+                _opts = _opts with { AnimateToggle = animate };
+                configWriter.Write(_opts);
             }
         }
 
         // Visible by Default
         {
-            var enabled = opts.Enabled;
+            var enabled = _opts.Enabled;
 
             ImGuiHelpers.SettingLabel(
                 "Visible by Default",
@@ -281,7 +280,8 @@ public sealed class RouletteWheelPanel(
 
             if (ImGui.Checkbox("##WheelEnabled", ref enabled))
             {
-                configWriter.Write(opts with { Enabled = enabled });
+                _opts = _opts with { Enabled = enabled };
+                configWriter.Write(_opts);
             }
         }
     }
@@ -292,11 +292,9 @@ public sealed class RouletteWheelPanel(
     {
         ImGuiHelpers.SectionHeader("Text Style");
 
-        var opts = wheelOptions.CurrentValue;
-
         // Font combo
         {
-            var currentIndex = Array.IndexOf(_fonts, opts.Font);
+            var currentIndex = Array.IndexOf(_fonts, _opts.Font);
             if (currentIndex < 0)
                 currentIndex = 0;
 
@@ -304,14 +302,15 @@ public sealed class RouletteWheelPanel(
 
             if (ImGui.Combo("##WheelFont", ref currentIndex, _fonts, _fonts.Length))
             {
-                var selected = _fonts.Length > 0 ? _fonts[currentIndex] : opts.Font;
-                configWriter.Write(opts with { Font = selected });
+                var selected = _fonts.Length > 0 ? _fonts[currentIndex] : _opts.Font;
+                _opts = _opts with { Font = selected };
+                configWriter.Write(_opts);
             }
         }
 
         // Font Size
         {
-            var fontSize = opts.FontSize;
+            var fontSize = _opts.FontSize;
 
             ImGuiHelpers.SettingLabel(
                 "Font Size",
@@ -320,7 +319,8 @@ public sealed class RouletteWheelPanel(
 
             if (ImGui.SliderInt("##WheelFontSize", ref fontSize, 8, 200))
             {
-                configWriter.Write(opts with { FontSize = fontSize });
+                _opts = _opts with { FontSize = fontSize };
+                configWriter.Write(_opts);
             }
 
             ImGuiHelpers.SliderGlow();
@@ -328,7 +328,7 @@ public sealed class RouletteWheelPanel(
 
         // Text Scale
         {
-            var scale = opts.TextScale;
+            var scale = _opts.TextScale;
 
             ImGuiHelpers.SettingLabel(
                 "Text Scale",
@@ -337,7 +337,8 @@ public sealed class RouletteWheelPanel(
 
             if (ImGui.SliderFloat("##WheelTextScale", ref scale, 0.5f, 2.0f, "%.2f"))
             {
-                configWriter.Write(opts with { TextScale = scale });
+                _opts = _opts with { TextScale = scale };
+                configWriter.Write(_opts);
             }
 
             ImGuiHelpers.SliderGlow();
