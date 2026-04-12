@@ -97,7 +97,7 @@ public ref struct SplitScope
         {
             var delta = ImGui.GetIO().MouseDelta.X;
             splitPos += delta;
-            var maxLeft = _totalWidth - _minRight - DividerWidth;
+            var maxLeft = MathF.Max(_minLeft, _totalWidth - _minRight - DividerWidth);
             splitPos = MathF.Max(_minLeft, MathF.Min(maxLeft, splitPos));
             _splitPositions[_id] = splitPos;
         }

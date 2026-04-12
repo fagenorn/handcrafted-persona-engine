@@ -63,10 +63,6 @@ public class ImGuiController : IDisposable
 
     private bool _wasCtrlVPressed = false;
 
-    private int _windowHeight;
-
-    private int _windowWidth;
-
     public ImGuiContextPtr Context;
 
     /// <summary>
@@ -156,7 +152,6 @@ public class ImGuiController : IDisposable
     /// </summary>
     public unsafe void Dispose()
     {
-        _view.Resize -= WindowResized;
         _keyboard.KeyChar -= OnKeyChar;
 
         _gl.DeleteBuffer(_vboHandle);
@@ -197,8 +192,6 @@ public class ImGuiController : IDisposable
         _gl = gl;
         _view = view;
         _input = input;
-        _windowWidth = view.Size.X;
-        _windowHeight = view.Size.Y;
 
         Context = ImGui.CreateContext();
         ImGui.SetCurrentContext(Context);
@@ -296,7 +289,6 @@ public class ImGuiController : IDisposable
         ImGui.NewFrame();
         _frameBegun = true;
         _keyboard = _input.Keyboards[0];
-        _view.Resize += WindowResized;
         _keyboard.KeyDown += OnKeyDown;
         _keyboard.KeyUp += OnKeyUp;
         _keyboard.KeyChar += OnKeyChar;
@@ -323,12 +315,6 @@ public class ImGuiController : IDisposable
     private void OnKeyChar(IKeyboard arg1, char arg2)
     {
         _pressedChars.Add(arg2);
-    }
-
-    private void WindowResized(Vector2D<int> size)
-    {
-        _windowWidth = size.X;
-        _windowHeight = size.Y;
     }
 
     /// <summary>
@@ -395,13 +381,14 @@ public class ImGuiController : IDisposable
     private void SetPerFrameImGuiData(float deltaSeconds)
     {
         var io = ImGui.GetIO();
-        io.DisplaySize = new Vector2(_windowWidth, _windowHeight);
+        var viewSize = _view.Size;
+        io.DisplaySize = new Vector2(viewSize.X, viewSize.Y);
 
-        if (_windowWidth > 0 && _windowHeight > 0)
+        if (viewSize.X > 0 && viewSize.Y > 0)
         {
             io.DisplayFramebufferScale = new Vector2(
-                _view.FramebufferSize.X / _windowWidth,
-                _view.FramebufferSize.Y / _windowHeight
+                _view.FramebufferSize.X / (float)viewSize.X,
+                _view.FramebufferSize.Y / (float)viewSize.Y
             );
         }
 

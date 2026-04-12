@@ -72,6 +72,7 @@ public class AvatarApp : IDisposable
         _windowConfig = _config.Value.Window;
         _windowManager = new WindowManager(
             new Vector2D<int>(_windowConfig.Width, _windowConfig.Height),
+            new Vector2D<int>(_windowConfig.MinWidth, _windowConfig.MinHeight),
             _windowConfig.Title
         );
         _window = _windowManager.MainWindow;
@@ -195,8 +196,8 @@ public class AvatarApp : IDisposable
 
     private void OnResize(Vector2D<int> size)
     {
-        _currentWidth = Math.Max(800, size.X);
-        _currentHeight = Math.Max(600, size.Y);
+        _currentWidth = size.X;
+        _currentHeight = size.Y;
 
         ResizeComponents(_regularComponents);
     }
