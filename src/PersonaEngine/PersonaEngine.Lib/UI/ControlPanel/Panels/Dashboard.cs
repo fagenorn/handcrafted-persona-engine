@@ -30,6 +30,7 @@ public sealed class Dashboard(IConversationOrchestrator orchestrator)
     public void Render()
     {
         using var rows = Ui.Rows(
+            12f,
             Sz.Fixed(HealthSectionHeight),
             Sz.Fill(),
             Sz.Fixed(StatsSectionHeight)

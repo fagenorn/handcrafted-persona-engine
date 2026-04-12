@@ -45,28 +45,17 @@ public sealed class Application(
     {
         ImGuiHelpers.SectionHeader("Window");
 
-        // Width
+        // Resolution
         {
             var width = _window.Width;
-
-            ImGuiHelpers.SettingLabel("Width", "Render window width in pixels (minimum 640).");
-
-            if (ImGui.InputInt("##WindowWidth", ref width))
-            {
-                _window.Width = Math.Max(640, width);
-                configWriter.Write(CloneWindow(_window));
-            }
-        }
-
-        // Height
-        {
             var height = _window.Height;
 
-            ImGuiHelpers.SettingLabel("Height", "Render window height in pixels (minimum 480).");
+            ImGuiHelpers.SettingLabel("Resolution", "Render window resolution.");
 
-            if (ImGui.InputInt("##WindowHeight", ref height))
+            if (ImGuiHelpers.ResolutionPicker("WindowRes", ref width, ref height))
             {
-                _window.Height = Math.Max(480, height);
+                _window.Width = width;
+                _window.Height = height;
                 configWriter.Write(CloneWindow(_window));
             }
         }

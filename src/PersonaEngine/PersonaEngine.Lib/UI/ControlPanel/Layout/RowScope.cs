@@ -14,6 +14,7 @@ public ref struct RowScope
 {
     private int _outerVarCount;
     private int _outerColorCount;
+    private float _indentX;
     private bool _disposed;
 
     internal RowScope(Sz height, Style style, ImGuiChildFlags childFlags)
@@ -21,6 +22,7 @@ public ref struct RowScope
         _disposed = false;
         _outerVarCount = 0;
         _outerColorCount = 0;
+        _indentX = 0f;
 
         var parentWidth = LayoutContext.Width();
         float resolvedHeight = height.IsFixed ? height.Value : LayoutContext.RemainingHeight();
@@ -35,6 +37,8 @@ public ref struct RowScope
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, Vector2.Zero);
         _outerVarCount++;
 
+        // Push padding so ImGui computes the right/bottom content boundary.
+        // Left/top is applied manually after BeginChild (see below).
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, padding);
         _outerVarCount++;
 
@@ -51,6 +55,17 @@ public ref struct RowScope
         );
 
         // ── After BeginChild ────────────────────────────────────────────
+        // Apply left/top padding manually via Indent/Dummy — the cursor
+        // start position is not reliably offset by WindowPadding.
+        if (padding.Y > 0f)
+            ImGui.Dummy(new Vector2(0f, padding.Y));
+
+        if (padding.X > 0f)
+        {
+            ImGui.Indent(padding.X);
+            _indentX = padding.X;
+        }
+
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, innerSpacing);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
 
@@ -67,6 +82,10 @@ public ref struct RowScope
 
         LayoutContext.Pop();
         ImGui.PopStyleVar(2); // inner WP reset + inner IS
+
+        if (_indentX > 0f)
+            ImGui.Unindent(_indentX);
+
         ImGui.EndChild();
         if (_outerColorCount > 0)
             ImGui.PopStyleColor(_outerColorCount);

@@ -1,7 +1,6 @@
 using Hexa.NET.ImGui;
 using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Configuration;
-using PersonaEngine.Lib.UI.ControlPanel.Layout;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels;
 
@@ -106,31 +105,16 @@ public sealed class Avatar(
             }
         }
 
-        // Render dimensions — side by side
+        // Render resolution
         {
-            using var grid = Ui.Grid("##RenderDims", 2);
-
-            grid.Row();
-            grid.Col();
-            ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
-            ImGui.TextUnformatted("Render Width");
-            grid.Col();
-            ImGui.TextUnformatted("Render Height");
-            ImGui.PopStyleColor();
-
-            grid.Row();
-            grid.ColFill();
             var width = _live2d.Width;
-            if (ImGui.InputInt("##RenderWidth", ref width))
+            var height = _live2d.Height;
+
+            ImGuiHelpers.SettingLabel("Resolution", "Render resolution for the Live2D model.");
+
+            if (ImGuiHelpers.ResolutionPicker("Live2DRes", ref width, ref height))
             {
                 _live2d.Width = width;
-                configWriter.Write(CloneLive2D(_live2d));
-            }
-
-            grid.ColFill();
-            var height = _live2d.Height;
-            if (ImGui.InputInt("##RenderHeight", ref height))
-            {
                 _live2d.Height = height;
                 configWriter.Write(CloneLive2D(_live2d));
             }

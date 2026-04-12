@@ -32,7 +32,13 @@ public static class Ui
     ///     Pre-resolves a sequence of row sizes so Fill rows correctly account for all
     ///     sibling Fixed rows. Call <see cref="RowGroupScope.Next"/> for each row in order.
     /// </summary>
-    public static RowGroupScope Rows(params Sz[] sizes) => new(sizes);
+    public static RowGroupScope Rows(params Sz[] sizes) => new(sizes, 0f);
+
+    /// <summary>
+    ///     Pre-resolves a sequence of row sizes with a gap between each row.
+    ///     Call <see cref="RowGroupScope.Next"/> for each row in order.
+    /// </summary>
+    public static RowGroupScope Rows(float gap, params Sz[] sizes) => new(sizes, gap);
 
     /// <summary>
     ///     Creates N equal-width columns side by side. Call <see cref="EqualColsScope.NextCol"/>

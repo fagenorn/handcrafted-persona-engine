@@ -9,7 +9,7 @@ public static class Styles
     public static readonly Style None = default;
 
     public static readonly Style StatusBar = new(
-        padding: new Vector2(24f, 8f),
+        padding: new Vector2(20f, 0f),
         itemSpacing: new Vector2(12f, 0f),
         childBg: Theme.Surface2
     );

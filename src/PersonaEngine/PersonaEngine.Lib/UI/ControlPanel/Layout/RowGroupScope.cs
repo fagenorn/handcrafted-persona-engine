@@ -12,13 +12,16 @@ public ref struct RowGroupScope
 {
     private readonly float[] _resolvedHeights;
     private readonly float _parentWidth;
+    private readonly float _gap;
     private readonly Vector2 _parentSpacing;
     private int _nextIndex;
     private bool _disposed;
 
-    internal RowGroupScope(ReadOnlySpan<Sz> sizes)
+    internal RowGroupScope(ReadOnlySpan<Sz> sizes, float gap)
     {
-        var available = LayoutContext.RemainingHeight();
+        _gap = gap;
+        var totalGap = gap * MathF.Max(0f, sizes.Length - 1);
+        var available = LayoutContext.RemainingHeight() - totalGap;
         _parentWidth = LayoutContext.Width();
         _resolvedHeights = Sz.Resolve(sizes, available);
         _parentSpacing = ImGui.GetStyle().ItemSpacing;
@@ -26,7 +29,11 @@ public ref struct RowGroupScope
         _disposed = false;
 
         // Reserve all available height so no sibling after this group can claim it.
-        LayoutContext.ConsumeHeight(available);
+        LayoutContext.ConsumeHeight(available + totalGap);
+
+        // Zero out item spacing so rows + gap dummies tile exactly.
+        // Restored in Dispose.
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, Vector2.Zero);
     }
 
     /// <summary>
@@ -38,6 +45,10 @@ public ref struct RowGroupScope
         ImGuiChildFlags childFlags = ImGuiChildFlags.None
     )
     {
+        // Emit gap spacing before every row except the first
+        if (_nextIndex > 0 && _gap > 0f)
+            ImGui.Dummy(new Vector2(0f, _gap));
+
         var height =
             _nextIndex < _resolvedHeights.Length ? MathF.Max(0f, _resolvedHeights[_nextIndex]) : 0f;
         _nextIndex++;
@@ -49,6 +60,8 @@ public ref struct RowGroupScope
         if (_disposed)
             return;
         _disposed = true;
+
+        ImGui.PopStyleVar(); // ItemSpacing zero
     }
 }
 

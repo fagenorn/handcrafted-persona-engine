@@ -9,18 +9,32 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Layout;
 /// </summary>
 public ref struct FillChildScope
 {
+    private float _indentX;
     private bool _disposed;
 
     internal FillChildScope(string id, Vector2 padding, ImGuiChildFlags childFlags)
     {
         _disposed = false;
+        _indentX = 0f;
 
-        // Explicit WP before BeginChild — never inherit parent's.
+        // Push padding so ImGui computes the right/bottom content boundary.
+        // Left/top is applied manually after BeginChild (see below).
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, padding);
 
         ImGui.BeginChild(id, ImGui.GetContentRegionAvail(), childFlags);
 
-        // Reset WP inside so nested children don't inherit our padding.
+        // Apply padding manually via Indent/Dummy — WindowPadding is not
+        // reliably applied to child windows in this ImGui binding.
+        if (padding.Y > 0f)
+            ImGui.Dummy(new Vector2(0f, padding.Y));
+
+        if (padding.X > 0f)
+        {
+            ImGui.Indent(padding.X);
+            _indentX = padding.X;
+        }
+
+        // Keep WP zero so nested children don't inherit our padding.
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
     }
 
@@ -31,6 +45,10 @@ public ref struct FillChildScope
         _disposed = true;
 
         ImGui.PopStyleVar(); // inner WP reset
+
+        if (_indentX > 0f)
+            ImGui.Unindent(_indentX);
+
         ImGui.EndChild();
         ImGui.PopStyleVar(); // outer WP
     }

@@ -1,7 +1,6 @@
 using Hexa.NET.ImGui;
 using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Configuration;
-using PersonaEngine.Lib.UI.ControlPanel.Layout;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels;
 
@@ -71,32 +70,11 @@ public sealed class Streaming(
         var w = config.Width;
         var h = config.Height;
 
-        using var grid = Ui.Grid($"##SpoutDims_{index}", 2);
+        ImGuiHelpers.SettingLabel("Resolution", "Output resolution for this Spout sender.");
 
-        grid.Row();
-        grid.Col();
-        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
-        ImGui.TextUnformatted("Width");
-        grid.Col();
-        ImGui.TextUnformatted("Height");
-        ImGui.PopStyleColor();
-
-        grid.Row();
-        grid.ColFill();
-        if (ImGui.InputInt($"##SpoutW_{index}", ref w))
+        if (ImGuiHelpers.ResolutionPicker($"SpoutRes_{index}", ref w, ref h))
         {
-            w = Math.Max(1, w);
-            var updated = config with { Width = w };
-            var newConfigs = ReplaceAt(spoutConfigs, index, updated);
-            _appConfig = _appConfig with { SpoutConfigs = newConfigs };
-            configWriter.Write(_appConfig);
-        }
-
-        grid.ColFill();
-        if (ImGui.InputInt($"##SpoutH_{index}", ref h))
-        {
-            h = Math.Max(1, h);
-            var updated = config with { Height = h };
+            var updated = config with { Width = w, Height = h };
             var newConfigs = ReplaceAt(spoutConfigs, index, updated);
             _appConfig = _appConfig with { SpoutConfigs = newConfigs };
             configWriter.Write(_appConfig);

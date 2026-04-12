@@ -68,7 +68,13 @@ public ref struct SplitScope
     {
         var splitPos = _splitPositions[_id];
         var leftWidth = MathF.Max(0f, splitPos);
-        return new SplitChildScope($"##{_id}_left", leftWidth, _height, _leftStyle);
+        return new SplitChildScope(
+            $"##{_id}_left",
+            leftWidth,
+            _height,
+            _leftStyle,
+            dualChild: false
+        );
     }
 
     /// <summary>Renders the divider and returns a scope for the right side.</summary>
@@ -99,7 +105,13 @@ public ref struct SplitScope
         ImGui.SameLine();
 
         var rightWidth = MathF.Max(0f, _totalWidth - splitPos - DividerWidth);
-        return new SplitChildScope($"##{_id}_right", rightWidth, _height, _rightStyle);
+        return new SplitChildScope(
+            $"##{_id}_right",
+            rightWidth,
+            _height,
+            _rightStyle,
+            dualChild: true
+        );
     }
 
     public void Dispose()
@@ -115,26 +127,29 @@ public ref struct SplitScope
 
 /// <summary>
 ///     One side of a <see cref="SplitScope"/>. Manages its own child window and style.
-///     Uses two-phase push: container (padding, bg) before BeginChild,
-///     content (item spacing) after BeginChild.
+///     Two modes: <b>dual-child</b> (outer bg + inner padded child) gives true padding
+///     on all four sides; <b>indent</b> (Indent/Dummy) avoids nested children so custom
+///     draw-list operations can reach the window edge.
 /// </summary>
 public ref struct SplitChildScope
 {
-    private int _outerVarCount;
+    private bool _hasInner;
+    private float _indentX;
     private int _outerColorCount;
     private bool _disposed;
 
-    internal SplitChildScope(string id, float width, float height, Style style)
+    internal SplitChildScope(string id, float width, float height, Style style, bool dualChild)
     {
         _disposed = false;
-        _outerVarCount = 0;
         _outerColorCount = 0;
+        _hasInner = false;
+        _indentX = 0f;
 
         var padding = style.Padding;
 
-        // ── Before BeginChild ───────────────────────────────────────────
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, padding);
-        _outerVarCount++;
+        // ── Outer child: full size, carries background color ────────────
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, Vector2.Zero);
 
         if (style.ChildBg is { } bg)
         {
@@ -144,15 +159,40 @@ public ref struct SplitChildScope
 
         ImGui.BeginChild(id, new Vector2(width, height));
 
-        // ── After BeginChild ────────────────────────────────────────────
-        // Set content spacing. Reset WP to zero so nested children
-        // don't inherit this scope's padding.
+        if (dualChild && padding != Vector2.Zero)
+        {
+            // ── Dual-child: inner child inset by padding on all sides ──
+            _hasInner = true;
+
+            ImGui.SetCursorPos(padding);
+            ImGui.PushStyleColor(ImGuiCol.ChildBg, Vector4.Zero);
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
+
+            var innerW = MathF.Max(0f, width - padding.X * 2f);
+            var innerH = MathF.Max(0f, height - padding.Y * 2f);
+
+            ImGui.BeginChild(id + "_inner", new Vector2(innerW, innerH));
+        }
+        else if (padding != Vector2.Zero)
+        {
+            // ── Indent mode: left/top via Indent/Dummy, no inner child ──
+            if (padding.Y > 0f)
+                ImGui.Dummy(new Vector2(0f, padding.Y));
+
+            if (padding.X > 0f)
+            {
+                ImGui.Indent(padding.X);
+                _indentX = padding.X;
+            }
+        }
+
+        // ── Content style ───────────────────────────────────────────────
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, style.ItemSpacing);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
 
-        var innerWidth = MathF.Max(0f, width - padding.X * 2f);
-        var innerHeight = MathF.Max(0f, height - padding.Y * 2f);
-        LayoutContext.Push(innerWidth, innerHeight);
+        var contentW = MathF.Max(0f, width - padding.X * 2f);
+        var contentH = MathF.Max(0f, height - padding.Y * 2f);
+        LayoutContext.Push(contentW, contentH);
     }
 
     public void Dispose()
@@ -162,10 +202,22 @@ public ref struct SplitChildScope
         _disposed = true;
 
         LayoutContext.Pop();
-        ImGui.PopStyleVar(2); // inner WP reset + inner IS
-        ImGui.EndChild();
+        ImGui.PopStyleVar(2); // content IS + content WP
+
+        if (_hasInner)
+        {
+            ImGui.EndChild(); // inner
+            ImGui.PopStyleVar(); // inner WP
+            ImGui.PopStyleColor(); // inner transparent bg
+        }
+        else if (_indentX > 0f)
+        {
+            ImGui.Unindent(_indentX);
+        }
+
+        ImGui.EndChild(); // outer
         if (_outerColorCount > 0)
             ImGui.PopStyleColor(_outerColorCount);
-        ImGui.PopStyleVar(_outerVarCount);
+        ImGui.PopStyleVar(2); // outer IS + outer WP
     }
 }

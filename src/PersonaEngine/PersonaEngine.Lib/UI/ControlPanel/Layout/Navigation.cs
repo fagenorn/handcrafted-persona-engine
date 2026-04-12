@@ -70,8 +70,8 @@ public sealed class Navigation
             {
                 var itemMin = ImGui.GetItemRectMin();
                 var itemMax = ImGui.GetItemRectMax();
-                var accentMin = itemMin;
-                var accentMax = new Vector2(itemMin.X + 4f, itemMax.Y);
+                var accentMin = new Vector2(ImGui.GetWindowPos().X, itemMin.Y);
+                var accentMax = new Vector2(ImGui.GetWindowPos().X + 4f, itemMax.Y);
                 var accentCol = ImGui.ColorConvertFloat4ToU32(Theme.AccentPrimary);
 
                 ImGui.AddRectFilled(drawList, accentMin, accentMax, accentCol);

@@ -218,29 +218,16 @@ public sealed class Subtitles(
     {
         ImGuiHelpers.SectionHeader("Output Size");
 
-        // Width
+        // Resolution
         {
             var width = _opts.Width;
-
-            ImGuiHelpers.SettingLabel("Width", "Width of the subtitle output in pixels.");
-
-            if (ImGui.InputInt("##SubtitleWidth", ref width))
-            {
-                width = Math.Max(1, width);
-                _opts.Width = width;
-                configWriter.Write(CloneOpts(_opts));
-            }
-        }
-
-        // Height
-        {
             var height = _opts.Height;
 
-            ImGuiHelpers.SettingLabel("Height", "Height of the subtitle output in pixels.");
+            ImGuiHelpers.SettingLabel("Resolution", "Output resolution for subtitles.");
 
-            if (ImGui.InputInt("##SubtitleHeight", ref height))
+            if (ImGuiHelpers.ResolutionPicker("SubtitleRes", ref width, ref height))
             {
-                height = Math.Max(1, height);
+                _opts.Width = width;
                 _opts.Height = height;
                 configWriter.Write(CloneOpts(_opts));
             }
