@@ -5,7 +5,7 @@ using PersonaEngine.Lib.UI.Common;
 using Silk.NET.OpenGL;
 using Texture = PersonaEngine.Lib.UI.Common.Texture;
 
-namespace PersonaEngine.Lib.UI.Text.Rendering;
+namespace PersonaEngine.Lib.UI.Rendering.Text;
 
 internal class Texture2DManager(GL gl) : ITexture2DManager
 {

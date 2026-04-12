@@ -3,13 +3,13 @@ using System.Numerics;
 using FontStashSharp;
 using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Configuration;
-using PersonaEngine.Lib.UI.Text.Rendering;
+using PersonaEngine.Lib.UI.Rendering.Text;
 using Silk.NET.Input;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 using Shader = PersonaEngine.Lib.UI.Common.Shader;
 
-namespace PersonaEngine.Lib.UI.RouletteWheel;
+namespace PersonaEngine.Lib.UI.Rendering.RouletteWheel;
 
 public partial class RouletteWheel : IRenderComponent
 {

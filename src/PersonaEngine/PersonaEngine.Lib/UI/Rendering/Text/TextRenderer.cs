@@ -5,7 +5,7 @@ using Silk.NET.OpenGL;
 using Shader = PersonaEngine.Lib.UI.Common.Shader;
 using Texture = PersonaEngine.Lib.UI.Common.Texture;
 
-namespace PersonaEngine.Lib.UI.Text.Rendering;
+namespace PersonaEngine.Lib.UI.Rendering.Text;
 
 internal class TextRenderer : IFontStashRenderer2, IDisposable
 {

@@ -43,9 +43,11 @@ using PersonaEngine.Lib.TTS.Synthesis.Qwen3;
 using PersonaEngine.Lib.TTS.Synthesis.TextProcessing;
 using PersonaEngine.Lib.UI;
 using PersonaEngine.Lib.UI.Common;
-using PersonaEngine.Lib.UI.GUI;
-using PersonaEngine.Lib.UI.RouletteWheel;
-using PersonaEngine.Lib.UI.Text.Subtitles;
+using PersonaEngine.Lib.UI.ControlPanel;
+using PersonaEngine.Lib.UI.ControlPanel.Layout;
+using PersonaEngine.Lib.UI.ControlPanel.Panels;
+using PersonaEngine.Lib.UI.Rendering.RouletteWheel;
+using PersonaEngine.Lib.UI.Rendering.Subtitles;
 using PersonaEngine.Lib.Vision;
 using Polly;
 using Polly.Retry;
@@ -348,7 +350,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRenderComponent, SubtitleRenderer>();
         services.AddSingleton<RouletteWheel>();
         services.AddSingleton<IRenderComponent>(x => x.GetRequiredService<RouletteWheel>());
-        services.AddConfigEditor();
+        services.AddControlPanel();
 
         services.AddSingleton<FontProvider>();
         services.AddSingleton<IStartupTask>(x => x.GetRequiredService<FontProvider>());
@@ -371,22 +373,33 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddConfigEditor(this IServiceCollection services)
+    public static IServiceCollection AddControlPanel(this IServiceCollection services)
     {
-        services.AddSingleton<IUiConfigurationManager, UiConfigurationManager>();
-        services.AddSingleton<IEditorStateManager, EditorStateManager>();
-        services.AddSingleton<IConfigSectionRegistry, ConfigSectionRegistry>();
-        services.AddSingleton<IUiThemeManager, UiThemeManager>();
-        services.AddSingleton<INotificationService, NotificationService>();
+        // Config writer — discovers section paths from AvatarAppConfig type hierarchy
+        services.AddSingleton<IConfigWriter>(sp => new ConfigWriter(
+            Path.Combine(AppContext.BaseDirectory, "appsettings.json"),
+            logger: sp.GetRequiredService<ILogger<ConfigWriter>>()
+        ));
 
-        services.AddSingleton<IRenderComponent, ConfigEditorComponent>();
+        // Layout components
+        services.AddSingleton<StatusBar>();
+        services.AddSingleton<ControlBar>();
 
-        services.AddSingleton<TtsConfigEditor>();
-        services.AddSingleton<RouletteWheelEditor>();
-        services.AddSingleton<ChatEditor>();
-        services.AddSingleton<MicrophoneConfigEditor>();
+        // Panels
+        services.AddSingleton<Dashboard>();
+        services.AddSingleton<Voice>();
+        services.AddSingleton<Personality>();
+        services.AddSingleton<Listening>();
+        services.AddSingleton<Avatar>();
+        services.AddSingleton<Subtitles>();
+        services.AddSingleton<RouletteWheelPanel>();
+        services.AddSingleton<ScreenAwareness>();
+        services.AddSingleton<Streaming>();
+        services.AddSingleton<LlmConnection>();
+        services.AddSingleton<Application>();
 
-        services.AddSingleton<IStartupTask, ConfigSectionRegistrationTask>();
+        // Shell — registered as IRenderComponent
+        services.AddSingleton<IRenderComponent, ControlPanelComponent>();
 
         return services;
     }

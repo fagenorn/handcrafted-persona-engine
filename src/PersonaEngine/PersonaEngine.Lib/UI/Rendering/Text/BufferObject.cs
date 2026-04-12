@@ -2,7 +2,7 @@
 using PersonaEngine.Lib.UI.Common;
 using Silk.NET.OpenGL;
 
-namespace PersonaEngine.Lib.UI.Text.Rendering;
+namespace PersonaEngine.Lib.UI.Rendering.Text;
 
 public class BufferObject<T> : IDisposable
     where T : unmanaged

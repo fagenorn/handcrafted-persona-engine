@@ -1,7 +1,7 @@
 ﻿using System.Numerics;
 using System.Runtime.InteropServices;
 
-namespace PersonaEngine.Lib.UI.RouletteWheel;
+namespace PersonaEngine.Lib.UI.Rendering.RouletteWheel;
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public readonly struct VertexPositionTexture

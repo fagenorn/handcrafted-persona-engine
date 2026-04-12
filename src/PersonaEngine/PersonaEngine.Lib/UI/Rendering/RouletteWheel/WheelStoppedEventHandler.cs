@@ -1,3 +1,3 @@
-﻿namespace PersonaEngine.Lib.UI.RouletteWheel;
+﻿namespace PersonaEngine.Lib.UI.Rendering.RouletteWheel;
 
 public delegate void WheelStoppedEventHandler(string selectedOption);

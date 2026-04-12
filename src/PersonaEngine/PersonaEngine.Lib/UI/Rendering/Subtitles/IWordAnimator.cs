@@ -1,7 +1,7 @@
 using System.Numerics;
 using FontStashSharp;
 
-namespace PersonaEngine.Lib.UI.Text.Subtitles;
+namespace PersonaEngine.Lib.UI.Rendering.Subtitles;
 
 /// <summary>
 ///     Interface for defining word animation strategies (scale, color).

@@ -1,7 +1,7 @@
 ﻿using PersonaEngine.Lib.Configuration;
 using Silk.NET.OpenGL;
 
-namespace PersonaEngine.Lib.UI.Spout;
+namespace PersonaEngine.Lib.UI.Rendering.Spout;
 
 public class SpoutRegistry : IDisposable
 {

@@ -1,6 +1,6 @@
 ﻿using System.Numerics;
 
-namespace PersonaEngine.Lib.UI.RouletteWheel;
+namespace PersonaEngine.Lib.UI.Rendering.RouletteWheel;
 
 public partial class RouletteWheel
 {

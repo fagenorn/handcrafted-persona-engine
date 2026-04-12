@@ -1,4 +1,4 @@
-﻿namespace PersonaEngine.Lib.UI.Text.Subtitles;
+﻿namespace PersonaEngine.Lib.UI.Rendering.Subtitles;
 
 /// <summary>
 ///     Represents a single line of processed subtitles containing multiple words.

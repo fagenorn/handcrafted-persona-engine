@@ -1,7 +1,7 @@
 using System.Text;
 using PersonaEngine.Lib.TTS.Synthesis;
 
-namespace PersonaEngine.Lib.UI.Text.Subtitles;
+namespace PersonaEngine.Lib.UI.Rendering.Subtitles;
 
 /// <summary>
 ///     Processes raw AudioSegments into structured SubtitleSegments containing lines and words

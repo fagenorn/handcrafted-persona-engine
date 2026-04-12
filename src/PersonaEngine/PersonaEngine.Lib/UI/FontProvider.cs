@@ -2,7 +2,7 @@
 using FontStashSharp;
 using Microsoft.Extensions.Logging;
 using PersonaEngine.Lib.UI.Common;
-using PersonaEngine.Lib.UI.Text.Rendering;
+using PersonaEngine.Lib.UI.Rendering.Text;
 using Silk.NET.OpenGL;
 using StbImageSharp;
 using Texture = PersonaEngine.Lib.UI.Common.Texture;

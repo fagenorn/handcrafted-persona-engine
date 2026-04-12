@@ -1,7 +1,7 @@
 using System.Numerics;
 using FontStashSharp;
 
-namespace PersonaEngine.Lib.UI.Text.Subtitles;
+namespace PersonaEngine.Lib.UI.Rendering.Subtitles;
 
 /// <summary>
 ///     Holds the properties and animation state of a single word for rendering.

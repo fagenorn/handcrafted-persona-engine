@@ -9,12 +9,12 @@ using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Adapters;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
 using PersonaEngine.Lib.TTS.Synthesis;
-using PersonaEngine.Lib.UI.Text.Rendering;
+using PersonaEngine.Lib.UI.Rendering.Text;
 using Silk.NET.Input;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 
-namespace PersonaEngine.Lib.UI.Text.Subtitles;
+namespace PersonaEngine.Lib.UI.Rendering.Subtitles;
 
 /// <summary>
 ///     Renders subtitles synchronized to audio playback.

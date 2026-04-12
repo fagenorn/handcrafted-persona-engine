@@ -1,7 +1,7 @@
 using System.Numerics;
 using FontStashSharp;
 using PersonaEngine.Lib.TTS.Synthesis;
-using PersonaEngine.Lib.UI.Text.Subtitles;
+using PersonaEngine.Lib.UI.Rendering.Subtitles;
 using Xunit;
 
 namespace PersonaEngine.Lib.Tests.TTS.Subtitles;

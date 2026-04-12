@@ -2,7 +2,7 @@
 using Silk.NET.OpenGL;
 using Spout.Interop;
 
-namespace PersonaEngine.Lib.UI.Spout;
+namespace PersonaEngine.Lib.UI.Rendering.Spout;
 
 /// <summary>
 ///     Provides real-time frame sharing via Spout with custom framebuffer support.
