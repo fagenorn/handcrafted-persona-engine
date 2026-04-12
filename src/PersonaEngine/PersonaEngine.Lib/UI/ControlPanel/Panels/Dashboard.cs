@@ -13,9 +13,9 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels;
 /// </summary>
 public sealed class Dashboard(IConversationOrchestrator orchestrator)
 {
-    private const float HealthSectionHeight = 100f;
+    private const float HealthSectionHeight = 112f;
     private const float StatsSectionHeight = 100f;
-    private const float CardHeight = 56f;
+    private const float CardHeight = 68f;
 
     private static readonly (string Name, string StatusText)[] _healthCards =
     [
@@ -54,7 +54,8 @@ public sealed class Dashboard(IConversationOrchestrator orchestrator)
         using var cols = Ui.EqualCols(
             _healthCards.Length,
             CardHeight,
-            childFlags: ImGuiChildFlags.Borders
+            childFlags: ImGuiChildFlags.Borders,
+            padding: 8f
         );
 
         for (var i = 0; i < _healthCards.Length; i++)

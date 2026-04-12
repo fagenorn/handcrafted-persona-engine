@@ -16,7 +16,7 @@ public sealed class ControlPanelComponent : IRenderComponent
 {
     private const float SidebarWidth = 170f;
 
-    private const float StatusBarHeight = 40f;
+    private const float StatusBarHeight = 46f;
     private const float ControlBarHeight = 44f;
     private const float SavedIndicatorDuration = 2f;
 

@@ -521,8 +521,7 @@ public sealed class VBridgerLipSyncService : AnimationServiceBase
                 .Select(t => t.EndTs!.Value + _cumulativeTimeOffset)
                 .DefaultIfEmpty(0.0)
                 .Max();
-            var existingMaxEnd =
-                _activePhonemes.Count > 0 ? _activePhonemes[^1].EndTime : 0.0;
+            var existingMaxEnd = _activePhonemes.Count > 0 ? _activePhonemes[^1].EndTime : 0.0;
 
             if (newMaxEnd >= existingMaxEnd)
             {

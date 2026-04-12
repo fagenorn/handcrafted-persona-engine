@@ -19,11 +19,10 @@ public sealed class StatusBar(IConversationOrchestrator orchestrator)
         _elapsed += deltaTime;
 
         var (_, barHeight) = Ui.PeekContext();
-        var (color, label, speechText) = GetConversationState();
+        var (color, label, speechText, isActive) = GetConversationState();
 
-        // Glow pulse: oscillates between 0.08 and 0.20 opacity, disabled for "No Session"
-        var glowAlpha =
-            color == Theme.TextSecondary ? 0f : 0.14f + 0.06f * MathF.Sin(_elapsed * 2.5f);
+        // Glow pulse: oscillates between 0.08 and 0.20 opacity, disabled when inactive
+        var glowAlpha = isActive ? 0.14f + 0.06f * MathF.Sin(_elapsed * 2.5f) : 0f;
 
         ImGui.SetCursorPosY((barHeight - ImGui.GetTextLineHeight()) * 0.5f);
 

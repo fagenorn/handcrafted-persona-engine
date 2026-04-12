@@ -55,6 +55,8 @@ public static class ImGuiHelpers
     /// <param name="glowAlpha">Glow halo opacity (0 = no glow). Halo uses the same color at this alpha.</param>
     public static void StatusDot(Vector4 color, float radius = 5f, float glowAlpha = 0f)
     {
+        const float glowScale = 2.4f;
+
         var drawList = ImGui.GetWindowDrawList();
         var cursor = ImGui.GetCursorScreenPos();
         var textH = ImGui.GetTextLineHeight();
@@ -65,7 +67,7 @@ public static class ImGuiHelpers
         {
             var glowColor = color with { W = glowAlpha };
             var glowCol = ImGui.ColorConvertFloat4ToU32(glowColor);
-            ImGui.AddCircleFilled(drawList, center, 12f, glowCol);
+            ImGui.AddCircleFilled(drawList, center, radius * glowScale, glowCol);
         }
 
         var col = ImGui.ColorConvertFloat4ToU32(color);

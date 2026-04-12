@@ -13,16 +13,24 @@ public ref struct EqualColsScope
     private readonly float _colWidth;
     private readonly float _height;
     private readonly float _gap;
+    private readonly float _padding;
     private readonly ImGuiChildFlags _childFlags;
     private int _currentCol;
     private bool _childOpen;
     private bool _disposed;
 
-    internal EqualColsScope(int count, float height, float gap, ImGuiChildFlags childFlags)
+    internal EqualColsScope(
+        int count,
+        float height,
+        float gap,
+        ImGuiChildFlags childFlags,
+        float padding
+    )
     {
         _count = count;
         _height = height;
         _gap = gap;
+        _padding = padding;
         _childFlags = childFlags;
         _currentCol = -1;
         _childOpen = false;
@@ -58,8 +66,9 @@ public ref struct EqualColsScope
         if (_currentCol > 0)
             ImGui.SameLine(0f, _gap);
 
-        // Explicitly set WP(0,0) so columns don't inherit parent's padding.
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
+        var wp = new Vector2(_padding, _padding);
+
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, wp);
 
         var visible = ImGui.BeginChild(
             $"##EqCol_{_currentCol}_{_height:F0}",
@@ -67,11 +76,13 @@ public ref struct EqualColsScope
             _childFlags
         );
 
-        // Reset WP inside too, so any nested children also get zero padding.
+        // Reset WP inside so nested children don't inherit column padding.
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
 
         _childOpen = true;
-        LayoutContext.Push(_colWidth, _height);
+        var innerW = MathF.Max(0f, _colWidth - _padding * 2f);
+        var innerH = MathF.Max(0f, _height - _padding * 2f);
+        LayoutContext.Push(innerW, innerH);
 
         return visible;
     }

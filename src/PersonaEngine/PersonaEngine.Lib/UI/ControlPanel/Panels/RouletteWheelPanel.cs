@@ -1,6 +1,7 @@
 using Hexa.NET.ImGui;
 using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Configuration;
+using PersonaEngine.Lib.UI.ControlPanel.Layout;
 using WheelRenderer = PersonaEngine.Lib.UI.Rendering.RouletteWheel.RouletteWheel;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels;
@@ -182,26 +183,29 @@ public sealed class RouletteWheelPanel(
     {
         ImGuiHelpers.SectionHeader("Size");
 
-        // Width
         {
+            using var grid = Ui.Grid("##WheelDims", 2);
+
+            grid.Row();
+            grid.Col();
+            ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
+            ImGui.TextUnformatted("Width");
+            grid.Col();
+            ImGui.TextUnformatted("Height");
+            ImGui.PopStyleColor();
+
+            grid.Row();
+            grid.ColFill();
             var width = _opts.Width;
-
-            ImGuiHelpers.SettingLabel("Width", "Width of the wheel output in pixels.");
-
             if (ImGui.InputInt("##WheelWidth", ref width))
             {
                 width = Math.Max(1, width);
                 _opts = _opts with { Width = width };
                 configWriter.Write(_opts);
             }
-        }
 
-        // Height
-        {
+            grid.ColFill();
             var height = _opts.Height;
-
-            ImGuiHelpers.SettingLabel("Height", "Height of the wheel output in pixels.");
-
             if (ImGui.InputInt("##WheelHeight", ref height))
             {
                 height = Math.Max(1, height);

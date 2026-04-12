@@ -1,6 +1,7 @@
 using Hexa.NET.ImGui;
 using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Configuration;
+using PersonaEngine.Lib.UI.ControlPanel.Layout;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels;
 
@@ -34,8 +35,6 @@ public sealed class Streaming(
 
     private void RenderSpoutOutputs()
     {
-        ImGuiHelpers.SectionHeader("Spout Outputs");
-
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
         ImGui.PushTextWrapPos(0f);
         ImGui.TextUnformatted(
@@ -45,8 +44,6 @@ public sealed class Streaming(
         );
         ImGui.PopTextWrapPos();
         ImGui.PopStyleColor();
-
-        ImGui.Spacing();
 
         var spoutConfigs = _appConfig.SpoutConfigs;
 
@@ -68,58 +65,42 @@ public sealed class Streaming(
     private void RenderSpoutOutputEntry(SpoutConfiguration[] spoutConfigs, int index)
     {
         var config = spoutConfigs[index];
-        var childId = $"##SpoutOutput_{index}";
-        var childSize = new System.Numerics.Vector2(0f, 90f);
 
-        if (!ImGui.BeginChild(childId, childSize, ImGuiChildFlags.Borders))
-        {
-            ImGui.EndChild();
+        ImGuiHelpers.SectionHeader(config.OutputName);
 
-            return;
-        }
+        var w = config.Width;
+        var h = config.Height;
 
-        ImGui.Spacing();
+        using var grid = Ui.Grid($"##SpoutDims_{index}", 2);
 
-        ImGui.PushStyleColor(ImGuiCol.Text, Theme.AccentPrimary);
-        ImGui.TextUnformatted(config.OutputName);
+        grid.Row();
+        grid.Col();
+        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
+        ImGui.TextUnformatted("Width");
+        grid.Col();
+        ImGui.TextUnformatted("Height");
         ImGui.PopStyleColor();
 
-        ImGui.Spacing();
-
-        // Width
+        grid.Row();
+        grid.ColFill();
+        if (ImGui.InputInt($"##SpoutW_{index}", ref w))
         {
-            var width = config.Width;
-
-            ImGuiHelpers.SettingLabel("Width", "Output width in pixels.");
-
-            if (ImGui.InputInt($"##SpoutW_{index}", ref width))
-            {
-                width = Math.Max(1, width);
-                var updated = config with { Width = width };
-                var newConfigs = ReplaceAt(spoutConfigs, index, updated);
-                _appConfig = _appConfig with { SpoutConfigs = newConfigs };
-                configWriter.Write(_appConfig);
-            }
+            w = Math.Max(1, w);
+            var updated = config with { Width = w };
+            var newConfigs = ReplaceAt(spoutConfigs, index, updated);
+            _appConfig = _appConfig with { SpoutConfigs = newConfigs };
+            configWriter.Write(_appConfig);
         }
 
-        // Height
+        grid.ColFill();
+        if (ImGui.InputInt($"##SpoutH_{index}", ref h))
         {
-            var height = config.Height;
-
-            ImGuiHelpers.SettingLabel("Height", "Output height in pixels.");
-
-            if (ImGui.InputInt($"##SpoutH_{index}", ref height))
-            {
-                height = Math.Max(1, height);
-                var updated = config with { Height = height };
-                var newConfigs = ReplaceAt(spoutConfigs, index, updated);
-                _appConfig = _appConfig with { SpoutConfigs = newConfigs };
-                configWriter.Write(_appConfig);
-            }
+            h = Math.Max(1, h);
+            var updated = config with { Height = h };
+            var newConfigs = ReplaceAt(spoutConfigs, index, updated);
+            _appConfig = _appConfig with { SpoutConfigs = newConfigs };
+            configWriter.Write(_appConfig);
         }
-
-        ImGui.EndChild();
-        ImGui.Spacing();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────

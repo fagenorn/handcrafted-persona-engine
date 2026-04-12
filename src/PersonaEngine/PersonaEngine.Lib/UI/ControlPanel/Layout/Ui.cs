@@ -42,8 +42,9 @@ public static class Ui
         int count,
         float height,
         float gap = 12f,
-        ImGuiChildFlags childFlags = ImGuiChildFlags.None
-    ) => new(count, height, gap, childFlags);
+        ImGuiChildFlags childFlags = ImGuiChildFlags.None,
+        float padding = 0f
+    ) => new(count, height, gap, childFlags, padding);
 
     /// <summary>
     ///     Creates a child window that fills all remaining space in the current context.
@@ -54,6 +55,13 @@ public static class Ui
         ImGuiChildFlags childFlags = ImGuiChildFlags.None,
         float padding = 0f
     ) => new(id, new System.Numerics.Vector2(padding, padding), childFlags);
+
+    /// <summary>
+    ///     Creates an auto-height equal-width column grid. Unlike <see cref="EqualCols"/>,
+    ///     rows auto-size to content — no fixed height, no child windows, no scrollbars.
+    ///     Call <see cref="GridScope.Row"/> then <see cref="GridScope.Col"/> for each cell.
+    /// </summary>
+    public static GridScope Grid(string id, int columns) => new(id, columns);
 
     /// <summary>Peeks the current layout context's available space.</summary>
     public static (float Width, float Height) PeekContext() => LayoutContext.Peek();

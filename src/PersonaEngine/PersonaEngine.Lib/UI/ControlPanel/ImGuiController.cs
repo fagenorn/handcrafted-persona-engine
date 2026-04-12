@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Drawing;
 using System.Numerics;
 using System.Runtime.CompilerServices;
@@ -15,7 +15,7 @@ using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 using Shader = PersonaEngine.Lib.UI.Common.Shader;
 
-namespace PersonaEngine.Lib.UI.GUI;
+namespace PersonaEngine.Lib.UI.ControlPanel;
 
 public class ImGuiController : IDisposable
 {
@@ -203,6 +203,7 @@ public class ImGuiController : IDisposable
         Context = ImGui.CreateContext();
         ImGui.SetCurrentContext(Context);
         ImGui.StyleColorsDark();
+        Theme.Apply();
 
         _platform = ImGui.GetPlatformIO();
         var io = ImGui.GetIO();
@@ -340,8 +341,6 @@ public class ImGuiController : IDisposable
     {
         if (_frameBegun)
         {
-            ImGui.End();
-
             var oldCtx = ImGui.GetCurrentContext();
 
             if (oldCtx != Context)
@@ -387,26 +386,6 @@ public class ImGuiController : IDisposable
     private void SetDocking()
     {
         ImGui.NewFrame();
-        var viewport = ImGui.GetMainViewport();
-
-        var windowFlags =
-            ImGuiWindowFlags.NoTitleBar
-            | ImGuiWindowFlags.NoResize
-            | ImGuiWindowFlags.NoMove
-            | ImGuiWindowFlags.NoBringToFrontOnFocus
-            | ImGuiWindowFlags.NoNavFocus;
-
-        ImGui.SetNextWindowPos(viewport.Pos);
-        ImGui.SetNextWindowSize(viewport.Size);
-        ImGui.SetNextWindowViewport(viewport.ID);
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 0.0f);
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0.0f);
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(0));
-
-        ImGui.Begin("DockSpace", windowFlags);
-        ImGui.PopStyleVar(3);
-        var dockspaceId = ImGui.GetID("MyDockSpace");
-        ImGui.DockSpace(dockspaceId, new Vector2(0.0f, 0.0f), ImGuiDockNodeFlags.AutoHideTabBar);
     }
 
     /// <summary>
