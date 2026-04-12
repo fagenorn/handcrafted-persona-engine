@@ -4,6 +4,7 @@ using Hexa.NET.ImGui;
 using OpenAI.Chat;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
+using PersonaEngine.Lib.UI.ControlPanel.Layout;
 using ConversationChatMessage = PersonaEngine.Lib.Core.Conversation.Abstractions.Context.ChatMessage;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels;
@@ -13,6 +14,9 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels;
 /// </summary>
 public sealed class Dashboard(IConversationOrchestrator orchestrator)
 {
+    private const float HealthSectionHeight = 110f;
+    private const float StatsSectionHeight = 80f;
+
     private static readonly (string Name, string StatusText)[] _healthCards =
     [
         ("Microphone", "OK"),
@@ -25,9 +29,14 @@ public sealed class Dashboard(IConversationOrchestrator orchestrator)
 
     public void Render()
     {
-        RenderSystemHealth();
-        RenderTranscript();
-        RenderSessionStats();
+        using (Ui.Row(Sz.Fixed(HealthSectionHeight)))
+            RenderSystemHealth();
+
+        using (Ui.Row(Sz.Fill(), childFlags: ImGuiChildFlags.Borders))
+            RenderTranscript();
+
+        using (Ui.Row(Sz.Fixed(StatsSectionHeight)))
+            RenderSessionStats();
     }
 
     // ── System Health ────────────────────────────────────────────────────────────
@@ -82,17 +91,6 @@ public sealed class Dashboard(IConversationOrchestrator orchestrator)
     {
         ImGuiHelpers.SectionHeader("Conversation");
 
-        // Leave room for the stats section below (~120px)
-        var availableHeight = ImGui.GetContentRegionAvail().Y - 120f;
-        var transcriptSize = new Vector2(0f, availableHeight);
-
-        if (!ImGui.BeginChild("##Transcript", transcriptSize, ImGuiChildFlags.Borders))
-        {
-            ImGui.EndChild();
-
-            return;
-        }
-
         var session = TryGetActiveSession();
 
         if (session is null)
@@ -111,8 +109,6 @@ public sealed class Dashboard(IConversationOrchestrator orchestrator)
         {
             ImGui.SetScrollHereY(1f);
         }
-
-        ImGui.EndChild();
     }
 
     private static void RenderHistory(IConversationContext context)

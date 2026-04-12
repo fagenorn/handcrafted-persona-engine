@@ -1,3 +1,5 @@
+using Hexa.NET.ImGui;
+
 namespace PersonaEngine.Lib.UI.ControlPanel.Layout;
 
 /// <summary>
@@ -9,7 +11,11 @@ public static class Ui
     public static WindowScope Window(string id) => new(id);
 
     /// <summary>Creates a horizontal band scope with the given height and style.</summary>
-    public static RowScope Row(Sz height, Style style = default) => new(height, style);
+    public static RowScope Row(
+        Sz height,
+        Style style = default,
+        ImGuiChildFlags childFlags = ImGuiChildFlags.None
+    ) => new(height, style, childFlags);
 
     /// <summary>Creates a resizable horizontal split scope.</summary>
     public static SplitScope HSplit(

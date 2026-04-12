@@ -12,7 +12,7 @@ public ref struct RowScope
     private int _stylePushToken;
     private bool _disposed;
 
-    internal RowScope(Sz height, Style style)
+    internal RowScope(Sz height, Style style, ImGuiChildFlags childFlags)
     {
         _disposed = false;
 
@@ -35,7 +35,8 @@ public ref struct RowScope
 
         ImGui.BeginChild(
             $"##Row_{resolvedHeight:F0}_{ImGui.GetCursorPosY():F0}",
-            new Vector2(parentWidth, resolvedHeight)
+            new Vector2(parentWidth, resolvedHeight),
+            childFlags
         );
 
         var innerWidth = MathF.Max(0f, parentWidth - style.Padding.X * 2f);
