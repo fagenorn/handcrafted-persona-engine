@@ -135,7 +135,7 @@ public static class ImGuiHelpers
 
         // Lerp track color between Surface (off) and AccentPrimary (on)
         var t = knobPosition.Current;
-        var trackColor = LerpColor(Theme.Surface, Theme.AccentPrimary, t);
+        var trackColor = LerpColor(Theme.Surface2, Theme.AccentPrimary, t);
         var trackCol = ImGui.ColorConvertFloat4ToU32(trackColor);
         var knobCol = ImGui.ColorConvertFloat4ToU32(Theme.TextPrimary);
 
@@ -182,7 +182,7 @@ public static class ImGuiHelpers
         ImGui.PushStyleColor(ImGuiCol.Button, Theme.AccentPrimary with { W = 0.7f });
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, Theme.AccentPrimary with { W = 0.85f });
         ImGui.PushStyleColor(ImGuiCol.ButtonActive, Theme.AccentPrimary);
-        ImGui.PushStyleColor(ImGuiCol.Text, Theme.Background);
+        ImGui.PushStyleColor(ImGuiCol.Text, Theme.Base);
         var clicked = ImGui.Button(label);
         ImGui.PopStyleColor(4);
         return clicked;
