@@ -14,7 +14,7 @@ namespace PersonaEngine.Lib.UI.ControlPanel;
 /// </summary>
 public sealed class ControlPanelComponent : IRenderComponent
 {
-    public const float SidebarWidth = 140f;
+    private const float SidebarWidth = 140f;
 
     private const float StatusBarHeight = 30f;
     private const float ControlBarHeight = 40f;
@@ -83,75 +83,34 @@ public sealed class ControlPanelComponent : IRenderComponent
 
     public void Render(float deltaTime)
     {
-        var viewport = ImGui.GetMainViewport();
-
-        ImGui.SetNextWindowPos(viewport.Pos);
-        ImGui.SetNextWindowSize(viewport.Size);
-
-        // Zero padding + rounding for the fullscreen host window only.
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 0f);
-
-        var windowFlags =
-            ImGuiWindowFlags.NoTitleBar
-            | ImGuiWindowFlags.NoResize
-            | ImGuiWindowFlags.NoMove
-            | ImGuiWindowFlags.NoCollapse
-            | ImGuiWindowFlags.NoBringToFrontOnFocus
-            | ImGuiWindowFlags.NoNavFocus
-            | ImGuiWindowFlags.NoScrollbar
-            | ImGuiWindowFlags.NoScrollWithMouse;
-
-        ImGui.Begin("##ControlPanel", windowFlags);
-
-        // Pop both — back to theme defaults.  From here we control everything
-        // explicitly: zero ItemSpacing for the tiling grid, per-child padding.
-        ImGui.PopStyleVar(2);
-
-        // Zero item spacing so children tile edge-to-edge with no gaps.
-        // This makes the height/width math exact: no hidden spacing to account for.
-        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, Vector2.Zero);
-
-        var availableWidth = ImGui.GetContentRegionAvail().X;
-        var availableHeight = ImGui.GetContentRegionAvail().Y;
-        var contentHeight = MathF.Max(0f, availableHeight - StatusBarHeight - ControlBarHeight);
-
-        // ── Status bar (full width, fixed height, minimal padding) ──────────
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8f, 0f));
-        _statusBar.Render(availableWidth);
-        ImGui.PopStyleVar();
-
-        // ── Navigation sidebar + content area side by side ──────────────────
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8f, 8f));
-        _navigation.Render(contentHeight);
-        ImGui.PopStyleVar();
-
-        ImGui.SameLine();
-
-        // Content area — scrollable child with comfortable padding and normal
-        // item spacing so panels lay out naturally inside.
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(16f, 16f));
-        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(10f, 8f));
-
-        var contentWidth = MathF.Max(0f, availableWidth - SidebarWidth);
-        if (ImGui.BeginChild("##Content", new Vector2(contentWidth, contentHeight)))
+        using (Ui.Window("##ControlPanel"))
         {
-            RenderActivePanel();
+            using (Ui.Row(Sz.Fixed(StatusBarHeight), Styles.StatusBar))
+                _statusBar.Render();
+
+            using (
+                var split = Ui.HSplit(
+                    "main",
+                    Sz.Fill(),
+                    initialLeft: SidebarWidth,
+                    minLeft: 100f,
+                    minRight: 300f,
+                    leftStyle: Styles.Sidebar,
+                    rightStyle: Styles.Content
+                )
+            )
+            {
+                using (split.Left())
+                    _navigation.Render();
+                using (split.Right())
+                    RenderActivePanel();
+            }
+
+            using (Ui.Row(Sz.Fixed(ControlBarHeight), Styles.ControlBar))
+                _controlBar.Render();
         }
 
-        ImGui.EndChild();
-        ImGui.PopStyleVar(2); // ItemSpacing(10,8) + WindowPadding(16,16)
-
-        // ── Control bar (full width, fixed height, minimal padding) ─────────
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8f, 0f));
-        _controlBar.Render(availableWidth);
-        ImGui.PopStyleVar();
-
-        ImGui.PopStyleVar(); // ItemSpacing(Zero)
-
         RenderSavedIndicator();
-
-        ImGui.End();
     }
 
     private void RenderActivePanel()

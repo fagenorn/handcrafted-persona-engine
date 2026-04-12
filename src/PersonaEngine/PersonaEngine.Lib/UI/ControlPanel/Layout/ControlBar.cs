@@ -1,4 +1,3 @@
-using System.Numerics;
 using Hexa.NET.ImGui;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
 
@@ -12,32 +11,16 @@ public sealed class ControlBar(IConversationOrchestrator orchestrator)
     private bool _isMuted;
     private bool _isPaused;
 
-    public void Render(float width)
+    public void Render()
     {
-        ImGui.PushStyleColor(ImGuiCol.ChildBg, Theme.SidebarBackground);
-
-        if (!ImGui.BeginChild("##ControlBar", new Vector2(width, 40f)))
-        {
-            ImGui.EndChild();
-            ImGui.PopStyleColor();
-
-            return;
-        }
-
-        ImGui.SetCursorPosY((40f - ImGui.GetFrameHeight()) * 0.5f);
+        var (_, barHeight) = Ui.PeekContext();
+        ImGui.SetCursorPosY((barHeight - ImGui.GetFrameHeight()) * 0.5f);
 
         RenderPauseResumeButton();
-
         ImGui.SameLine(0f, 8f);
-
         RenderSkipButton();
-
         ImGui.SameLine(0f, 8f);
-
         RenderMuteButton();
-
-        ImGui.EndChild();
-        ImGui.PopStyleColor();
     }
 
     private void RenderPauseResumeButton()

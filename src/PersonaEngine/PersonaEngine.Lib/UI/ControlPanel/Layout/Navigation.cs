@@ -1,6 +1,5 @@
 using System.Numerics;
 using Hexa.NET.ImGui;
-using PersonaEngine.Lib.UI.ControlPanel;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Layout;
 
@@ -41,20 +40,8 @@ public sealed class Navigation
 
     public NavSection ActiveSection { get; private set; } = NavSection.Dashboard;
 
-    public void Render(float height)
+    public void Render()
     {
-        ImGui.PushStyleColor(ImGuiCol.ChildBg, Theme.SidebarBackground);
-
-        if (!ImGui.BeginChild("##Nav", new Vector2(ControlPanelComponent.SidebarWidth, height)))
-        {
-            ImGui.EndChild();
-            ImGui.PopStyleColor();
-
-            return;
-        }
-
-        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(8f, 6f));
-
         var drawList = ImGui.GetWindowDrawList();
 
         foreach (var (section, label) in _sections)
@@ -77,7 +64,6 @@ public sealed class Navigation
             {
                 ImGui.PopStyleColor(3);
 
-                // Draw left-edge accent indicator
                 var itemMin = ImGui.GetItemRectMin();
                 var itemMax = ImGui.GetItemRectMax();
                 var accentMin = itemMin;
@@ -87,9 +73,5 @@ public sealed class Navigation
                 ImGui.AddRectFilled(drawList, accentMin, accentMax, accentCol);
             }
         }
-
-        ImGui.PopStyleVar();
-        ImGui.EndChild();
-        ImGui.PopStyleColor();
     }
 }
