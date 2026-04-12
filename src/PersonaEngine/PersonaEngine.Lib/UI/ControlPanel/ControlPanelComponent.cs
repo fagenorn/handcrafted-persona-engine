@@ -88,8 +88,11 @@ public sealed class ControlPanelComponent : IRenderComponent
         ImGui.SetNextWindowPos(viewport.Pos);
         ImGui.SetNextWindowSize(viewport.Size);
 
+        // The fullscreen host window needs zero padding/rounding/spacing so children
+        // tile edge-to-edge.  Each child pushes its own padding before BeginChild.
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
         ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 0f);
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, Vector2.Zero);
 
         var windowFlags =
             ImGuiWindowFlags.NoTitleBar
@@ -103,38 +106,46 @@ public sealed class ControlPanelComponent : IRenderComponent
 
         ImGui.Begin("##ControlPanel", windowFlags);
 
-        ImGui.PopStyleVar(2);
+        // Pop rounding only — keep zero padding + zero spacing active so every
+        // BeginChild below inherits them and children tile without gaps.
+        ImGui.PopStyleVar(1); // WindowRounding
 
         var availableWidth = ImGui.GetContentRegionAvail().X;
         var availableHeight = ImGui.GetContentRegionAvail().Y;
-        var contentHeight = availableHeight - StatusBarHeight - ControlBarHeight;
+        var contentHeight = MathF.Max(0f, availableHeight - StatusBarHeight - ControlBarHeight);
 
-        // Status bar (full width, fixed height)
+        // ── Status bar (full width, fixed height, minimal padding) ──────────
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8f, 0f));
         _statusBar.Render(availableWidth);
+        ImGui.PopStyleVar();
 
-        // Navigation sidebar + content area side by side
+        // ── Navigation sidebar + content area side by side ──────────────────
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8f, 8f));
         _navigation.Render(contentHeight);
+        ImGui.PopStyleVar();
 
         ImGui.SameLine();
 
-        // Content area — scrollable child with padding
+        // Content area — scrollable child with comfortable padding and normal
+        // item spacing so panels lay out naturally inside.
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(16f, 16f));
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(10f, 8f));
 
-        var contentWidth = availableWidth - SidebarWidth;
+        var contentWidth = MathF.Max(0f, availableWidth - SidebarWidth);
         if (ImGui.BeginChild("##Content", new Vector2(contentWidth, contentHeight)))
         {
-            ImGui.PopStyleVar();
             RenderActivePanel();
-            ImGui.EndChild();
-        }
-        else
-        {
-            ImGui.PopStyleVar();
-            ImGui.EndChild();
         }
 
-        // Control bar (full width, fixed height)
+        ImGui.EndChild();
+        ImGui.PopStyleVar(2); // ItemSpacing + WindowPadding
+
+        // ── Control bar (full width, fixed height, minimal padding) ─────────
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(8f, 0f));
         _controlBar.Render(availableWidth);
+        ImGui.PopStyleVar();
+
+        ImGui.PopStyleVar(2); // WindowPadding(Zero) + ItemSpacing(Zero)
 
         RenderSavedIndicator();
 
