@@ -32,6 +32,10 @@ public class AvatarApp : IDisposable
 
     private GL _gl;
 
+    private int _currentWidth;
+
+    private int _currentHeight;
+
     private ImGuiController _imGui;
 
     private IInputContext _inputContext;
@@ -101,6 +105,8 @@ public class AvatarApp : IDisposable
         }
 
         _gl = _windowManager.GL;
+        _currentWidth = _window.Size.X;
+        _currentHeight = _window.Size.Y;
 
         foreach (var task in _startupTasks)
         {
@@ -157,7 +163,7 @@ public class AvatarApp : IDisposable
     private void OnRender(double deltaTime)
     {
         _imGui.Update((float)deltaTime);
-        _gl.Viewport(0, 0, (uint)_windowConfig.Width, (uint)_windowConfig.Height);
+        _gl.Viewport(0, 0, (uint)_currentWidth, (uint)_currentHeight);
         _gl.Clear((uint)ClearBufferMask.ColorBufferBit);
 
         // Render regular components to the screen
@@ -189,7 +195,9 @@ public class AvatarApp : IDisposable
 
     private void OnResize(Vector2D<int> size)
     {
-        // Resize all components
+        _currentWidth = Math.Max(800, size.X);
+        _currentHeight = Math.Max(600, size.Y);
+
         ResizeComponents(_regularComponents);
     }
 

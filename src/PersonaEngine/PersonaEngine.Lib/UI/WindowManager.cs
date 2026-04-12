@@ -16,7 +16,7 @@ public class WindowManager
         options.Title = title;
         options.UpdatesPerSecond = 60;
         options.FramesPerSecond = 30;
-        options.WindowBorder = WindowBorder.Fixed;
+        options.WindowBorder = WindowBorder.Resizable;
         MainWindow = Window.Create(options);
         MainWindow.Load += OnLoad;
         MainWindow.Update += OnUpdate;
