@@ -41,7 +41,7 @@ public static class Ui
     public static EqualColsScope EqualCols(
         int count,
         float height,
-        float gap = 8f,
+        float gap = 12f,
         ImGuiChildFlags childFlags = ImGuiChildFlags.None
     ) => new(count, height, gap, childFlags);
 

@@ -14,10 +14,10 @@ namespace PersonaEngine.Lib.UI.ControlPanel;
 /// </summary>
 public sealed class ControlPanelComponent : IRenderComponent
 {
-    private const float SidebarWidth = 140f;
+    private const float SidebarWidth = 170f;
 
-    private const float StatusBarHeight = 30f;
-    private const float ControlBarHeight = 40f;
+    private const float StatusBarHeight = 36f;
+    private const float ControlBarHeight = 44f;
     private const float SavedIndicatorDuration = 2f;
 
     private readonly ControlBar _controlBar;

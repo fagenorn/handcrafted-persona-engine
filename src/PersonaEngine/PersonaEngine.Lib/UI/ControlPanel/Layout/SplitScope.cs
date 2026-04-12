@@ -1,5 +1,6 @@
 using System.Numerics;
 using Hexa.NET.ImGui;
+using PersonaEngine.Lib.UI.ControlPanel;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Layout;
 
@@ -11,7 +12,7 @@ public ref struct SplitScope
 {
     private static readonly Dictionary<string, float> _splitPositions = new();
 
-    private const float DividerWidth = 4f;
+    private const float DividerWidth = 6f;
 
     private readonly string _id;
     private readonly float _totalWidth;
@@ -77,7 +78,11 @@ public ref struct SplitScope
 
         // Divider — an invisible button the user can drag
         ImGui.SameLine();
+        ImGui.PushStyleColor(ImGuiCol.Button, Theme.Surface1);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, Theme.SurfaceHover);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, Theme.SurfaceHover);
         ImGui.Button($"##{_id}_div", new Vector2(DividerWidth, _height));
+        ImGui.PopStyleColor(3);
 
         if (ImGui.IsItemHovered())
             ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeEw);
