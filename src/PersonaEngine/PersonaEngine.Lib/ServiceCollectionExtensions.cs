@@ -183,6 +183,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<IOutputAdapter, PortaudioOutputAdapter>();
         services.AddSingleton<IAudioProgressNotifier, AudioProgressNotifier>();
+        services.AddSingleton<IAudioAmplitudeProvider, AudioAmplitudeProvider>();
 
         return services;
     }
@@ -384,6 +385,11 @@ public static class ServiceCollectionExtensions
         // Layout components
         services.AddSingleton<StatusBar>();
         services.AddSingleton<ControlBar>();
+
+        // Persona state bridge for UI effects
+        services.AddSingleton<PersonaStateProvider>();
+        services.AddSingleton<AmbientRenderer>();
+        services.AddSingleton<IUiSoundEmitter, NoOpUiSoundEmitter>();
 
         // Panels
         services.AddSingleton<Dashboard>();
