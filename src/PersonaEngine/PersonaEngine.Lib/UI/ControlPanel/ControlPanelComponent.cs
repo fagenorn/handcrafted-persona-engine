@@ -114,7 +114,7 @@ public sealed class ControlPanelComponent : IRenderComponent
             _ambientRenderer.RenderBackground(bgDrawList, winPos, winSize);
 
             using (Ui.Row(Sz.Fixed(StatusBarHeight), Styles.StatusBar))
-                _statusBar.Render(deltaTime);
+                _statusBar.Render(deltaTime, _stateProvider);
 
             using (
                 var split = Ui.HSplit(
