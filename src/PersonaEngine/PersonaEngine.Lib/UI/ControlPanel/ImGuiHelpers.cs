@@ -129,7 +129,7 @@ public static class ImGuiHelpers
     }
 
     /// <summary>
-    ///     Renders a custom pill-shaped toggle switch with a smooth animated knob.
+    ///     Renders a custom pill-shaped toggle switch with a springy animated knob and ripple effect.
     /// </summary>
     /// <param name="id">ImGui widget ID string.</param>
     /// <param name="value">Current toggle state; toggled on click.</param>
@@ -158,16 +158,19 @@ public static class ImGuiHelpers
         var cursor = ImGui.GetCursorScreenPos();
         var changed = false;
 
-        // Invisible hit-test button that covers the track area
         if (ImGui.InvisibleButton(id, new Vector2(trackW, trackH)))
         {
             value = !value;
             changed = true;
         }
 
-        // Lerp track color between Surface (off) and AccentPrimary (on)
         var t = knobPosition.Current;
-        var trackColor = LerpColor(Theme.Surface2, Theme.AccentPrimary, t);
+
+        // Apply overshoot easing for springy feel — only when traveling forward
+        var clampedT = Math.Clamp(t, 0f, 1f);
+        var easedT = Math.Clamp(Easing.EaseOutBack(clampedT), 0f, 1.15f);
+
+        var trackColor = LerpColor(Theme.Surface2, Theme.AccentPrimary, clampedT);
         var trackCol = ImGui.ColorConvertFloat4ToU32(trackColor);
         var knobCol = ImGui.ColorConvertFloat4ToU32(Theme.TextPrimary);
 
@@ -175,34 +178,65 @@ public static class ImGuiHelpers
         var trackMin = cursor;
         var trackMax = new Vector2(cursor.X + trackW, cursor.Y + trackH);
 
-        // Draw rounded-rect track
         ImGui.AddRectFilled(drawList, trackMin, trackMax, trackCol, trackRounding);
 
-        // Sliding knob: travel from left edge (+knobRadius+2) to right edge (-knobRadius-2)
         var travel = trackW - (knobRadius + 2f) * 2f;
-        var knobX = cursor.X + knobRadius + 2f + travel * t;
+        var knobX = cursor.X + knobRadius + 2f + travel * Math.Clamp(easedT, 0f, 1f);
         var knobY = cursor.Y + trackH * 0.5f;
+        var knobCenter = new Vector2(knobX, knobY);
 
-        ImGui.AddCircleFilled(drawList, new Vector2(knobX, knobY), knobRadius, knobCol);
+        // Ripple effect: expanding ring that fades out as animation settles
+        if (!knobPosition.IsSettled)
+        {
+            var rippleProgress = 1f - MathF.Abs(t - knobPosition.Target);
+            if (rippleProgress > 0f && rippleProgress < 0.8f)
+            {
+                var rippleRadius = knobRadius + 6f * (1f - rippleProgress);
+                var rippleAlpha = rippleProgress * 0.2f;
+                var rippleCol = ImGui.ColorConvertFloat4ToU32(
+                    Theme.AccentPrimary with
+                    {
+                        W = rippleAlpha,
+                    }
+                );
+                ImGui.AddCircle(drawList, knobCenter, rippleRadius, rippleCol, 16, 1.5f);
+            }
+        }
+
+        ImGui.AddCircleFilled(drawList, knobCenter, knobRadius, knobCol);
 
         return changed;
     }
 
+    private static float _sliderGlowAlpha;
+
     /// <summary>
-    ///     Draws a subtle accent glow rect behind the previous slider when it is hovered or active.
+    ///     Draws a subtle accent glow rect behind the previous slider.
+    ///     Lingers for ~300ms after interaction ends (pass dt to enable decay).
     /// </summary>
-    public static void SliderGlow()
+    public static void SliderGlow(float dt = 0f)
     {
-        if (!ImGui.IsItemHovered() && !ImGui.IsItemActive())
+        var isInteracting = ImGui.IsItemHovered() || ImGui.IsItemActive();
+
+        if (isInteracting)
+        {
+            _sliderGlowAlpha = 0.12f;
+        }
+        else if (_sliderGlowAlpha > 0.001f)
+        {
+            _sliderGlowAlpha *= MathF.Exp(-8f * dt);
+        }
+        else
+        {
+            _sliderGlowAlpha = 0f;
             return;
+        }
 
         var min = ImGui.GetItemRectMin();
         var max = ImGui.GetItemRectMax();
-        var glowColor = Theme.AccentPrimary with { W = 0.12f };
+        var glowColor = Theme.AccentPrimary with { W = _sliderGlowAlpha };
         var col = ImGui.ColorConvertFloat4ToU32(glowColor);
         var drawList = ImGui.GetWindowDrawList();
-
-        // Draw glow behind the slider (use same rounding as FrameRounding)
         ImGui.AddRectFilled(drawList, min, max, col, ImGui.GetStyle().FrameRounding);
     }
 
@@ -217,6 +251,56 @@ public static class ImGuiHelpers
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.Base);
         var clicked = ImGui.Button(label);
         ImGui.PopStyleColor(4);
+        return clicked;
+    }
+
+    /// <summary>
+    ///     Renders a primary button with press feedback (brief darkening)
+    ///     and a warm glow pulse on click.
+    /// </summary>
+    public static bool PrimaryButtonWithFeedback(
+        string label,
+        ref OneShotAnimation pressAnim,
+        float dt
+    )
+    {
+        pressAnim.Update(dt);
+
+        // Darken slightly on press (non-linear pulse)
+        var baseAlpha = 0.7f;
+        if (pressAnim.IsActive)
+        {
+            var pressT = pressAnim.Progress;
+            var darken = (pressT < 0.3f ? pressT / 0.3f : (1f - pressT) / 0.7f) * 0.05f;
+            baseAlpha = 0.7f - darken;
+        }
+
+        ImGui.PushStyleColor(ImGuiCol.Button, Theme.AccentPrimary with { W = baseAlpha });
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, Theme.AccentPrimary with { W = 0.85f });
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, Theme.AccentPrimary);
+        ImGui.PushStyleColor(ImGuiCol.Text, Theme.Base);
+        var clicked = ImGui.Button(label);
+        ImGui.PopStyleColor(4);
+
+        if (clicked)
+        {
+            pressAnim.Start(0.15f);
+
+            // Warm glow pulse around the button on click
+            var drawList = ImGui.GetWindowDrawList();
+            var min = ImGui.GetItemRectMin();
+            var max = ImGui.GetItemRectMax();
+            var glowCol = ImGui.ColorConvertFloat4ToU32(Theme.AccentPrimary with { W = 0.15f });
+            var padding = new Vector2(4f, 4f);
+            ImGui.AddRectFilled(
+                drawList,
+                min - padding,
+                max + padding,
+                glowCol,
+                ImGui.GetStyle().FrameRounding + 2f
+            );
+        }
+
         return clicked;
     }
 
@@ -363,7 +447,7 @@ public static class ImGuiHelpers
 
     // ── Helpers ──────────────────────────────────────────────────────────────────
 
-    private static Vector4 LerpColor(Vector4 a, Vector4 b, float t) =>
+    public static Vector4 LerpColor(Vector4 a, Vector4 b, float t) =>
         new(
             a.X + (b.X - a.X) * t,
             a.Y + (b.Y - a.Y) * t,
