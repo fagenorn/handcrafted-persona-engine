@@ -84,9 +84,12 @@ public sealed class ParticleSystem
             p.Position.Y += p.Velocity.Y * dt;
         }
 
-        // Spawn new particles to reach target count
+        // Spawn new particles to reach target count. Require non-degenerate
+        // bounds — spawning into a zero-area region would collapse all new
+        // particles to the origin, which is never the caller's intent.
+        var canSpawn = bounds.X > 0f && bounds.Y > 0f;
         var alive = AliveCount;
-        if (alive < config.TargetCount)
+        if (canSpawn && alive < config.TargetCount)
         {
             _spawnAccumulator += dt;
             var spawnInterval = 1f / config.SpawnRate;
@@ -98,7 +101,7 @@ public sealed class ParticleSystem
                 alive++;
             }
         }
-        else
+        else if (alive >= config.TargetCount)
         {
             _spawnAccumulator = 0f;
         }

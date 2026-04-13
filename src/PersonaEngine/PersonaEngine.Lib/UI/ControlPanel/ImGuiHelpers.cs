@@ -199,7 +199,7 @@ public static class ImGuiHelpers
                         W = rippleAlpha,
                     }
                 );
-                ImGui.AddCircle(drawList, knobCenter, rippleRadius, rippleCol, 16, 1.5f);
+                ImGui.AddCircle(drawList, knobCenter, rippleRadius, rippleCol, 0, 1.5f);
             }
         }
 

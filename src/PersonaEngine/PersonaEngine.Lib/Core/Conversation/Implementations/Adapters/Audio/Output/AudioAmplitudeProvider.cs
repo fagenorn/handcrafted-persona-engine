@@ -4,11 +4,18 @@ using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
 namespace PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Output;
 
 /// <summary>
-/// Computes and exposes smoothed audio amplitude from playback chunk events.
+/// Computes and exposes a live audio amplitude signal from playback events.
+/// On each chunk start, builds an <see cref="AmplitudeEnvelope"/>; as
+/// playback progresses, samples the envelope to update <see cref="CurrentAmplitude"/>
+/// at envelope-window resolution (default ~33 Hz). UI consumers see real
+/// per-syllable amplitude variation, not a single per-sentence average.
 /// </summary>
 public sealed class AudioAmplitudeProvider : IAudioAmplitudeProvider, IDisposable
 {
     private readonly IAudioProgressNotifier _notifier;
+
+    private AmplitudeEnvelope _envelope = AmplitudeEnvelope.Empty;
+    private DateTimeOffset _chunkStartUtc;
     private float _amplitude;
     private bool _isPlaying;
 
@@ -17,6 +24,7 @@ public sealed class AudioAmplitudeProvider : IAudioAmplitudeProvider, IDisposabl
         _notifier = notifier;
         _notifier.ChunkPlaybackStarted += OnChunkStarted;
         _notifier.ChunkPlaybackEnded += OnChunkEnded;
+        _notifier.PlaybackProgress += OnPlaybackProgress;
     }
 
     public float CurrentAmplitude => _amplitude;
@@ -25,37 +33,32 @@ public sealed class AudioAmplitudeProvider : IAudioAmplitudeProvider, IDisposabl
 
     private void OnChunkStarted(object? sender, AudioChunkPlaybackStartedEvent e)
     {
-        var audioData = e.Chunk.AudioData;
-        if (audioData.Length > 0)
-        {
-            _amplitude = Math.Clamp(ComputeRms(audioData.Span), 0f, 1f);
-        }
-
+        var data = e.Chunk.AudioData.Span;
+        _envelope = AmplitudeEnvelope.From(data, e.Chunk.SampleRate);
+        _chunkStartUtc = DateTimeOffset.UtcNow;
+        _amplitude = _envelope.SampleAt(0f);
         _isPlaying = true;
+    }
+
+    private void OnPlaybackProgress(object? sender, AudioPlaybackProgressEvent e)
+    {
+        if (!_isPlaying)
+            return;
+
+        var elapsed = (float)(DateTimeOffset.UtcNow - _chunkStartUtc).TotalSeconds;
+        _amplitude = Math.Clamp(_envelope.SampleAt(elapsed), 0f, 1f);
     }
 
     private void OnChunkEnded(object? sender, AudioChunkPlaybackEndedEvent e)
     {
         _isPlaying = false;
-    }
-
-    public static float ComputeRms(ReadOnlySpan<float> samples)
-    {
-        if (samples.Length == 0)
-            return 0f;
-
-        var sum = 0f;
-        for (var i = 0; i < samples.Length; i++)
-        {
-            sum += samples[i] * samples[i];
-        }
-
-        return MathF.Sqrt(sum / samples.Length);
+        _envelope = AmplitudeEnvelope.Empty;
     }
 
     public void Dispose()
     {
         _notifier.ChunkPlaybackStarted -= OnChunkStarted;
         _notifier.ChunkPlaybackEnded -= OnChunkEnded;
+        _notifier.PlaybackProgress -= OnPlaybackProgress;
     }
 }

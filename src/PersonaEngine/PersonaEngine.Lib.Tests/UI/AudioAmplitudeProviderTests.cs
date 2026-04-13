@@ -92,17 +92,4 @@ public class AudioAmplitudeProviderTests
         Assert.False(provider.IsPlaying);
     }
 
-    [Fact]
-    public void ComputeRms_SilentAudio_ReturnsZero()
-    {
-        Assert.Equal(0f, AudioAmplitudeProvider.ComputeRms(new float[100].AsSpan()));
-    }
-
-    [Fact]
-    public void ComputeRms_ConstantValue_ReturnsAbsValue()
-    {
-        var samples = new float[100];
-        Array.Fill(samples, 0.5f);
-        Assert.Equal(0.5f, AudioAmplitudeProvider.ComputeRms(samples.AsSpan()), precision: 4);
-    }
 }

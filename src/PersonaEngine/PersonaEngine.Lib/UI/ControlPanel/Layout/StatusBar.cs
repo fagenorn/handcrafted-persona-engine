@@ -9,47 +9,36 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Layout;
 /// <summary>
 ///     Top status strip with audio-reactive border and persona-linked warmth.
 /// </summary>
-public sealed class StatusBar(IConversationOrchestrator orchestrator)
+public sealed class StatusBar(IConversationOrchestrator orchestrator, PresenceOrb presenceOrb)
 {
     private const int MaxSpeechSnippetLength = 80;
 
-    private float _elapsed;
+    // Space reserved on the left for the presence orb + gap before the label.
+    private const float OrbSlotWidth = 22f;
+    private const float OrbLeftPadding = 2f;
+    private const float OrbLabelGap = 10f;
 
-    // Smooth the amplitude for the border glow
     private float _smoothedAmplitude;
-
-    // Dot flare on state transitions
-    private OneShotAnimation _dotFlare;
 
     public void Render(float deltaTime, PersonaStateProvider stateProvider)
     {
-        _elapsed += deltaTime;
-        _dotFlare.Update(deltaTime);
+        presenceOrb.Update(deltaTime, stateProvider);
 
-        var (color, label, speechText, isActive) = GetConversationState();
-
-        // Trigger dot flare on persona state transition
-        if (stateProvider.StateJustChanged)
-            _dotFlare.Start(0.2f);
-
-        // Base pulse: oscillates between 0.08 and 0.20 opacity at 2.5 Hz, disabled when inactive
-        var glowAlpha = isActive ? 0.14f + 0.06f * MathF.Sin(_elapsed * 2.5f) : 0f;
-
-        // Flare boost
-        if (_dotFlare.IsActive)
-        {
-            var flareT = Easing.EaseOutCubic(_dotFlare.Progress);
-            glowAlpha += (1f - flareT) * 0.15f;
-        }
+        var (_, label, speechText, _) = GetConversationState();
 
         var contentH = ImGui.GetContentRegionAvail().Y;
         var textH = ImGui.GetTextLineHeight();
         var centerY = ImGui.GetCursorPosY() + (contentH - textH) * 0.5f;
 
+        // Reserve horizontal space for the orb — cursor moves past it so the
+        // label lines up on the right of the reserved slot. Capture the orb's
+        // screen-space anchor here (after row padding has been applied) so the
+        // orb renders in exactly the slot we reserved.
         ImGui.SetCursorPosY(centerY);
-
-        ImGuiHelpers.StatusDot(color, glowAlpha: glowAlpha);
-        ImGui.SameLine(0f, 10f);
+        ImGui.Indent(OrbLeftPadding);
+        var orbStartScreenX = ImGui.GetCursorScreenPos().X;
+        ImGui.Dummy(new Vector2(OrbSlotWidth, textH));
+        ImGui.SameLine(0f, OrbLabelGap);
 
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextPrimary);
         ImGui.TextUnformatted(label);
@@ -101,6 +90,17 @@ public sealed class StatusBar(IConversationOrchestrator orchestrator)
             new Vector2(winPos.X + winSize.X, borderY),
             borderColor
         );
+
+        // Presence orb — rendered on the foreground drawlist so the halo can
+        // extend beyond the status bar bounds without being clipped to the
+        // 46px child window. Position uses the screen-space anchor captured
+        // earlier, which respects the row's actual padding.
+        var orbDrawList = ImGui.GetForegroundDrawList();
+        var orbCenter = new Vector2(
+            orbStartScreenX + OrbSlotWidth * 0.5f,
+            winPos.Y + winSize.Y * 0.5f
+        );
+        presenceOrb.Render(orbDrawList, orbCenter, stateProvider.State);
     }
 
     private (Vector4 Color, string Label, string? SpeechText, bool IsActive) GetConversationState()

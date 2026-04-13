@@ -383,6 +383,7 @@ public static class ServiceCollectionExtensions
         ));
 
         // Layout components
+        services.AddSingleton<PresenceOrb>();
         services.AddSingleton<StatusBar>();
         services.AddSingleton<ControlBar>();
 

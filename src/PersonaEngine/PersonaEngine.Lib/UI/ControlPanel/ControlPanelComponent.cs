@@ -144,7 +144,8 @@ public sealed class ControlPanelComponent : IRenderComponent
                     _ambientRenderer.RenderBackground(
                         rightScope.OuterDrawList,
                         rightScope.OuterPos,
-                        rightScope.OuterSize
+                        rightScope.OuterSize,
+                        deltaTime
                     );
                     RenderActivePanel(deltaTime);
                 }

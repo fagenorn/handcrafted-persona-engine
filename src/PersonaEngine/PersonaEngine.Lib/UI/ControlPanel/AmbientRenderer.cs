@@ -14,13 +14,21 @@ public sealed class AmbientRenderer : IDisposable
     private readonly ParticleSystem _particles = new(12);
     private float _elapsed;
 
-    // Breathe intensity (alpha oscillation) per glow.
-    private readonly SineOscillator _glow1Breathe = new(0.9f, 0.1f, frequencyHz: 0.05f);
-    private readonly SineOscillator _glow2Breathe = new(0.9f, 0.1f, frequencyHz: 0.07f);
+    // Position drift per glow (normalized 0..1 of panel bounds).
+    // Biased toward opposite corners with narrow amplitudes — motion is subtle
+    // and the two glows rarely overlap. Frequencies are incommensurate so the
+    // combined drift never repeats a visible pattern.
+    private readonly SineOscillator _glow1X = new(0.28f, 0.06f, frequencyHz: 0.07f);
+    private readonly SineOscillator _glow1Y = new(0.32f, 0.05f, frequencyHz: 0.055f);
+    private readonly SineOscillator _glow2X = new(0.72f, 0.06f, frequencyHz: 0.083f);
+    private readonly SineOscillator _glow2Y = new(0.68f, 0.05f, frequencyHz: 0.061f);
 
     // Animated tints — smoothly transition between persona-state colors.
     private AnimatedColor _tint1 = new(Vector4.Zero, speed: 2f);
     private AnimatedColor _tint2 = new(Vector4.Zero, speed: 2f);
+
+    // Smoothed audio amplitude for reactive intensity.
+    private float _smoothedAmplitude;
 
     private RadialGradientTexture? _gradient;
 
@@ -34,6 +42,12 @@ public sealed class AmbientRenderer : IDisposable
         _gradient ??= RadialGradientTexture.Create(gl, size: 256);
     }
 
+    /// <summary>
+    /// Advances time-based state that does not depend on panel geometry:
+    /// <c>_elapsed</c>, tint animations, and smoothed audio amplitude.
+    /// Particle simulation is stepped in <see cref="RenderBackground"/> where
+    /// the panel bounds are known.
+    /// </summary>
     public void Update(float dt)
     {
         _elapsed += dt;
@@ -45,13 +59,21 @@ public sealed class AmbientRenderer : IDisposable
         _tint1.Update(dt);
         _tint2.Update(dt);
 
-        _particles.Update(dt, _stateProvider.State, Vector2.Zero); // bounds set at render time
+        // Smooth the raw per-chunk RMS so glow intensity tracks voice dynamics
+        // continuously rather than stepping between chunk boundaries.
+        var targetAmp = _stateProvider.IsAudioPlaying ? _stateProvider.AudioAmplitude : 0f;
+        _smoothedAmplitude += (targetAmp - _smoothedAmplitude) * (1f - MathF.Exp(-10f * dt));
     }
 
-    public void RenderBackground(ImDrawListPtr drawList, Vector2 origin, Vector2 size)
+    /// <summary>
+    /// Steps the particle simulation with the current panel bounds and draws
+    /// the ambient layer (warmth glows + particles). <paramref name="dt"/> is
+    /// the frame delta; it is only used to advance the particle population
+    /// here, since spawn positions depend on <paramref name="size"/>.
+    /// </summary>
+    public void RenderBackground(ImDrawListPtr drawList, Vector2 origin, Vector2 size, float dt)
     {
-        // Refresh particle bounds without advancing time
-        _particles.Update(0f, _stateProvider.State, size);
+        _particles.Update(dt, _stateProvider.State, size);
 
         if (_gradient is not null)
             RenderWarmthGlows(drawList, origin, size);
@@ -61,26 +83,31 @@ public sealed class AmbientRenderer : IDisposable
 
     private void RenderWarmthGlows(ImDrawListPtr drawList, Vector2 origin, Vector2 size)
     {
-        var breathe1 = _glow1Breathe.Sample(_elapsed);
-        var breathe2 = _glow2Breathe.Sample(_elapsed);
+        // Intensity is constant + reactive to audio amplitude. No sine-based
+        // breathing — that reads as mechanical pulsing. When the persona is
+        // speaking, the glows brighten with the voice; when idle, they stay
+        // steady.
+        var audioBoost = 1f + _smoothedAmplitude * 0.6f;
 
         var tint1 = _tint1.Current;
-        tint1.W *= breathe1;
+        tint1.W *= audioBoost;
 
         var tint2 = _tint2.Current;
-        tint2.W *= breathe2 * 0.8f;
+        tint2.W *= audioBoost * 0.8f;
 
         DrawGlowQuad(
             drawList,
-            center: origin + new Vector2(-size.X * 0.1f, -size.Y * 0.2f),
-            radius: size.X * 1.4f,
+            center: origin
+                + new Vector2(_glow1X.Sample(_elapsed) * size.X, _glow1Y.Sample(_elapsed) * size.Y),
+            radius: size.X * 0.40f,
             tint: tint1
         );
 
         DrawGlowQuad(
             drawList,
-            center: origin + new Vector2(size.X * 1.1f, size.Y * 1.2f),
-            radius: size.X * 1.3f,
+            center: origin
+                + new Vector2(_glow2X.Sample(_elapsed) * size.X, _glow2Y.Sample(_elapsed) * size.Y),
+            radius: size.X * 0.35f,
             tint: tint2
         );
     }

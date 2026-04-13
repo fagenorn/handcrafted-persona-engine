@@ -45,6 +45,10 @@ public static class Theme
         style.GrabRounding = 6f;
         style.TabRounding = 6f;
 
+        // Smoother auto-tessellation for small circles (knobs, radio dots, status dots).
+        // Default 0.30 leaves r≈8 as a dodecagon; 0.10 produces ~20 segments at r=8.
+        style.CircleTessellationMaxError = 0.10f;
+
         // ── Spacing ───────────────────────────────────────────────────────────
         style.WindowPadding = new Vector2(20f, 20f);
         style.FramePadding = new Vector2(10f, 6f);
