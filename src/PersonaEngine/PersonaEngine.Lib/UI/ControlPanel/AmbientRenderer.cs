@@ -45,9 +45,9 @@ public sealed class AmbientRenderer
 
         var (color1, color2, baseAlpha, radiusScale) = state switch
         {
-            PersonaUiState.Speaking => (Theme.AccentPrimary, Theme.AccentSecondary, 0.05f, 1.15f),
-            PersonaUiState.Thinking => (Theme.AccentSecondary, Theme.AccentPrimary, 0.04f, 1.0f),
-            _ => (Theme.AccentSecondary, Theme.AccentSecondary, 0.035f, 1.0f),
+            PersonaUiState.Speaking => (Theme.AccentPrimary, Theme.AccentSecondary, 0.14f, 1.15f),
+            PersonaUiState.Thinking => (Theme.AccentSecondary, Theme.AccentPrimary, 0.11f, 1.0f),
+            _ => (Theme.AccentSecondary, Theme.AccentSecondary, 0.09f, 1.0f),
         };
 
         var center1 =
@@ -69,13 +69,17 @@ public sealed class AmbientRenderer
         float maxAlpha
     )
     {
-        // Approximate radial gradient with 4 concentric circles at decreasing alpha
-        const int rings = 4;
+        // Approximate radial gradient with many concentric circles at decreasing alpha.
+        // More rings + quadratic falloff = smoother gradient that reads as ambient light
+        // instead of visible concentric rings.
+        const int rings = 16;
         for (var i = rings; i >= 1; i--)
         {
             var t = i / (float)rings;
             var r = radius * t;
-            var alpha = maxAlpha * (1f - t) * 1.5f;
+            // Quadratic falloff: stronger at center, softer toward edges
+            var falloff = (1f - t) * (1f - t);
+            var alpha = maxAlpha * falloff;
             var col = ImGui.ColorConvertFloat4ToU32(color with { W = alpha });
             ImGui.AddCircleFilled(drawList, center, r, col, 32);
         }
@@ -98,7 +102,7 @@ public sealed class AmbientRenderer
             )
                 continue;
 
-            var alpha = p.Alpha * 0.4f;
+            var alpha = p.Alpha * 0.25f;
             var col = ImGui.ColorConvertFloat4ToU32(p.Color with { W = alpha });
             var outerCol = ImGui.ColorConvertFloat4ToU32(p.Color with { W = alpha * 0.3f });
 

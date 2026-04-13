@@ -267,13 +267,14 @@ public sealed class ControlPanelComponent : IRenderComponent
         var cardH = (paddingY * 2f + MathF.Max(textSize.Y, dotRadius * 2f)) * pulseScale;
 
         const float rightMargin = 14f;
-        const float topMargin = 14f;
         const float offscreenOffset = 40f;
 
         // slideIn controls horizontal position: 0 = offscreen right, 1 = at rest
         var targetX = viewport.Pos.X + viewport.Size.X - cardW - rightMargin;
         var offX = (1f - slideIn) * offscreenOffset;
-        var cardMin = new Vector2(targetX + offX, viewport.Pos.Y + topMargin);
+        // Vertically centered inside the status bar band (top StatusBarHeight pixels of viewport)
+        var cardY = viewport.Pos.Y + (StatusBarHeight - cardH) * 0.5f;
+        var cardMin = new Vector2(targetX + offX, cardY);
         var cardMax = cardMin + new Vector2(cardW, cardH);
 
         // Card background
