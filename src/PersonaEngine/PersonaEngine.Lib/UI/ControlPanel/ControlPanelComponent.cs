@@ -93,7 +93,10 @@ public sealed class ControlPanelComponent : IRenderComponent
 
     public int Priority => 0;
 
-    public void Initialize(GL gl, IView view, IInputContext input) { }
+    public void Initialize(GL gl, IView view, IInputContext input)
+    {
+        _ambientRenderer.Initialize(gl);
+    }
 
     public void Update(float deltaTime)
     {
@@ -103,7 +106,10 @@ public sealed class ControlPanelComponent : IRenderComponent
 
     public void Resize() { }
 
-    public void Dispose() { }
+    public void Dispose()
+    {
+        _ambientRenderer.Dispose();
+    }
 
     /// <summary>
     ///     Registers a renderer for the given navigation section.
@@ -133,8 +139,15 @@ public sealed class ControlPanelComponent : IRenderComponent
             {
                 using (split.Left())
                     _navigation.Render(deltaTime, _stateProvider);
-                using (split.Right())
+                using (var rightScope = split.Right())
+                {
+                    _ambientRenderer.RenderBackground(
+                        rightScope.OuterDrawList,
+                        rightScope.OuterPos,
+                        rightScope.OuterSize
+                    );
                     RenderActivePanel(deltaTime);
+                }
             }
 
             using (Ui.Row(Sz.Fixed(ControlBarHeight), Styles.ControlBar))
@@ -146,13 +159,6 @@ public sealed class ControlPanelComponent : IRenderComponent
 
     private void RenderActivePanel(float deltaTime)
     {
-        // Render ambient background inside the Content child so it's not
-        // covered by child window backgrounds (the main fix).
-        var contentDrawList = ImGui.GetWindowDrawList();
-        var contentPos = ImGui.GetWindowPos();
-        var contentSize = ImGui.GetWindowSize();
-        _ambientRenderer.RenderBackground(contentDrawList, contentPos, contentSize);
-
         var current = _navigation.ActiveSection;
 
         if (current != _lastSection)

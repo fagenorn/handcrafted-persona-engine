@@ -138,6 +138,20 @@ public ref struct SplitChildScope
     private int _outerColorCount;
     private bool _disposed;
 
+    // Outer child geometry — captured before the inner child opens.
+    private readonly ImDrawListPtr _outerDrawList;
+    private readonly Vector2 _outerPos;
+    private readonly Vector2 _outerSize;
+
+    /// <summary>The draw list of the outer child (full background area, no padding).</summary>
+    public readonly ImDrawListPtr OuterDrawList => _outerDrawList;
+
+    /// <summary>Screen-space top-left of the outer child.</summary>
+    public readonly Vector2 OuterPos => _outerPos;
+
+    /// <summary>Pixel size of the outer child.</summary>
+    public readonly Vector2 OuterSize => _outerSize;
+
     internal SplitChildScope(string id, float width, float height, Style style, bool dualChild)
     {
         _disposed = false;
@@ -158,6 +172,11 @@ public ref struct SplitChildScope
         }
 
         ImGui.BeginChild(id, new Vector2(width, height));
+
+        // Capture outer child geometry BEFORE the inner child begins.
+        _outerDrawList = ImGui.GetWindowDrawList();
+        _outerPos = ImGui.GetWindowPos();
+        _outerSize = ImGui.GetWindowSize();
 
         if (dualChild && padding != Vector2.Zero)
         {
