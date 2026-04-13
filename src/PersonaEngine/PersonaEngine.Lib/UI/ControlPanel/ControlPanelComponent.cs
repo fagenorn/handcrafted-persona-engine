@@ -18,7 +18,6 @@ public sealed class ControlPanelComponent : IRenderComponent
 
     private const float StatusBarHeight = 46f;
     private const float ControlBarHeight = 44f;
-    private const float SavedIndicatorDuration = 2f;
 
     // Staggered transition config
     private const float PanelFadeInBase = 0.18f;
@@ -37,8 +36,18 @@ public sealed class ControlPanelComponent : IRenderComponent
 
     private NavSection _lastSection;
     private OneShotAnimation _panelTransition;
-    private OneShotAnimation _savedPop;
-    private DateTime? _lastSavedTime;
+
+    // Saved toast animation state
+    private DateTime? _lastKnownSaveTime;
+    private float _toastElapsed;
+    private bool _toastVisible;
+    private OneShotAnimation _toastPulse;
+
+    private const float ToastSlideInDuration = 0.2f;
+    private const float ToastVisibleDuration = 1.6f;
+    private const float ToastSlideOutDuration = 0.3f;
+    private const float ToastTotalDuration =
+        ToastSlideInDuration + ToastVisibleDuration + ToastSlideOutDuration;
 
     public ControlPanelComponent(
         StatusBar statusBar,
@@ -107,12 +116,6 @@ public sealed class ControlPanelComponent : IRenderComponent
     {
         using (Ui.Window("##ControlPanel"))
         {
-            // Render ambient background behind all content
-            var winPos = ImGui.GetWindowPos();
-            var winSize = ImGui.GetWindowSize();
-            var bgDrawList = ImGui.GetWindowDrawList();
-            _ambientRenderer.RenderBackground(bgDrawList, winPos, winSize);
-
             using (Ui.Row(Sz.Fixed(StatusBarHeight), Styles.StatusBar))
                 _statusBar.Render(deltaTime, _stateProvider);
 
@@ -143,6 +146,13 @@ public sealed class ControlPanelComponent : IRenderComponent
 
     private void RenderActivePanel(float deltaTime)
     {
+        // Render ambient background inside the Content child so it's not
+        // covered by child window backgrounds (the main fix).
+        var contentDrawList = ImGui.GetWindowDrawList();
+        var contentPos = ImGui.GetWindowPos();
+        var contentSize = ImGui.GetWindowSize();
+        _ambientRenderer.RenderBackground(contentDrawList, contentPos, contentSize);
+
         var current = _navigation.ActiveSection;
 
         if (current != _lastSection)
@@ -176,75 +186,116 @@ public sealed class ControlPanelComponent : IRenderComponent
 
     private void RenderSavedIndicator(float dt)
     {
-        if (_configWriter.LastSaveTime is not { } saveTime)
-            return;
+        var saveTime = _configWriter.LastSaveTime;
 
-        var elapsed = (float)(DateTime.UtcNow - saveTime).TotalSeconds;
-        if (elapsed >= SavedIndicatorDuration)
-            return;
-
-        // Detect new save for pop animation
-        if (_lastSavedTime != saveTime)
+        // Detect new save
+        if (saveTime is { } currentSave && currentSave != _lastKnownSaveTime)
         {
-            _lastSavedTime = saveTime;
-            _savedPop.Start(0.2f);
+            _lastKnownSaveTime = currentSave;
+
+            if (_toastVisible)
+            {
+                // Rapid successive save: extend the visible window and pulse
+                // Clamp elapsed back so we get the full "Visible" duration ahead of us,
+                // but never reset to < slide-in time (keep toast on screen).
+                _toastElapsed = MathF.Min(_toastElapsed, ToastSlideInDuration);
+                _toastPulse.Start(0.18f);
+            }
+            else
+            {
+                // Fresh toast
+                _toastElapsed = 0f;
+                _toastVisible = true;
+            }
         }
 
-        _savedPop.Update(dt);
+        if (!_toastVisible)
+            return;
 
-        var alpha = 1f - elapsed / SavedIndicatorDuration;
+        _toastElapsed += dt;
+        _toastPulse.Update(dt);
 
-        // Scale pop: uses EaseOutBack (overshoot) during pop animation
-        var scale = 1f;
-        if (_savedPop.IsActive)
+        if (_toastElapsed >= ToastTotalDuration)
         {
-            var popT = Easing.EaseOutBack(_savedPop.Progress);
-            scale = 1f + 0.1f * (1f - popT);
+            _toastVisible = false;
+            return;
         }
 
-        var color = Theme.Success with { W = alpha };
-        var col = ImGui.ColorConvertFloat4ToU32(color);
+        // Phase calculations
+        float slideIn; // 0→1 slide-in progress
+        float alpha; // overall alpha
+        if (_toastElapsed < ToastSlideInDuration)
+        {
+            slideIn = Easing.EaseOutCubic(_toastElapsed / ToastSlideInDuration);
+            alpha = slideIn;
+        }
+        else if (_toastElapsed < ToastSlideInDuration + ToastVisibleDuration)
+        {
+            slideIn = 1f;
+            alpha = 1f;
+        }
+        else
+        {
+            slideIn = 1f;
+            var outT =
+                (_toastElapsed - ToastSlideInDuration - ToastVisibleDuration)
+                / ToastSlideOutDuration;
+            outT = Math.Clamp(outT, 0f, 1f);
+            alpha = 1f - Easing.EaseOutCubic(outT);
+            slideIn = 1f - 0.3f * Easing.EaseOutCubic(outT); // slight slide-out
+        }
+
+        // Pulse for rapid save
+        var pulseScale = 1f;
+        if (_toastPulse.IsActive)
+        {
+            var popT = Easing.EaseOutBack(_toastPulse.Progress);
+            pulseScale = 1f + 0.08f * (1f - popT);
+        }
 
         var viewport = ImGui.GetMainViewport();
         var drawList = ImGui.GetForegroundDrawList();
 
-        const string text = "Saved";
-        var textSize = ImGui.CalcTextSize(text);
+        const string label = "Saved";
+        const float paddingX = 12f;
+        const float paddingY = 7f;
+        const float dotRadius = 3.5f;
+        const float dotGap = 8f;
 
-        const float margin = 12f;
-        var pos = new Vector2(
-            viewport.Pos.X + viewport.Size.X - textSize.X * scale - margin,
-            viewport.Pos.Y + margin
+        var textSize = ImGui.CalcTextSize(label);
+        var cardW = (paddingX * 2f + dotRadius * 2f + dotGap + textSize.X) * pulseScale;
+        var cardH = (paddingY * 2f + MathF.Max(textSize.Y, dotRadius * 2f)) * pulseScale;
+
+        const float rightMargin = 14f;
+        const float topMargin = 14f;
+        const float offscreenOffset = 40f;
+
+        // slideIn controls horizontal position: 0 = offscreen right, 1 = at rest
+        var targetX = viewport.Pos.X + viewport.Size.X - cardW - rightMargin;
+        var offX = (1f - slideIn) * offscreenOffset;
+        var cardMin = new Vector2(targetX + offX, viewport.Pos.Y + topMargin);
+        var cardMax = cardMin + new Vector2(cardW, cardH);
+
+        // Card background
+        var bgCol = ImGui.ColorConvertFloat4ToU32(Theme.Surface2 with { W = alpha * 0.96f });
+        var borderCol = ImGui.ColorConvertFloat4ToU32(Theme.Success with { W = alpha * 0.55f });
+
+        ImGui.AddRectFilled(drawList, cardMin, cardMax, bgCol, 6f);
+        ImGui.AddRect(drawList, cardMin, cardMax, borderCol, 6f, 0, 1f);
+
+        // Success dot (left side)
+        var dotCenter = new Vector2(cardMin.X + paddingX + dotRadius, cardMin.Y + cardH * 0.5f);
+        var dotCol = ImGui.ColorConvertFloat4ToU32(Theme.Success with { W = alpha });
+        var dotGlowCol = ImGui.ColorConvertFloat4ToU32(Theme.Success with { W = alpha * 0.4f });
+        ImGui.AddCircleFilled(drawList, dotCenter, dotRadius * 2f, dotGlowCol, 16);
+        ImGui.AddCircleFilled(drawList, dotCenter, dotRadius, dotCol, 16);
+
+        // Label text
+        var textCol = ImGui.ColorConvertFloat4ToU32(Theme.TextPrimary with { W = alpha });
+        var textPos = new Vector2(
+            dotCenter.X + dotRadius + dotGap,
+            cardMin.Y + (cardH - textSize.Y) * 0.5f
         );
-
-        // Spark particle drifting upward during pop
-        if (_savedPop.IsActive)
-        {
-            var sparkT = _savedPop.Progress;
-            var sparkY = pos.Y - sparkT * 12f;
-            var sparkAlpha = alpha * (1f - sparkT);
-            var sparkCol = ImGui.ColorConvertFloat4ToU32(
-                Theme.Success with
-                {
-                    W = sparkAlpha * 0.6f,
-                }
-            );
-            ImGui.AddCircleFilled(
-                drawList,
-                new Vector2(pos.X + textSize.X * 0.5f, sparkY),
-                2f,
-                sparkCol
-            );
-        }
-
-        // Offset position to keep the scaled text visually centered
-        if (scale > 1.001f)
-        {
-            var scaledSize = textSize * scale;
-            var offset = (scaledSize - textSize) * 0.5f;
-            pos -= offset;
-        }
-
-        ImGui.AddText(drawList, pos, col, text);
+        ImGui.AddText(drawList, textPos, textCol, label);
     }
 }

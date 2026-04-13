@@ -154,17 +154,14 @@ public sealed class Navigation
             }
             else if (ImGui.IsItemHovered())
             {
-                // Hover warmth: faint radial glow centered on item
-                var centerX = (itemMin.X + itemMax.X) * 0.5f;
-                var centerY = (itemMin.Y + itemMax.Y) * 0.5f;
-                var glowRadius = (itemMax.X - itemMin.X) * 0.4f;
-                var glowCol = ImGui.ColorConvertFloat4ToU32(Theme.AccentPrimary with { W = 0.06f });
-                ImGui.AddCircleFilled(
+                // Hover warmth: subtle rounded-rect tint behind the item
+                var glowCol = ImGui.ColorConvertFloat4ToU32(Theme.AccentPrimary with { W = 0.05f });
+                ImGui.AddRectFilled(
                     drawList,
-                    new Vector2(centerX, centerY),
-                    glowRadius,
+                    itemMin,
+                    itemMax,
                     glowCol,
-                    16
+                    ImGui.GetStyle().FrameRounding
                 );
             }
         }

@@ -70,8 +70,8 @@ public sealed class StatusBar(IConversationOrchestrator orchestrator)
 
         var warmthColor = stateProvider.State switch
         {
-            PersonaUiState.Speaking => Theme.AccentPrimary with { W = 0.03f },
-            PersonaUiState.Thinking => Theme.AccentSecondary with { W = 0.02f },
+            PersonaUiState.Speaking => Theme.AccentPrimary with { W = 0.10f },
+            PersonaUiState.Thinking => Theme.AccentSecondary with { W = 0.07f },
             _ => Vector4.Zero,
         };
 
