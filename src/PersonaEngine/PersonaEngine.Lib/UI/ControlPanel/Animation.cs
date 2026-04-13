@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Runtime.CompilerServices;
 
 namespace PersonaEngine.Lib.UI.ControlPanel;
@@ -123,6 +124,35 @@ public struct OneShotAnimation
         _duration = 0f;
         _active = false;
         Progress = 0f;
+    }
+}
+
+/// <summary>
+/// Smoothly interpolates a Vector4 color toward a target using exponential decay.
+/// </summary>
+public struct AnimatedColor
+{
+    public Vector4 Current;
+    public Vector4 Target;
+    public float Speed;
+
+    public AnimatedColor(Vector4 initial, float speed = 3f)
+    {
+        Current = initial;
+        Target = initial;
+        Speed = speed;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Update(float dt)
+    {
+        var t = 1f - MathF.Exp(-Speed * dt);
+        Current = new Vector4(
+            Current.X + (Target.X - Current.X) * t,
+            Current.Y + (Target.Y - Current.Y) * t,
+            Current.Z + (Target.Z - Current.Z) * t,
+            Current.W + (Target.W - Current.W) * t
+        );
     }
 }
 

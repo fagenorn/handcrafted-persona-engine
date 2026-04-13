@@ -1,87 +1,112 @@
 using System.Numerics;
 using Hexa.NET.ImGui;
+using Silk.NET.OpenGL;
 
 namespace PersonaEngine.Lib.UI.ControlPanel;
 
 /// <summary>
-/// Renders ambient background effects: drifting gradient glows and floating particles.
-/// Call <see cref="Update"/> then <see cref="RenderBackground"/> each frame.
+/// Renders ambient background effects: two smooth radial warmth glows (via
+/// a pre-rendered gradient texture) and sparse floating particles.
 /// </summary>
-public sealed class AmbientRenderer
+public sealed class AmbientRenderer : IDisposable
 {
     private readonly PersonaStateProvider _stateProvider;
     private readonly ParticleSystem _particles = new(12);
     private float _elapsed;
 
-    // Two glow positions drift on independent sine paths (values are normalized 0..1 of bounds)
-    private readonly SineOscillator _glow1X = new(0.35f, 0.15f, frequencyHz: 0.1f);
-    private readonly SineOscillator _glow1Y = new(0.40f, 0.10f, frequencyHz: 0.08f);
-    private readonly SineOscillator _glow2X = new(0.65f, 0.12f, frequencyHz: 0.12f);
-    private readonly SineOscillator _glow2Y = new(0.55f, 0.10f, frequencyHz: 0.09f);
+    // Breathe intensity (alpha oscillation) per glow.
+    private readonly SineOscillator _glow1Breathe = new(0.9f, 0.1f, frequencyHz: 0.05f);
+    private readonly SineOscillator _glow2Breathe = new(0.9f, 0.1f, frequencyHz: 0.07f);
+
+    // Animated tints — smoothly transition between persona-state colors.
+    private AnimatedColor _tint1 = new(Vector4.Zero, speed: 2f);
+    private AnimatedColor _tint2 = new(Vector4.Zero, speed: 2f);
+
+    private RadialGradientTexture? _gradient;
 
     public AmbientRenderer(PersonaStateProvider stateProvider)
     {
         _stateProvider = stateProvider;
     }
 
+    public void Initialize(GL gl)
+    {
+        _gradient ??= RadialGradientTexture.Create(gl, size: 256);
+    }
+
     public void Update(float dt)
     {
         _elapsed += dt;
+
+        // Resolve per-state target tints (RGB = color, A = base alpha).
+        var (target1, target2) = GetTargetTints(_stateProvider.State);
+        _tint1.Target = target1;
+        _tint2.Target = target2;
+        _tint1.Update(dt);
+        _tint2.Update(dt);
+
         _particles.Update(dt, _stateProvider.State, Vector2.Zero); // bounds set at render time
     }
 
     public void RenderBackground(ImDrawListPtr drawList, Vector2 origin, Vector2 size)
     {
-        // Refresh particle bounds to actual render area without advancing time
+        // Refresh particle bounds without advancing time
         _particles.Update(0f, _stateProvider.State, size);
 
-        RenderGradientGlows(drawList, origin, size);
+        if (_gradient is not null)
+            RenderWarmthGlows(drawList, origin, size);
+
         RenderParticles(drawList, origin, size);
     }
 
-    private void RenderGradientGlows(ImDrawListPtr drawList, Vector2 origin, Vector2 size)
+    private void RenderWarmthGlows(ImDrawListPtr drawList, Vector2 origin, Vector2 size)
     {
-        var state = _stateProvider.State;
+        var breathe1 = _glow1Breathe.Sample(_elapsed);
+        var breathe2 = _glow2Breathe.Sample(_elapsed);
 
-        var (color1, color2, baseAlpha, radiusScale) = state switch
-        {
-            PersonaUiState.Speaking => (Theme.AccentPrimary, Theme.AccentSecondary, 0.14f, 1.15f),
-            PersonaUiState.Thinking => (Theme.AccentSecondary, Theme.AccentPrimary, 0.11f, 1.0f),
-            _ => (Theme.AccentSecondary, Theme.AccentSecondary, 0.09f, 1.0f),
-        };
+        var tint1 = _tint1.Current;
+        tint1.W *= breathe1;
 
-        var center1 =
-            origin
-            + new Vector2(_glow1X.Sample(_elapsed) * size.X, _glow1Y.Sample(_elapsed) * size.Y);
-        RenderRadialGlow(drawList, center1, size.X * 0.4f * radiusScale, color1, baseAlpha);
+        var tint2 = _tint2.Current;
+        tint2.W *= breathe2 * 0.8f;
 
-        var center2 =
-            origin
-            + new Vector2(_glow2X.Sample(_elapsed) * size.X, _glow2Y.Sample(_elapsed) * size.Y);
-        RenderRadialGlow(drawList, center2, size.X * 0.35f * radiusScale, color2, baseAlpha * 0.8f);
+        DrawGlowQuad(
+            drawList,
+            center: origin + new Vector2(-size.X * 0.1f, -size.Y * 0.2f),
+            radius: size.X * 1.4f,
+            tint: tint1
+        );
+
+        DrawGlowQuad(
+            drawList,
+            center: origin + new Vector2(size.X * 1.1f, size.Y * 1.2f),
+            radius: size.X * 1.3f,
+            tint: tint2
+        );
     }
 
-    private static void RenderRadialGlow(
-        ImDrawListPtr drawList,
-        Vector2 center,
-        float radius,
-        Vector4 color,
-        float maxAlpha
-    )
+    private void DrawGlowQuad(ImDrawListPtr drawList, Vector2 center, float radius, Vector4 tint)
     {
-        // Approximate radial gradient with many concentric circles at decreasing alpha.
-        // More rings + quadratic falloff = smoother gradient that reads as ambient light
-        // instead of visible concentric rings.
-        const int rings = 16;
-        for (var i = rings; i >= 1; i--)
+        if (tint.W <= 0.001f || _gradient is null)
+            return;
+
+        var min = center - new Vector2(radius, radius);
+        var max = center + new Vector2(radius, radius);
+        var col = ImGui.ColorConvertFloat4ToU32(tint);
+
+        unsafe
         {
-            var t = i / (float)rings;
-            var r = radius * t;
-            // Quadratic falloff: stronger at center, softer toward edges
-            var falloff = (1f - t) * (1f - t);
-            var alpha = maxAlpha * falloff;
-            var col = ImGui.ColorConvertFloat4ToU32(color with { W = alpha });
-            ImGui.AddCircleFilled(drawList, center, r, col, 32);
+            var texRef = new ImTextureRef(null, new ImTextureID((nuint)_gradient.TextureId));
+
+            ImGui.AddImage(
+                drawList,
+                texRef,
+                min,
+                max,
+                new Vector2(0f, 0f),
+                new Vector2(1f, 1f),
+                col
+            );
         }
     }
 
@@ -93,7 +118,6 @@ public sealed class AmbientRenderer
                 continue;
 
             var screenPos = origin + p.Position;
-
             if (
                 screenPos.X < origin.X - 10f
                 || screenPos.X > origin.X + size.X + 10f
@@ -106,9 +130,55 @@ public sealed class AmbientRenderer
             var col = ImGui.ColorConvertFloat4ToU32(p.Color with { W = alpha });
             var outerCol = ImGui.ColorConvertFloat4ToU32(p.Color with { W = alpha * 0.3f });
 
-            // Feathered circle: outer ring at lower alpha, inner at higher
             ImGui.AddCircleFilled(drawList, screenPos, p.Radius * 2f, outerCol, 16);
             ImGui.AddCircleFilled(drawList, screenPos, p.Radius, col, 16);
         }
+    }
+
+    /// <summary>
+    /// Maps persona state to (tint1, tint2) target colors. RGB is the warmth
+    /// color; W is the base alpha for that glow.
+    /// </summary>
+    private static (Vector4 Tint1, Vector4 Tint2) GetTargetTints(PersonaUiState state)
+    {
+        return state switch
+        {
+            PersonaUiState.Speaking => (
+                Theme.AccentPrimary with
+                {
+                    W = 0.085f,
+                },
+                Theme.AccentSecondary with
+                {
+                    W = 0.085f,
+                }
+            ),
+            PersonaUiState.Thinking => (
+                Theme.AccentSecondary with
+                {
+                    W = 0.065f,
+                },
+                Theme.AccentPrimary with
+                {
+                    W = 0.065f,
+                }
+            ),
+            _ => (
+                Theme.AccentSecondary with
+                {
+                    W = 0.055f,
+                },
+                Theme.AccentSecondary with
+                {
+                    W = 0.055f,
+                }
+            ),
+        };
+    }
+
+    public void Dispose()
+    {
+        _gradient?.Dispose();
+        _gradient = null;
     }
 }
