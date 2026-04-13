@@ -26,6 +26,7 @@ public sealed class ControlPanelComponent : IRenderComponent
     private readonly Navigation _navigation = new();
     private readonly Dictionary<NavSection, Action<float>> _panelRenderers = new();
     private readonly StatusBar _statusBar;
+    private readonly PersonaStateProvider _stateProvider;
 
     private NavSection _lastSection;
     private OneShotAnimation _panelTransition;
@@ -34,6 +35,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         StatusBar statusBar,
         ControlBar controlBar,
         IConfigWriter configWriter,
+        PersonaStateProvider stateProvider,
         Dashboard dashboard,
         Voice voice,
         Personality personality,
@@ -50,6 +52,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         _statusBar = statusBar;
         _controlBar = controlBar;
         _configWriter = configWriter;
+        _stateProvider = stateProvider;
 
         RegisterPanel(NavSection.Dashboard, dt => dashboard.Render(dt));
         RegisterPanel(NavSection.Voice, dt => voice.Render(dt));
@@ -72,7 +75,10 @@ public sealed class ControlPanelComponent : IRenderComponent
 
     public void Initialize(GL gl, IView view, IInputContext input) { }
 
-    public void Update(float deltaTime) { }
+    public void Update(float deltaTime)
+    {
+        _stateProvider.Update(deltaTime);
+    }
 
     public void Resize() { }
 
@@ -105,7 +111,7 @@ public sealed class ControlPanelComponent : IRenderComponent
             )
             {
                 using (split.Left())
-                    _navigation.Render(deltaTime);
+                    _navigation.Render(deltaTime, _stateProvider);
                 using (split.Right())
                     RenderActivePanel(deltaTime);
             }
@@ -129,9 +135,7 @@ public sealed class ControlPanelComponent : IRenderComponent
 
         _panelTransition.Update(deltaTime);
 
-        var t = _panelTransition.IsActive
-            ? Easing.EaseOutCubic(_panelTransition.Progress)
-            : 1f;
+        var t = _panelTransition.IsActive ? Easing.EaseOutCubic(_panelTransition.Progress) : 1f;
 
         ImGui.PushStyleVar(ImGuiStyleVar.Alpha, t);
 
