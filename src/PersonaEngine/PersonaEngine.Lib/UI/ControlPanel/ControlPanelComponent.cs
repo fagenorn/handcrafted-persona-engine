@@ -19,8 +19,15 @@ public sealed class ControlPanelComponent : IRenderComponent
     private const float StatusBarHeight = 46f;
     private const float ControlBarHeight = 44f;
     private const float SavedIndicatorDuration = 2f;
-    private const float PanelTransitionDuration = 0.18f;
 
+    // Staggered transition config
+    private const float PanelFadeInBase = 0.18f;
+    private const float PanelFadeInStagger = 0.04f;
+    private const float PanelFadeInMaxTotal = 0.40f;
+    private const float PanelFadeOutDuration = 0.10f;
+    private const float PanelSlideOffset = 8f;
+
+    private readonly AmbientRenderer _ambientRenderer;
     private readonly ControlBar _controlBar;
     private readonly IConfigWriter _configWriter;
     private readonly Navigation _navigation = new();
@@ -30,12 +37,15 @@ public sealed class ControlPanelComponent : IRenderComponent
 
     private NavSection _lastSection;
     private OneShotAnimation _panelTransition;
+    private OneShotAnimation _savedPop;
+    private DateTime? _lastSavedTime;
 
     public ControlPanelComponent(
         StatusBar statusBar,
         ControlBar controlBar,
         IConfigWriter configWriter,
         PersonaStateProvider stateProvider,
+        AmbientRenderer ambientRenderer,
         Dashboard dashboard,
         Voice voice,
         Personality personality,
@@ -53,6 +63,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         _controlBar = controlBar;
         _configWriter = configWriter;
         _stateProvider = stateProvider;
+        _ambientRenderer = ambientRenderer;
 
         RegisterPanel(NavSection.Dashboard, dt => dashboard.Render(dt));
         RegisterPanel(NavSection.Voice, dt => voice.Render(dt));
@@ -78,6 +89,7 @@ public sealed class ControlPanelComponent : IRenderComponent
     public void Update(float deltaTime)
     {
         _stateProvider.Update(deltaTime);
+        _ambientRenderer.Update(deltaTime);
     }
 
     public void Resize() { }
@@ -95,6 +107,12 @@ public sealed class ControlPanelComponent : IRenderComponent
     {
         using (Ui.Window("##ControlPanel"))
         {
+            // Render ambient background behind all content
+            var winPos = ImGui.GetWindowPos();
+            var winSize = ImGui.GetWindowSize();
+            var bgDrawList = ImGui.GetWindowDrawList();
+            _ambientRenderer.RenderBackground(bgDrawList, winPos, winSize);
+
             using (Ui.Row(Sz.Fixed(StatusBarHeight), Styles.StatusBar))
                 _statusBar.Render(deltaTime);
 
@@ -120,7 +138,7 @@ public sealed class ControlPanelComponent : IRenderComponent
                 _controlBar.Render(deltaTime);
         }
 
-        RenderSavedIndicator();
+        RenderSavedIndicator(deltaTime);
     }
 
     private void RenderActivePanel(float deltaTime)
@@ -129,7 +147,7 @@ public sealed class ControlPanelComponent : IRenderComponent
 
         if (current != _lastSection)
         {
-            _panelTransition.Start(PanelTransitionDuration);
+            _panelTransition.Start(PanelFadeInBase);
             _lastSection = current;
         }
 
@@ -139,7 +157,7 @@ public sealed class ControlPanelComponent : IRenderComponent
 
         ImGui.PushStyleVar(ImGuiStyleVar.Alpha, t);
 
-        var offsetY = (1f - t) * 10f;
+        var offsetY = (1f - t) * PanelSlideOffset;
         ImGui.SetCursorPosY(ImGui.GetCursorPosY() + offsetY);
 
         if (_panelRenderers.TryGetValue(current, out var renderer))
@@ -156,7 +174,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         ImGui.PopStyleVar();
     }
 
-    private void RenderSavedIndicator()
+    private void RenderSavedIndicator(float dt)
     {
         if (_configWriter.LastSaveTime is not { } saveTime)
             return;
@@ -165,7 +183,25 @@ public sealed class ControlPanelComponent : IRenderComponent
         if (elapsed >= SavedIndicatorDuration)
             return;
 
+        // Detect new save for pop animation
+        if (_lastSavedTime != saveTime)
+        {
+            _lastSavedTime = saveTime;
+            _savedPop.Start(0.2f);
+        }
+
+        _savedPop.Update(dt);
+
         var alpha = 1f - elapsed / SavedIndicatorDuration;
+
+        // Scale pop: uses EaseOutBack (overshoot) during pop animation
+        var scale = 1f;
+        if (_savedPop.IsActive)
+        {
+            var popT = Easing.EaseOutBack(_savedPop.Progress);
+            scale = 1f + 0.1f * (1f - popT);
+        }
+
         var color = Theme.Success with { W = alpha };
         var col = ImGui.ColorConvertFloat4ToU32(color);
 
@@ -177,9 +213,37 @@ public sealed class ControlPanelComponent : IRenderComponent
 
         const float margin = 12f;
         var pos = new Vector2(
-            viewport.Pos.X + viewport.Size.X - textSize.X - margin,
+            viewport.Pos.X + viewport.Size.X - textSize.X * scale - margin,
             viewport.Pos.Y + margin
         );
+
+        // Spark particle drifting upward during pop
+        if (_savedPop.IsActive)
+        {
+            var sparkT = _savedPop.Progress;
+            var sparkY = pos.Y - sparkT * 12f;
+            var sparkAlpha = alpha * (1f - sparkT);
+            var sparkCol = ImGui.ColorConvertFloat4ToU32(
+                Theme.Success with
+                {
+                    W = sparkAlpha * 0.6f,
+                }
+            );
+            ImGui.AddCircleFilled(
+                drawList,
+                new Vector2(pos.X + textSize.X * 0.5f, sparkY),
+                2f,
+                sparkCol
+            );
+        }
+
+        // Offset position to keep the scaled text visually centered
+        if (scale > 1.001f)
+        {
+            var scaledSize = textSize * scale;
+            var offset = (scaledSize - textSize) * 0.5f;
+            pos -= offset;
+        }
 
         ImGui.AddText(drawList, pos, col, text);
     }
