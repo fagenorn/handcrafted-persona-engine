@@ -213,39 +213,38 @@ public sealed class Win32WindowHelper : IDisposable
         return HTCLIENT;
     }
 
-    private unsafe void HandleGetMinMaxInfo(nint lParam)
+    private void HandleGetMinMaxInfo(nint lParam)
     {
         // Only set maximize constraints — min size is enforced by WM_SIZING.
-        // Layout: [0,1] ptReserved  [2,3] ptMaxSize  [4,5] ptMaxPosition
-        var p = (int*)lParam;
-
+        // MINMAXINFO layout (int offsets): [0,1] ptReserved  [2,3] ptMaxSize  [4,5] ptMaxPosition
         var monitor = MonitorFromWindow(_hwnd, MONITOR_DEFAULTTONEAREST);
-        var monitorInfo = new MONITORINFO { cbSize = 40 };
+        var monitorInfo = new MONITORINFO { cbSize = (uint)Marshal.SizeOf<MONITORINFO>() };
         GetMonitorInfo(monitor, ref monitorInfo);
 
         var work = monitorInfo.rcWork;
 
-        // ptMaxPosition — top-left when maximized
-        p[4] = work.Left - monitorInfo.rcMonitor.Left;
-        p[5] = work.Top - monitorInfo.rcMonitor.Top;
+        // ptMaxSize (offset 8) — size when maximized (work area = excludes taskbar)
+        Marshal.WriteInt32(lParam, 8, work.Right - work.Left);
+        Marshal.WriteInt32(lParam, 12, work.Bottom - work.Top);
 
-        // ptMaxSize — size when maximized (work area = excludes taskbar)
-        p[2] = work.Right - work.Left;
-        p[3] = work.Bottom - work.Top;
+        // ptMaxPosition (offset 16) — top-left when maximized
+        Marshal.WriteInt32(lParam, 16, work.Left - monitorInfo.rcMonitor.Left);
+        Marshal.WriteInt32(lParam, 20, work.Top - monitorInfo.rcMonitor.Top);
     }
 
-    private unsafe void HandleSizing(nint lParam)
+    private void HandleSizing(nint lParam)
     {
         // Enforce minimum window size during edge resize.
-        // lParam points to a RECT (Left, Top, Right, Bottom).
-        var rect = (int*)lParam;
-        var width = rect[2] - rect[0]; // Right - Left
-        var height = rect[3] - rect[1]; // Bottom - Top
+        // lParam points to a RECT: Left(0), Top(4), Right(8), Bottom(12).
+        var left = Marshal.ReadInt32(lParam, 0);
+        var top = Marshal.ReadInt32(lParam, 4);
+        var right = Marshal.ReadInt32(lParam, 8);
+        var bottom = Marshal.ReadInt32(lParam, 12);
 
-        if (width < _minWidth)
-            rect[2] = rect[0] + _minWidth;
-        if (height < _minHeight)
-            rect[3] = rect[1] + _minHeight;
+        if (right - left < _minWidth)
+            Marshal.WriteInt32(lParam, 8, left + _minWidth);
+        if (bottom - top < _minHeight)
+            Marshal.WriteInt32(lParam, 12, top + _minHeight);
     }
 
     public void Dispose()
@@ -318,23 +317,6 @@ public sealed class Win32WindowHelper : IDisposable
             Top,
             Right,
             Bottom;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT
-    {
-        public int X,
-            Y;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MINMAXINFO
-    {
-        public POINT ptReserved;
-        public POINT ptMaxSize;
-        public POINT ptMaxPosition;
-        public POINT ptMaxTrackSize;
-        public POINT ptMinTrackSize;
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
