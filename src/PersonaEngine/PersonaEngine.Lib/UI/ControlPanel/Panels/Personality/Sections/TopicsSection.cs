@@ -131,6 +131,7 @@ public sealed class TopicsSection : IDisposable
         if (!hasInput)
             ImGui.BeginDisabled();
         var buttonPressed = ImGui.Button("Add##add_topic_btn");
+        ImGuiHelpers.HandCursorOnHover();
         if (!hasInput)
             ImGui.EndDisabled();
 
@@ -164,6 +165,7 @@ public sealed class TopicsSection : IDisposable
 
         var cursor = ImGui.GetCursorScreenPos();
         var clicked = ImGui.InvisibleButton($"##topic_{index}", size);
+        ImGuiHelpers.HandCursorOnHover();
         var hovered = ImGui.IsItemHovered();
 
         var drawList = ImGui.GetWindowDrawList();

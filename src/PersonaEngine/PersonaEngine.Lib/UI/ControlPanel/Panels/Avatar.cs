@@ -154,6 +154,8 @@ public sealed class Avatar(
                 _lipSync.Engine = _engineIds[currentIndex];
                 configWriter.Write(CloneLipSync(_lipSync));
             }
+
+            ImGuiHelpers.HandCursorOnHover();
         }
 
         // Audio2Face sub-settings — only shown when Audio2Face engine is active
@@ -212,6 +214,8 @@ public sealed class Avatar(
                 _lipSync.Audio2Face.SolverType = _solverIds[currentSolverIndex];
                 configWriter.Write(CloneLipSync(_lipSync));
             }
+
+            ImGuiHelpers.HandCursorOnHover();
         }
     }
 }

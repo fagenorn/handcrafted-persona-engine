@@ -61,6 +61,8 @@ public sealed class Subtitles(
                 _opts.Font = selected;
                 configWriter.Write(CloneOpts(_opts));
             }
+
+            ImGuiHelpers.HandCursorOnHover();
         }
 
         // Font Size
@@ -115,6 +117,8 @@ public sealed class Subtitles(
                 _opts.Color = FormatHexColor(vec);
                 configWriter.Write(CloneOpts(_opts));
             }
+
+            ImGuiHelpers.HandCursorOnHover();
         }
 
         // Highlight Color
@@ -132,6 +136,8 @@ public sealed class Subtitles(
                 _opts.HighlightColor = FormatHexColor(vec);
                 configWriter.Write(CloneOpts(_opts));
             }
+
+            ImGuiHelpers.HandCursorOnHover();
         }
     }
 

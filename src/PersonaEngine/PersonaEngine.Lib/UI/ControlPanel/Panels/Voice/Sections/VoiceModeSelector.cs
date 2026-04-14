@@ -98,12 +98,16 @@ public sealed class VoiceModeSelector : IDisposable
             ImGui.PopTextWrapPos();
             ImGui.PopStyleColor();
 
-            if (
+            var cardHovered =
                 !selected
                 && ImGui.IsWindowHovered(ImGuiHoveredFlags.None)
-                && ImGui.IsMouseClicked(ImGuiMouseButton.Left)
-                && !ImGui.IsAnyItemHovered()
-            )
+                && !ImGui.IsAnyItemHovered();
+            if (cardHovered)
+            {
+                ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
+            }
+
+            if (cardHovered && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
             {
                 Select(mode);
             }

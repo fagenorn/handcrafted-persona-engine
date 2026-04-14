@@ -93,12 +93,15 @@ public sealed class Listening(
             configWriter.Write(_mic);
         }
 
+        ImGuiHelpers.HandCursorOnHover();
         ImGui.SameLine();
 
         if (ImGui.Button("Refresh"))
         {
             RefreshDevices();
         }
+
+        ImGuiHelpers.HandCursorOnHover();
 
         ImGuiHelpers.Tooltip("Re-scan for available audio input devices.");
     }
@@ -193,6 +196,8 @@ public sealed class Listening(
                 _conversation = _conversation with { BargeInType = _bargeInValues[currentIndex] };
                 configWriter.Write(_conversation);
             }
+
+            ImGuiHelpers.HandCursorOnHover();
         }
 
         // Interruption Threshold (BargeInMinWords)

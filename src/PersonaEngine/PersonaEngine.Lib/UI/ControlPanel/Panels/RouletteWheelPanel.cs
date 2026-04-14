@@ -70,6 +70,7 @@ public sealed class RouletteWheelPanel(
                 ImGui.BeginDisabled();
                 var noSections = "(no sections)";
                 ImGui.Combo("##WheelPlayTarget", ref _playgroundTargetIndex, [noSections], 1);
+                ImGuiHelpers.HandCursorOnHover();
                 ImGui.EndDisabled();
             }
             else
@@ -78,6 +79,7 @@ public sealed class RouletteWheelPanel(
                     _playgroundTargetIndex = 0;
 
                 ImGui.Combo("##WheelPlayTarget", ref _playgroundTargetIndex, labels, labels.Length);
+                ImGuiHelpers.HandCursorOnHover();
             }
         }
 
@@ -103,6 +105,7 @@ public sealed class RouletteWheelPanel(
             _ = wheel.SpinAsync();
         }
 
+        ImGuiHelpers.HandCursorOnHover();
         ImGui.SameLine();
 
         // Show / Hide toggle
@@ -113,6 +116,8 @@ public sealed class RouletteWheelPanel(
             _opts = _opts with { Enabled = !_opts.Enabled };
             configWriter.Write(_opts);
         }
+
+        ImGuiHelpers.HandCursorOnHover();
 
         if (spinning || noLabels)
             ImGui.EndDisabled();
@@ -305,6 +310,8 @@ public sealed class RouletteWheelPanel(
                 _opts = _opts with { Font = selected };
                 configWriter.Write(_opts);
             }
+
+            ImGuiHelpers.HandCursorOnHover();
         }
 
         // Font Size

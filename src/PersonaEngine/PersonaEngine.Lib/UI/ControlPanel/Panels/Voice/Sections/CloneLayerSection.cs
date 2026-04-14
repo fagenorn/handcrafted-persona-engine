@@ -108,6 +108,8 @@ public sealed class CloneLayerSection : IDisposable
                 _rvc = _rvc with { DefaultVoice = rvcVoices[currentIndex] };
                 _configWriter.Write(_rvc);
             }
+
+            ImGuiHelpers.HandCursorOnHover();
         }
         ImGuiHelpers.SettingEndRow(rowY);
 

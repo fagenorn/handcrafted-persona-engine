@@ -91,11 +91,14 @@ public static class VoiceTile
             result.ContentHeight = ImGui.GetCursorPosY() - contentStartY + Padding * 2f;
 
             // Tile-body click: any click on empty space selects the voice.
-            if (
-                ImGui.IsWindowHovered(ImGuiHoveredFlags.None)
-                && ImGui.IsMouseClicked(ImGuiMouseButton.Left)
-                && !ImGui.IsAnyItemHovered()
-            )
+            var tileHovered =
+                ImGui.IsWindowHovered(ImGuiHoveredFlags.None) && !ImGui.IsAnyItemHovered();
+            if (tileHovered)
+            {
+                ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
+            }
+
+            if (tileHovered && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
             {
                 result.SelectClicked = true;
             }

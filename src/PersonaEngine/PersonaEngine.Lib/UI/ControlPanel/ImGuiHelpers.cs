@@ -9,6 +9,16 @@ namespace PersonaEngine.Lib.UI.ControlPanel;
 public static class ImGuiHelpers
 {
     /// <summary>
+    ///     Sets the mouse cursor to <see cref="ImGuiMouseCursor.Hand"/> when the
+    ///     previous item is hovered. Call immediately after any clickable widget.
+    /// </summary>
+    public static void HandCursorOnHover()
+    {
+        if (ImGui.IsItemHovered())
+            ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
+    }
+
+    /// <summary>
     ///     Renders a hover tooltip on the previous item using a short delay.
     /// </summary>
     public static void Tooltip(string text)
@@ -119,6 +129,7 @@ public static class ImGuiHelpers
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.AccentPrimary);
         var headerOpen = ImGui.CollapsingHeader($"##{label}_header");
         ImGui.PopStyleColor();
+        HandCursorOnHover();
 
         // Draw label + hint on the header bar
         RenderCollapsibleHeaderText(label, hint);
@@ -353,6 +364,8 @@ public static class ImGuiHelpers
             changed = true;
         }
 
+        HandCursorOnHover();
+
         var t = knobPosition.Current;
 
         // Apply overshoot easing for springy feel — only when traveling forward
@@ -498,6 +511,7 @@ public static class ImGuiHelpers
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.Base);
         var clicked = ImGui.Button(label);
         ImGui.PopStyleColor(4);
+        HandCursorOnHover();
         return clicked;
     }
 
@@ -520,6 +534,7 @@ public static class ImGuiHelpers
         if (interactive)
         {
             clicked = ImGui.InvisibleButton($"##chip_{label}", size);
+            HandCursorOnHover();
             hovered = ImGui.IsItemHovered();
         }
         else
@@ -586,6 +601,7 @@ public static class ImGuiHelpers
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.Base);
         var clicked = ImGui.Button(label);
         ImGui.PopStyleColor(4);
+        HandCursorOnHover();
 
         if (clicked)
         {
@@ -619,6 +635,7 @@ public static class ImGuiHelpers
         ImGui.PushStyleColor(ImGuiCol.ButtonActive, Theme.Error);
         var clicked = ImGui.Button(label);
         ImGui.PopStyleColor(3);
+        HandCursorOnHover();
         return clicked;
     }
 
@@ -672,6 +689,7 @@ public static class ImGuiHelpers
         else
         {
             clicked = ImGui.InvisibleButton(id, btnSize);
+            HandCursorOnHover();
         }
 
         var hovered = state != PreviewButtonState.Disabled && ImGui.IsItemHovered();
@@ -763,6 +781,7 @@ public static class ImGuiHelpers
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.Base);
         var clicked = ImGui.Button(glyph, new Vector2(size, size));
         ImGui.PopStyleColor(4);
+        HandCursorOnHover();
 
         if (tooltip is not null)
             Tooltip(tooltip);
@@ -849,6 +868,7 @@ public static class ImGuiHelpers
             }
         }
 
+        HandCursorOnHover();
         ImGui.SameLine();
 
         if (ImGui.RadioButton($"Portrait##{id}", isPortrait))
@@ -860,6 +880,8 @@ public static class ImGuiHelpers
                 changed = true;
             }
         }
+
+        HandCursorOnHover();
 
         var presets = isPortrait ? PortraitResolutions : LandscapeResolutions;
         var labels = isPortrait ? PortraitLabels : LandscapeLabels;
@@ -892,9 +914,11 @@ public static class ImGuiHelpers
         {
             width = presets[currentIndex].Width;
             height = presets[currentIndex].Height;
+            HandCursorOnHover();
             return true;
         }
 
+        HandCursorOnHover();
         return false;
     }
 

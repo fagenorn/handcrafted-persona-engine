@@ -98,6 +98,7 @@ public sealed class Navigation
                 ActiveSection = section;
             }
 
+            ImGuiHelpers.HandCursorOnHover();
             ImGui.PopStyleColor(isActive ? 3 : 1);
 
             var itemMin = ImGui.GetItemRectMin();
