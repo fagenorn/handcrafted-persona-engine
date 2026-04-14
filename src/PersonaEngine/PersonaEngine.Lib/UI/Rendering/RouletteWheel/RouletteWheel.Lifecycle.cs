@@ -1,4 +1,6 @@
-﻿namespace PersonaEngine.Lib.UI.Rendering.RouletteWheel;
+﻿using PersonaEngine.Lib.UI.ControlPanel;
+
+namespace PersonaEngine.Lib.UI.Rendering.RouletteWheel;
 
 public partial class RouletteWheel
 {
@@ -130,7 +132,7 @@ public partial class RouletteWheel
         var progress = Math.Min(elapsed / _animationDuration, 1.0f);
 
         // Apply easing function to the progress
-        var easedProgress = EaseOutBack(progress);
+        var easedProgress = Easing.EaseOutBack(progress);
 
         // Calculate current scale based on progress
         _animationCurrentScale =
@@ -142,13 +144,5 @@ public partial class RouletteWheel
             CurrentAnimationState = AnimationState.Idle;
             _animationCurrentScale = _animationTargetScale;
         }
-    }
-
-    private static float EaseOutBack(float t)
-    {
-        const float c1 = 1.70158f;
-        const float c3 = c1 + 1;
-
-        return 1 + c3 * MathF.Pow(t - 1, 3) + c1 * MathF.Pow(t - 1, 2);
     }
 }

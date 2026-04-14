@@ -39,7 +39,7 @@ public class ImGuiController : IDisposable
 
     private IntPtr _clipboardTextPtr = IntPtr.Zero;
 
-    private bool _ctrlVProcessed = false;
+    private bool _wasCtrlVPressed;
 
     private uint _elementsHandle;
 
@@ -61,7 +61,7 @@ public class ImGuiController : IDisposable
 
     private IView _view;
 
-    private bool _wasCtrlVPressed = false;
+    private ImGuiMouseCursor _lastCursor = ImGuiMouseCursor.Arrow;
 
     public ImGuiContextPtr Context;
 
@@ -211,26 +211,19 @@ public class ImGuiController : IDisposable
             Marshal.GetFunctionPointerForDelegate(getClipboardFn);
     }
 
-    private void SetClipboard(IntPtr data)
+    private void SetClipboard(IntPtr ctx, IntPtr text)
     {
-        Debug.WriteLine("SetClipboard called");
-
-        if (data == IntPtr.Zero)
+        if (text == IntPtr.Zero)
         {
             return;
         }
 
-        var text = Marshal.PtrToStringUTF8(data) ?? string.Empty;
+        var str = Marshal.PtrToStringUTF8(text) ?? string.Empty;
         try
         {
-            // Try the Silk.NET method first
             if (_keyboard != null)
             {
-                _keyboard.ClipboardText = text;
-            }
-            else
-            {
-                Debug.WriteLine("Keyboard reference is null when setting clipboard text");
+                _keyboard.ClipboardText = str;
             }
         }
         catch (Exception ex)
@@ -239,10 +232,8 @@ public class ImGuiController : IDisposable
         }
     }
 
-    private IntPtr GetClipboard()
+    private IntPtr GetClipboard(IntPtr ctx)
     {
-        Debug.WriteLine("GetClipboard called");
-
         if (_clipboardTextPtr != IntPtr.Zero)
         {
             Marshal.FreeHGlobal(_clipboardTextPtr);
@@ -250,15 +241,12 @@ public class ImGuiController : IDisposable
         }
 
         var text = string.Empty;
-        var success = false;
 
-        // Try primary method
         if (_keyboard != null)
         {
             try
             {
                 text = _keyboard.ClipboardText ?? string.Empty;
-                success = true;
             }
             catch (Exception ex)
             {
@@ -266,10 +254,8 @@ public class ImGuiController : IDisposable
             }
         }
 
-        // Convert to UTF-8 and allocate memory
         try
         {
-            // Ensure null termination for C strings
             var bytes = Encoding.UTF8.GetBytes(text + '\0');
             _clipboardTextPtr = Marshal.AllocHGlobal(bytes.Length);
             Marshal.Copy(bytes, 0, _clipboardTextPtr, bytes.Length);
@@ -307,6 +293,26 @@ public class ImGuiController : IDisposable
     private static void OnKeyEvent(IKeyboard keyboard, Key keycode, int scancode, bool down)
     {
         var io = ImGui.GetIO();
+
+        // Send logical modifier flags BEFORE the key event (matches imgui_impl_glfw.cpp pattern).
+        // ImGui checks ImGuiKey.ModCtrl for shortcuts, NOT ImGuiKey.LeftCtrl/RightCtrl.
+        io.AddKeyEvent(
+            ImGuiKey.ModCtrl,
+            keyboard.IsKeyPressed(Key.ControlLeft) || keyboard.IsKeyPressed(Key.ControlRight)
+        );
+        io.AddKeyEvent(
+            ImGuiKey.ModShift,
+            keyboard.IsKeyPressed(Key.ShiftLeft) || keyboard.IsKeyPressed(Key.ShiftRight)
+        );
+        io.AddKeyEvent(
+            ImGuiKey.ModAlt,
+            keyboard.IsKeyPressed(Key.AltLeft) || keyboard.IsKeyPressed(Key.AltRight)
+        );
+        io.AddKeyEvent(
+            ImGuiKey.ModSuper,
+            keyboard.IsKeyPressed(Key.SuperLeft) || keyboard.IsKeyPressed(Key.SuperRight)
+        );
+
         var imGuiKey = TranslateInputKeyToImGuiKey(keycode);
         io.AddKeyEvent(imGuiKey, down);
         io.SetKeyEventNativeData(imGuiKey, (int)keycode, scancode);
@@ -337,12 +343,46 @@ public class ImGuiController : IDisposable
             _frameBegun = false;
             ImGui.Render();
             RenderImDrawData(ImGui.GetDrawData());
+            UpdateMouseCursor();
 
             if (oldCtx != Context)
             {
                 ImGui.SetCurrentContext(oldCtx);
             }
         }
+    }
+
+    private void UpdateMouseCursor()
+    {
+        var io = ImGui.GetIO();
+
+        if ((io.ConfigFlags & ImGuiConfigFlags.NoMouseCursorChange) != 0)
+        {
+            return;
+        }
+
+        var imguiCursor = ImGui.GetMouseCursor();
+
+        if (imguiCursor == _lastCursor)
+        {
+            return;
+        }
+
+        _lastCursor = imguiCursor;
+
+        var mouse = _input.Mice[0];
+        mouse.Cursor.StandardCursor = imguiCursor switch
+        {
+            ImGuiMouseCursor.TextInput => StandardCursor.IBeam,
+            ImGuiMouseCursor.ResizeNs => StandardCursor.VResize,
+            ImGuiMouseCursor.ResizeEw => StandardCursor.HResize,
+            ImGuiMouseCursor.ResizeNesw => StandardCursor.NeswResize,
+            ImGuiMouseCursor.ResizeNwse => StandardCursor.NwseResize,
+            ImGuiMouseCursor.Hand => StandardCursor.Hand,
+            ImGuiMouseCursor.ResizeAll => StandardCursor.ResizeAll,
+            ImGuiMouseCursor.NotAllowed => StandardCursor.NotAllowed,
+            _ => StandardCursor.Arrow,
+        };
     }
 
     /// <summary>
@@ -419,47 +459,34 @@ public class ImGuiController : IDisposable
 
         _pressedChars.Clear();
 
-        io.KeyCtrl =
+        // Modifier state — logical modifier flags for the modern key event API
+        var ctrlDown =
             _keyboard.IsKeyPressed(Key.ControlLeft) || _keyboard.IsKeyPressed(Key.ControlRight);
-        io.KeyAlt = _keyboard.IsKeyPressed(Key.AltLeft) || _keyboard.IsKeyPressed(Key.AltRight);
-        io.KeyShift =
+        var shiftDown =
             _keyboard.IsKeyPressed(Key.ShiftLeft) || _keyboard.IsKeyPressed(Key.ShiftRight);
-        io.KeySuper =
+        var altDown = _keyboard.IsKeyPressed(Key.AltLeft) || _keyboard.IsKeyPressed(Key.AltRight);
+        var superDown =
             _keyboard.IsKeyPressed(Key.SuperLeft) || _keyboard.IsKeyPressed(Key.SuperRight);
 
-        if (io.KeyCtrl && _keyboard.IsKeyPressed(Key.C))
-        {
-            io.AddKeyEvent(ImGuiKey.C, true);
-            io.AddKeyEvent(ImGuiKey.LeftCtrl, true);
+        io.AddKeyEvent(ImGuiKey.ModCtrl, ctrlDown);
+        io.AddKeyEvent(ImGuiKey.ModShift, shiftDown);
+        io.AddKeyEvent(ImGuiKey.ModAlt, altDown);
+        io.AddKeyEvent(ImGuiKey.ModSuper, superDown);
 
-            Debug.WriteLine("Adding Ctrl+C event to ImGui");
-        }
-
-        var isCtrlVPressed = io.KeyCtrl && _keyboard.IsKeyPressed(Key.V);
+        // Ctrl+V paste — inject clipboard characters directly as a reliable fallback
+        var isCtrlVPressed = ctrlDown && _keyboard.IsKeyPressed(Key.V);
 
         if (isCtrlVPressed && !_wasCtrlVPressed)
         {
-            _ctrlVProcessed = false;
-        }
-
-        if (isCtrlVPressed && !_ctrlVProcessed)
-        {
-            io.AddKeyEvent(ImGuiKey.V, true);
-            io.AddKeyEvent(ImGuiKey.LeftCtrl, true);
-
             var clipboardText = ImGui.GetClipboardTextS();
-            if (ImGui.IsAnyItemActive())
+
+            if (ImGui.IsAnyItemActive() && !string.IsNullOrEmpty(clipboardText))
             {
                 foreach (var c in clipboardText)
                 {
                     io.AddInputCharacter(c);
                 }
             }
-
-            io.AddKeyEvent(ImGuiKey.V, false);
-            io.AddKeyEvent(ImGuiKey.LeftCtrl, false);
-
-            _ctrlVProcessed = true;
         }
 
         _wasCtrlVPressed = isCtrlVPressed;
@@ -1060,8 +1087,8 @@ public class ImGuiController : IDisposable
     }
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate void SetClipboardDelegate(IntPtr data);
+    private delegate void SetClipboardDelegate(IntPtr ctx, IntPtr text);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    private delegate IntPtr GetClipboardDelegate();
+    private delegate IntPtr GetClipboardDelegate(IntPtr ctx);
 }

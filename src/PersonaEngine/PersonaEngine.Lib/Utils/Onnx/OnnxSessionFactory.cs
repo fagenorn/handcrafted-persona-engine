@@ -110,6 +110,19 @@ public static class OnnxSessionFactory
         }
     }
 
+    private static void AppendCuda(SessionOptions options)
+    {
+        using var cudaOptions = new OrtCUDAProviderOptions();
+        // Use DEFAULT algo search to avoid cuDNN Frontend heuristic failures on
+        // newer GPU architectures (e.g. Blackwell SM 12.0) where bundled cuDNN
+        // lacks execution plans. DEFAULT uses the legacy cuDNN algorithm selection
+        // API which works reliably across all architectures.
+        cudaOptions.UpdateOptions(
+            new Dictionary<string, string> { ["cudnn_conv_algo_search"] = "DEFAULT" }
+        );
+        options.AppendExecutionProvider_CUDA(cudaOptions);
+    }
+
     private static void ApplyExecutionProvider(SessionOptions options, ExecutionProvider provider)
     {
         switch (provider)
@@ -118,12 +131,12 @@ public static class OnnxSessionFactory
                 options.AppendExecutionProvider_CPU();
                 break;
             case ExecutionProvider.Cuda:
-                options.AppendExecutionProvider_CUDA();
+                AppendCuda(options);
                 break;
             case ExecutionProvider.CudaWithCpuFallback:
                 try
                 {
-                    options.AppendExecutionProvider_CUDA();
+                    AppendCuda(options);
                 }
                 catch
                 {

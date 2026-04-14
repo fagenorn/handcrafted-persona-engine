@@ -36,7 +36,10 @@ public ref struct EqualColsScope
         _childOpen = false;
         _disposed = false;
 
-        var parentWidth = LayoutContext.Width();
+        // Use GetContentRegionAvail rather than LayoutContext.Width() so the
+        // column calculation accounts for any active scrollbar that may have
+        // reduced the available horizontal space (e.g., inside a scrollable FillChild).
+        var parentWidth = ImGui.GetContentRegionAvail().X;
         var totalGaps = (count - 1) * gap;
         _colWidth = MathF.Max(1f, (parentWidth - totalGaps) / count);
     }

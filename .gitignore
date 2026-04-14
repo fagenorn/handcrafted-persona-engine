@@ -697,7 +697,8 @@ CLAUDE.md
 .mcp.json
 
 src/PersonaEngine/PersonaEngine.Lib/Resources/*
-!src/PersonaEngine/PersonaEngine.Lib/Resources/.gitkeep 
+!src/PersonaEngine/PersonaEngine.Lib/Resources/.gitkeep
+!src/PersonaEngine/PersonaEngine.Lib/Resources/voice_metadata.json
 
 # Native resources for PersonaEngine
 !src/PersonaEngine/PersonaEngine.Lib/Resources/native

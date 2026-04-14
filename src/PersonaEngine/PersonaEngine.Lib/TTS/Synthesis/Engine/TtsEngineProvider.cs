@@ -43,6 +43,16 @@ internal sealed class TtsEngineProvider : ITtsEngineProvider, IDisposable
 
     public IReadOnlyList<TtsEngineInfo> AvailableEngines { get; }
 
+    public ISentenceSynthesizer Get(string engineId)
+    {
+        if (_engines.TryGetValue(engineId, out var engine))
+        {
+            return engine;
+        }
+
+        throw new KeyNotFoundException($"No TTS engine registered with id '{engineId}'.");
+    }
+
     public void Dispose()
     {
         _changeToken?.Dispose();

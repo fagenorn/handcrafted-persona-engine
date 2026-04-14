@@ -23,6 +23,13 @@ public interface ISentenceSynthesizer : IAsyncDisposable
     ///     The caller must dispose the session when the turn ends.
     /// </summary>
     ISynthesisSession CreateSession();
+
+    /// <summary>
+    ///     Creates a session that uses the specified voice instead of the ambient options.
+    ///     Used by the voice-audition pipeline to preview a specific voice without waiting
+    ///     for the config write → file reload → options-monitor cycle.
+    /// </summary>
+    ISynthesisSession CreateSession(string voiceName);
 }
 
 /// <summary>

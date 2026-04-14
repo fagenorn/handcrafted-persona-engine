@@ -1,3 +1,4 @@
+using Silk.NET.GLFW;
 using Silk.NET.OpenGL;
 
 namespace PersonaEngine.Lib.UI.ControlPanel;
@@ -113,6 +114,14 @@ public sealed class RadialGradientTexture : IDisposable
         if (_disposed)
             return;
         _disposed = true;
-        _gl.DeleteTexture(_textureId);
+
+        try
+        {
+            _gl.DeleteTexture(_textureId);
+        }
+        catch (GlfwException)
+        {
+            // Context may already be destroyed during app shutdown — safe to ignore.
+        }
     }
 }

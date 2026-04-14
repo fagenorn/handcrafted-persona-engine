@@ -2,6 +2,7 @@ using System.Numerics;
 using Hexa.NET.ImGui;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
 using PersonaEngine.Lib.UI.ControlPanel.Panels;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice;
 using Silk.NET.Input;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
@@ -56,7 +57,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         PersonaStateProvider stateProvider,
         AmbientRenderer ambientRenderer,
         Dashboard dashboard,
-        Voice voice,
+        VoicePanel voicePanel,
         Personality personality,
         Listening listening,
         Avatar avatar,
@@ -75,7 +76,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         _ambientRenderer = ambientRenderer;
 
         RegisterPanel(NavSection.Dashboard, dt => dashboard.Render(dt));
-        RegisterPanel(NavSection.Voice, dt => voice.Render(dt));
+        RegisterPanel(NavSection.Voice, dt => voicePanel.Render(dt));
         RegisterPanel(NavSection.Personality, dt => personality.Render(dt));
         RegisterPanel(NavSection.Listening, dt => listening.Render(dt));
         RegisterPanel(NavSection.Avatar, dt => avatar.Render(dt));

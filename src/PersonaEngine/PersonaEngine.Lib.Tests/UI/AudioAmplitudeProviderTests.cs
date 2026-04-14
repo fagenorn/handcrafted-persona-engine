@@ -91,5 +91,4 @@ public class AudioAmplitudeProviderTests
 
         Assert.False(provider.IsPlaying);
     }
-
 }

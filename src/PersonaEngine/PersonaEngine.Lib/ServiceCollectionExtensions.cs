@@ -46,6 +46,10 @@ using PersonaEngine.Lib.UI.Common;
 using PersonaEngine.Lib.UI.ControlPanel;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
 using PersonaEngine.Lib.UI.ControlPanel.Panels;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Audition;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Models;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Sections;
 using PersonaEngine.Lib.UI.Rendering.RouletteWheel;
 using PersonaEngine.Lib.UI.Rendering.Subtitles;
 using PersonaEngine.Lib.Vision;
@@ -392,9 +396,26 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<AmbientRenderer>();
         services.AddSingleton<IUiSoundEmitter, NoOpUiSoundEmitter>();
 
+        // Voice panel sections
+        services.AddSingleton<VoiceModeSelector>();
+        services.AddSingleton<VoiceCard>();
+        services.AddSingleton<VoiceGallery>();
+        services.AddSingleton<DeliverySection>();
+        services.AddSingleton<CloneLayerSection>();
+        services.AddSingleton<AdvancedSection>();
+
+        // Voice metadata
+        services.AddSingleton<VoiceMetadataCatalog>();
+
+        // Voice audition pipeline
+        services.AddSingleton<OneShotAudioPlayer>();
+        services.AddSingleton<IOneShotPlayer>(sp => sp.GetRequiredService<OneShotAudioPlayer>());
+        services.AddSingleton<IRvcAuditionProcessor, RvcAuditionProcessor>();
+        services.AddSingleton<IVoiceAuditionService, VoiceAuditionService>();
+
         // Panels
         services.AddSingleton<Dashboard>();
-        services.AddSingleton<Voice>();
+        services.AddSingleton<VoicePanel>();
         services.AddSingleton<Personality>();
         services.AddSingleton<Listening>();
         services.AddSingleton<Avatar>();
@@ -419,7 +440,8 @@ public static class ServiceCollectionExtensions
         services.Configure<RVCFilterOptions>(configuration.GetSection("Config:Tts:Rvc"));
 
         services.AddSingleton<IRVCVoiceProvider, RVCVoiceProvider>();
-        services.AddSingleton<IAudioFilter, RVCFilter>();
+        services.AddSingleton<RVCFilter>();
+        services.AddSingleton<IAudioFilter>(sp => sp.GetRequiredService<RVCFilter>());
 
         return services;
     }

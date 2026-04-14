@@ -138,4 +138,7 @@
     <Compile Remove="Core\Conversation\Models\ConversationTrigger.cs" />
     <Compile Remove="Core\Conversation\Interfaces\IConversationSessionFactory.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\voice_metadata.json" />
+  </ItemGroup>
 </Project>

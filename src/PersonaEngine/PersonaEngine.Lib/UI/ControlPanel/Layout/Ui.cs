@@ -63,11 +63,34 @@ public static class Ui
     ) => new(id, new System.Numerics.Vector2(padding, padding), childFlags);
 
     /// <summary>
+    ///     Creates a bordered, padded card scope. Auto-sizes vertically by default
+    ///     (<c>ImGuiChildFlags.AutoResizeY</c>). Pass <paramref name="height" /> &gt; 0
+    ///     for a fixed height (e.g., from <see cref="UniformHeightTracker" />).
+    /// </summary>
+    public static CardScope Card(
+        string id,
+        float padding = 12f,
+        bool border = true,
+        float width = 0f,
+        float height = 0f
+    ) => new(id, padding, border, width, height);
+
+    /// <summary>
     ///     Creates an auto-height equal-width column grid. Unlike <see cref="EqualCols"/>,
     ///     rows auto-size to content — no fixed height, no child windows, no scrollbars.
     ///     Call <see cref="GridScope.Row"/> then <see cref="GridScope.Col"/> for each cell.
     /// </summary>
     public static GridScope Grid(string id, int columns) => new(id, columns);
+
+    /// <summary>
+    ///     Creates an auto-wrapping grid whose column count is derived from the available width
+    ///     and the given tile size. Each tile is placed via <see cref="WrapGridScope.NextTile" />.
+    /// </summary>
+    public static WrapGridScope WrapGrid(
+        string id,
+        System.Numerics.Vector2 itemSize,
+        float gap = 12f
+    ) => new(id, itemSize, gap);
 
     /// <summary>Peeks the current layout context's available space.</summary>
     public static (float Width, float Height) PeekContext() => LayoutContext.Peek();

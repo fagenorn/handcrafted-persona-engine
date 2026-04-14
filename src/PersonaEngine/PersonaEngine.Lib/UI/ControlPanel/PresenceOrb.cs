@@ -70,9 +70,12 @@ public sealed class PresenceOrb
 
     /// <summary>Maximum on-screen radius this orb may occupy, for layout reservation.</summary>
     public static float MaxRadius =>
-        CoreBaseRadius + CoreAmplitudeGain
-        + InnerHaloPadding + InnerHaloAmplitudeGain
-        + OuterHaloPadding + OuterHaloAmplitudeGain;
+        CoreBaseRadius
+        + CoreAmplitudeGain
+        + InnerHaloPadding
+        + InnerHaloAmplitudeGain
+        + OuterHaloPadding
+        + OuterHaloAmplitudeGain;
 
     public void Update(float dt, PersonaStateProvider state)
     {
@@ -87,7 +90,8 @@ public sealed class PresenceOrb
         _outerAmplitude += (rawAmp - _outerAmplitude) * (1f - MathF.Exp(-OuterSmoothing * dt));
 
         var targetVisibility = state.State == PersonaUiState.NoSession ? 0f : 1f;
-        _visibility += (targetVisibility - _visibility) * (1f - MathF.Exp(-VisibilitySmoothing * dt));
+        _visibility +=
+            (targetVisibility - _visibility) * (1f - MathF.Exp(-VisibilitySmoothing * dt));
 
         // Advance / spawn pulse rings only during speaking state. Each ring
         // has its own spawn delay; lifetime begins ticking once the delay
@@ -96,7 +100,8 @@ public sealed class PresenceOrb
         for (var i = 0; i < _rings.Length; i++)
         {
             ref var ring = ref _rings[i];
-            if (!ring.Active) continue;
+            if (!ring.Active)
+                continue;
 
             if (ring.SpawnDelay > 0f)
             {
@@ -143,7 +148,9 @@ public sealed class PresenceOrb
         // Per-layer pulse values. In Speaking, each layer follows its own
         // smoothed amplitude (core leads, outer lags). Otherwise all layers
         // share the heartbeat.
-        float corePulse, innerPulse, outerPulse;
+        float corePulse,
+            innerPulse,
+            outerPulse;
         if (state == PersonaUiState.Speaking)
         {
             corePulse = CompressedPulse(_coreAmplitude);
@@ -161,7 +168,8 @@ public sealed class PresenceOrb
         for (var i = 0; i < _rings.Length; i++)
         {
             ref readonly var ring = ref _rings[i];
-            if (!ring.Active || ring.SpawnDelay > 0f) continue;
+            if (!ring.Active || ring.SpawnDelay > 0f)
+                continue;
 
             var t = ring.Lifetime;
             var ringRadius = ring.StartRadius + t * (ring.MaxRadius - ring.StartRadius);
@@ -182,9 +190,12 @@ public sealed class PresenceOrb
         // Outer halo — drawn first so inner layers sit on top. Uses the slow
         // amplitude trace, so it visibly trails the core during transients.
         var outerRadius =
-            CoreBaseRadius + CoreAmplitudeGain * corePulse
-            + InnerHaloPadding + InnerHaloAmplitudeGain * innerPulse
-            + OuterHaloPadding + OuterHaloAmplitudeGain * outerPulse;
+            CoreBaseRadius
+            + CoreAmplitudeGain * corePulse
+            + InnerHaloPadding
+            + InnerHaloAmplitudeGain * innerPulse
+            + OuterHaloPadding
+            + OuterHaloAmplitudeGain * outerPulse;
         var outerAlpha = _visibility * (0.10f + outerPulse * 0.20f);
         ImGui.AddCircleFilled(
             drawList,
@@ -196,8 +207,10 @@ public sealed class PresenceOrb
 
         // Inner halo — uses inner trace, slightly delayed from core.
         var innerRadius =
-            CoreBaseRadius + CoreAmplitudeGain * corePulse
-            + InnerHaloPadding + InnerHaloAmplitudeGain * innerPulse;
+            CoreBaseRadius
+            + CoreAmplitudeGain * corePulse
+            + InnerHaloPadding
+            + InnerHaloAmplitudeGain * innerPulse;
         var innerAlpha = _visibility * (0.30f + innerPulse * 0.30f);
         ImGui.AddCircleFilled(
             drawList,
@@ -225,7 +238,8 @@ public sealed class PresenceOrb
     /// </summary>
     private static float CompressedPulse(float amp)
     {
-        if (amp <= 0f) return 0f;
+        if (amp <= 0f)
+            return 0f;
         return MathF.Min(1f, MathF.Pow(amp, CompressionExponent) * CompressionGain);
     }
 
