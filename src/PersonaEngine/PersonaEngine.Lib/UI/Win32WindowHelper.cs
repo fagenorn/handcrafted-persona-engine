@@ -9,6 +9,8 @@ namespace PersonaEngine.Lib.UI;
 public sealed class Win32WindowHelper : IDisposable
 {
     private const int WM_NCHITTEST = 0x0084;
+    private const int WM_NCCALCSIZE = 0x0083;
+    private const int WM_NCRBUTTONUP = 0x00A5;
     private const int WM_GETMINMAXINFO = 0x0024;
     private const int WM_SYSCOMMAND = 0x0112;
     private const int WM_CLOSE = 0x0010;
@@ -31,6 +33,8 @@ public sealed class Win32WindowHelper : IDisposable
     private const int GWLP_WNDPROC = -4;
     private const int GWL_STYLE = -16;
     private const int WS_MAXIMIZE = 0x01000000;
+    private const int WS_THICKFRAME = 0x00040000;
+    private const int WS_CAPTION = 0x00C00000;
 
     private const int MONITOR_DEFAULTTONEAREST = 2;
     private const int TPM_RETURNCMD = 0x0100;
@@ -58,6 +62,13 @@ public sealed class Win32WindowHelper : IDisposable
             GWLP_WNDPROC,
             Marshal.GetFunctionPointerForDelegate(_wndProcDelegate)
         );
+
+        // Add WS_THICKFRAME (enables edge resize) and WS_CAPTION (enables double-click
+        // maximize) to the borderless window. WM_NCCALCSIZE handler prevents these from
+        // adding any visible non-client area.
+        var style = GetWindowLong(_hwnd, GWL_STYLE);
+        style |= WS_THICKFRAME | WS_CAPTION;
+        SetWindowLong(_hwnd, GWL_STYLE, style);
     }
 
     public bool IsMaximized
@@ -102,6 +113,25 @@ public sealed class Win32WindowHelper : IDisposable
         {
             case WM_NCHITTEST:
                 return HandleNcHitTest(lParam);
+
+            case WM_NCCALCSIZE:
+                // Return 0 to tell Windows the entire window is client area,
+                // preventing WS_THICKFRAME/WS_CAPTION from adding visible chrome.
+                if (wParam != 0)
+                    return 0;
+                break;
+
+            case WM_NCRBUTTONUP:
+                // Right-click on title bar — show system context menu.
+                // ImGui can't handle this because Win32 intercepts non-client clicks.
+                if (wParam == HTCAPTION)
+                {
+                    var x = (short)(lParam.ToInt64() & 0xFFFF);
+                    var y = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
+                    ShowSystemMenu(x, y);
+                    return 0;
+                }
+                break;
 
             case WM_GETMINMAXINFO:
                 HandleGetMinMaxInfo(lParam);
@@ -199,6 +229,9 @@ public sealed class Win32WindowHelper : IDisposable
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
     private static extern int GetWindowLong(nint hWnd, int nIndex);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongW")]
+    private static extern int SetWindowLong(nint hWnd, int nIndex, int dwNewLong);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

@@ -50,15 +50,6 @@ public sealed class TitleBar
         // the invisible buttons are laid out before the title text
         var buttonsStartX = winSize.X - ButtonWidth * 3f;
 
-        // Right-click on drag area shows system menu
-        ImGui.SetCursorPos(Vector2.Zero);
-        ImGui.InvisibleButton("##titlebar_drag", new Vector2(buttonsStartX, winSize.Y));
-        if (ImGui.IsItemClicked(ImGuiMouseButton.Right))
-        {
-            var mousePos = ImGui.GetMousePos();
-            _windowHelper.ShowSystemMenu((int)mousePos.X, (int)mousePos.Y);
-        }
-
         RenderWindowButton(
             drawList,
             "##wb_minimize",
