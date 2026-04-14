@@ -138,6 +138,26 @@ public class ConversationOrchestrator : IConversationOrchestrator
 
     public IEnumerable<Guid> GetActiveSessionIds() { return _activeSessions.Keys.ToList(); }
 
+    public async ValueTask<bool> CancelPendingTurnAsync(Guid sessionId)
+    {
+        if ( !_activeSessions.TryGetValue(sessionId, out var sessionInfo) )
+        {
+            _logger.LogWarning("Session {SessionId} not found for CancelPendingTurnAsync.", sessionId);
+            return false;
+        }
+
+        try
+        {
+            await sessionInfo.Session.CancelPendingTurnAsync();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error cancelling pending turn for session {SessionId}.", sessionId);
+            return false;
+        }
+    }
+
     public async ValueTask StopAllSessionsAsync()
     {
         if ( !_orchestratorCts.IsCancellationRequested )

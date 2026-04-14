@@ -158,6 +158,21 @@ public partial class ConversationSession : IConversationSession
         }
     }
 
+    public async ValueTask CancelPendingTurnAsync()
+    {
+        if ( _isDisposed )
+        {
+            return;
+        }
+
+        _logger.LogInformation("{SessionId} | CancelPendingTurnAsync called. Current State: {State}", SessionId, _stateMachine.State);
+
+        if ( _stateMachine.CanFire(ConversationTrigger.InterruptRequested) )
+        {
+            await _stateMachine.FireAsync(ConversationTrigger.InterruptRequested);
+        }
+    }
+
     #region Event Processing Loops
 
     private async Task ProcessInputEventsAsync(CancellationToken cancellationToken)

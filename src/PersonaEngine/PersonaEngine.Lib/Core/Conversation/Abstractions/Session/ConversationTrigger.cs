@@ -35,6 +35,8 @@ public enum ConversationTrigger
     AudioStreamStarted,
     
     AudioStreamEnded,
-    
+
     ErrorOccurred,
+
+    InterruptRequested,
 }

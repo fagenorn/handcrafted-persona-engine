@@ -11,4 +11,6 @@ public interface IConversationSession : IAsyncDisposable
     ValueTask RunAsync(CancellationToken cancellationToken);
 
     ValueTask StopAsync();
+
+    ValueTask CancelPendingTurnAsync();
 }

@@ -38,9 +38,11 @@ public partial class ConversationSession
 
         _stateMachine.Configure(ConversationState.Idle)
                      .OnEntry(HandleIdle, "Handle Idle State")
+                     .OnEntryFromAsync(ConversationTrigger.InterruptRequested, CancelCurrentTurnProcessingAsync, "Cancel on External Interrupt")
                      .Ignore(ConversationTrigger.LlmStreamEnded)
                      .Ignore(ConversationTrigger.TtsStreamEnded)
                      .Ignore(ConversationTrigger.AudioStreamEnded)
+                     .Ignore(ConversationTrigger.InterruptRequested)
                      .Permit(ConversationTrigger.InputDetected, ConversationState.Listening)
                      .Permit(ConversationTrigger.InputFinalized, ConversationState.ProcessingInput)
                      .Permit(ConversationTrigger.StopRequested, ConversationState.Ended)
@@ -58,7 +60,8 @@ public partial class ConversationSession
                      .PermitIf(_inputDetectedTrigger, ConversationState.Interrupted,
                                ShouldAllowBargeIn, "Barge-In")
                      .PermitIf(_inputFinalizedTrigger, ConversationState.Interrupted,
-                               ShouldAllowBargeIn, "Barge-In");
+                               ShouldAllowBargeIn, "Barge-In")
+                     .Permit(ConversationTrigger.InterruptRequested, ConversationState.Idle);
 
         _stateMachine.Configure(ConversationState.ProcessingInput)
                      .SubstateOf(ConversationState.ActiveTurn)

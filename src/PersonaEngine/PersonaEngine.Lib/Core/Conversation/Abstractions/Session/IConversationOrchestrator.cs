@@ -11,6 +11,8 @@ public interface IConversationOrchestrator : IAsyncDisposable
     IEnumerable<Guid> GetActiveSessionIds();
 
     ValueTask StopAllSessionsAsync();
+
+    ValueTask<bool> CancelPendingTurnAsync(Guid sessionId);
     
     event EventHandler? SessionsUpdated;
 }
