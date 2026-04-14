@@ -210,14 +210,18 @@ public partial class ConversationSession
                         }
                         case AudioPlaybackStartedEvent ev:
                         {
-                            var audioLatency = _metricsTracker.RecordFirstAudioChunk();
-                            if (audioLatency.HasValue && ev.TurnId.HasValue)
+                            var segmentLatency = _metricsTracker.RecordFirstAudioChunk();
+                            if (segmentLatency.HasValue && ev.TurnId.HasValue)
                             {
-                                _metrics.RecordFirstAudioLatency(
-                                    audioLatency.Value,
-                                    SessionId,
-                                    ev.TurnId.Value
-                                );
+                                var endToEndLatency = _metricsTracker.GetTurnElapsedMs();
+                                if (endToEndLatency.HasValue)
+                                {
+                                    _metrics.RecordFirstAudioLatency(
+                                        endToEndLatency.Value,
+                                        SessionId,
+                                        ev.TurnId.Value
+                                    );
+                                }
                             }
 
                             _metricsTracker.StartStopwatch(MetricPhase.AudioPlayback);
