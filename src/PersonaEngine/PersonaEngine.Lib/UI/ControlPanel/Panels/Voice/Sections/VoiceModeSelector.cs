@@ -48,12 +48,30 @@ public sealed class VoiceModeSelector : IDisposable
         var activeMode = CurrentMode;
         var cardWidth = (ImGui.GetContentRegionAvail().X - 12f) * 0.5f;
 
-        RenderModeCard(VoiceMode.Clear, "Clear", ClearSubtitle, activeMode == VoiceMode.Clear, cardWidth);
+        RenderModeCard(
+            VoiceMode.Clear,
+            "Clear",
+            ClearSubtitle,
+            activeMode == VoiceMode.Clear,
+            cardWidth
+        );
         ImGui.SameLine(0f, 12f);
-        RenderModeCard(VoiceMode.Expressive, "Expressive", ExpressiveSubtitle, activeMode == VoiceMode.Expressive, cardWidth);
+        RenderModeCard(
+            VoiceMode.Expressive,
+            "Expressive",
+            ExpressiveSubtitle,
+            activeMode == VoiceMode.Expressive,
+            cardWidth
+        );
     }
 
-    private void RenderModeCard(VoiceMode mode, string title, string subtitle, bool selected, float width)
+    private void RenderModeCard(
+        VoiceMode mode,
+        string title,
+        string subtitle,
+        bool selected,
+        float width
+    )
     {
         using (Ui.Card($"##mode_{mode}", padding: 25f, width: width))
         {

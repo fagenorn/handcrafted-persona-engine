@@ -46,16 +46,19 @@ using PersonaEngine.Lib.UI.Common;
 using PersonaEngine.Lib.UI.ControlPanel;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
 using PersonaEngine.Lib.UI.ControlPanel.Panels;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard.Sections;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Audition;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Models;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Sections;
+using PersonaEngine.Lib.UI.ControlPanel.Services;
 using PersonaEngine.Lib.UI.Rendering.RouletteWheel;
 using PersonaEngine.Lib.UI.Rendering.Subtitles;
 using PersonaEngine.Lib.Vision;
 using Polly;
 using Polly.Retry;
 using Polly.Timeout;
+using Dashboard = PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard.Dashboard;
 using SentenceSegmenter = PersonaEngine.Lib.TTS.Synthesis.TextProcessing.SentenceSegmenter;
 
 namespace PersonaEngine.Lib;
@@ -412,6 +415,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IOneShotPlayer>(sp => sp.GetRequiredService<OneShotAudioPlayer>());
         services.AddSingleton<IRvcAuditionProcessor, RvcAuditionProcessor>();
         services.AddSingleton<IVoiceAuditionService, VoiceAuditionService>();
+
+        // Dashboard panel sections + services
+        services.AddSingleton<SessionStatsCollector>();
+        services.AddSingleton<SystemHealthSection>();
+        services.AddSingleton<TranscriptSection>();
+        services.AddSingleton<SessionStatsSection>();
 
         // Panels
         services.AddSingleton<Dashboard>();

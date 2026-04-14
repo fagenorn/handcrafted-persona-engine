@@ -165,7 +165,10 @@ public static class ImGuiHelpers
             var drawList = ImGui.GetWindowDrawList();
             ImGui.PushClipRect(
                 cursorStart,
-                new Vector2(cursorStart.X + ImGui.GetContentRegionAvail().X + 100f, cursorStart.Y + clipHeight),
+                new Vector2(
+                    cursorStart.X + ImGui.GetContentRegionAvail().X + 100f,
+                    cursorStart.Y + clipHeight
+                ),
                 true
             );
 
@@ -268,8 +271,7 @@ public static class ImGuiHelpers
     ///     (e.g., ToggleSwitch at 20px) get padded so all settings have consistent spacing.
     ///     Computed from ImGui's standard framed-widget height (FramePadding.Y * 2 + FontSize).
     /// </summary>
-    public static float SettingRowHeight =>
-        ImGui.GetFrameHeight() + ImGui.GetStyle().ItemSpacing.Y;
+    public static float SettingRowHeight => ImGui.GetFrameHeight() + ImGui.GetStyle().ItemSpacing.Y;
 
     public static void SettingLabel(string label, string? tooltip, float? labelWidth = null)
     {

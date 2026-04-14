@@ -51,10 +51,7 @@ public static class VoiceTile
             var contentStartY = ImGui.GetCursorPosY();
 
             // Row 1: display name + preview button
-            ImGui.PushStyleColor(
-                ImGuiCol.Text,
-                selected ? Theme.AccentPrimary : Theme.TextPrimary
-            );
+            ImGui.PushStyleColor(ImGuiCol.Text, selected ? Theme.AccentPrimary : Theme.TextPrimary);
             ImGui.TextUnformatted(descriptor.DisplayName);
             ImGui.PopStyleColor();
 

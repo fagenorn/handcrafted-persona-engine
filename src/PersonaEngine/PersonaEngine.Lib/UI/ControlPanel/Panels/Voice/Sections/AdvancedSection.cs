@@ -83,7 +83,9 @@ public sealed class AdvancedSection : IDisposable
     private void RenderBody(float dt, VoiceMode mode)
     {
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.Warning);
-        ImGui.TextUnformatted("These settings can degrade voice quality. Change only if you know what you're doing.");
+        ImGui.TextUnformatted(
+            "These settings can degrade voice quality. Change only if you know what you're doing."
+        );
         ImGui.PopStyleColor();
         ImGui.Spacing();
 
@@ -167,7 +169,10 @@ public sealed class AdvancedSection : IDisposable
         // Expressiveness (Temperature)
         rowY = ImGui.GetCursorPosY();
         var temperature = _qwen3.Temperature;
-        ImGuiHelpers.SettingLabel("Expressiveness", "Sampling temperature \u2014 higher values produce more varied, expressive output.");
+        ImGuiHelpers.SettingLabel(
+            "Expressiveness",
+            "Sampling temperature \u2014 higher values produce more varied, expressive output."
+        );
         if (
             ImGuiHelpers.LabeledSlider(
                 "##expressiveness",

@@ -6,6 +6,7 @@ using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice;
 using Silk.NET.Input;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
+using Dashboard = PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard.Dashboard;
 
 namespace PersonaEngine.Lib.UI.ControlPanel;
 
