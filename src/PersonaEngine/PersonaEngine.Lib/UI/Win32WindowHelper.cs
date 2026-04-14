@@ -212,23 +212,25 @@ public sealed class Win32WindowHelper : IDisposable
         return HTCLIENT;
     }
 
-    private void HandleGetMinMaxInfo(nint lParam)
+    private unsafe void HandleGetMinMaxInfo(nint lParam)
     {
+        var mmi = (MINMAXINFO*)lParam;
+
         var monitor = MonitorFromWindow(_hwnd, MONITOR_DEFAULTTONEAREST);
-        var monitorInfo = new MONITORINFO { cbSize = (uint)Marshal.SizeOf<MONITORINFO>() };
+        var monitorInfo = new MONITORINFO { cbSize = (uint)sizeof(MONITORINFO) };
         GetMonitorInfo(monitor, ref monitorInfo);
 
         var work = monitorInfo.rcWork;
-        var mmi = Marshal.PtrToStructure<MINMAXINFO>(lParam);
-        mmi.ptMaxPosition.X = work.Left - monitorInfo.rcMonitor.Left;
-        mmi.ptMaxPosition.Y = work.Top - monitorInfo.rcMonitor.Top;
-        mmi.ptMaxSize.X = work.Right - work.Left;
-        mmi.ptMaxSize.Y = work.Bottom - work.Top;
-        mmi.ptMaxTrackSize.X = work.Right - work.Left;
-        mmi.ptMaxTrackSize.Y = work.Bottom - work.Top;
-        mmi.ptMinTrackSize.X = _minWidth;
-        mmi.ptMinTrackSize.Y = _minHeight;
-        Marshal.StructureToPtr(mmi, lParam, false);
+
+        // Maximize: fill work area (excludes taskbar)
+        mmi->ptMaxPosition.X = work.Left - monitorInfo.rcMonitor.Left;
+        mmi->ptMaxPosition.Y = work.Top - monitorInfo.rcMonitor.Top;
+        mmi->ptMaxSize.X = work.Right - work.Left;
+        mmi->ptMaxSize.Y = work.Bottom - work.Top;
+
+        // Resize constraints
+        mmi->ptMinTrackSize.X = _minWidth;
+        mmi->ptMinTrackSize.Y = _minHeight;
     }
 
     public void Dispose()
