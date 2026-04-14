@@ -47,6 +47,8 @@ using PersonaEngine.Lib.UI.ControlPanel;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
 using PersonaEngine.Lib.UI.ControlPanel.Panels;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard.Sections;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Personality;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Personality.Sections;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Audition;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Models;
@@ -425,7 +427,11 @@ public static class ServiceCollectionExtensions
         // Panels
         services.AddSingleton<Dashboard>();
         services.AddSingleton<VoicePanel>();
-        services.AddSingleton<Personality>();
+        // Personality panel sections
+        services.AddSingleton<PromptSourceSection>();
+        services.AddSingleton<CurrentVibeSection>();
+        services.AddSingleton<TopicsSection>();
+        services.AddSingleton<PersonalityPanel>();
         services.AddSingleton<Listening>();
         services.AddSingleton<Avatar>();
         services.AddSingleton<Subtitles>();
