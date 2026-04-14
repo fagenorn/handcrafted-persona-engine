@@ -214,23 +214,29 @@ public sealed class Win32WindowHelper : IDisposable
 
     private unsafe void HandleGetMinMaxInfo(nint lParam)
     {
-        var mmi = (MINMAXINFO*)lParam;
+        // Write directly to known MINMAXINFO offsets to avoid struct layout issues.
+        // Layout: 10 consecutive ints (5 POINTs × 2 ints each)
+        //   [0,1] ptReserved   [2,3] ptMaxSize      [4,5] ptMaxPosition
+        //   [6,7] ptMaxTrackSize   [8,9] ptMinTrackSize
+        var p = (int*)lParam;
 
         var monitor = MonitorFromWindow(_hwnd, MONITOR_DEFAULTTONEAREST);
-        var monitorInfo = new MONITORINFO { cbSize = (uint)sizeof(MONITORINFO) };
+        var monitorInfo = new MONITORINFO { cbSize = 40 };
         GetMonitorInfo(monitor, ref monitorInfo);
 
         var work = monitorInfo.rcWork;
 
-        // Maximize: fill work area (excludes taskbar)
-        mmi->ptMaxPosition.X = work.Left - monitorInfo.rcMonitor.Left;
-        mmi->ptMaxPosition.Y = work.Top - monitorInfo.rcMonitor.Top;
-        mmi->ptMaxSize.X = work.Right - work.Left;
-        mmi->ptMaxSize.Y = work.Bottom - work.Top;
+        // ptMaxPosition [4,5] — top-left when maximized
+        p[4] = work.Left - monitorInfo.rcMonitor.Left;
+        p[5] = work.Top - monitorInfo.rcMonitor.Top;
 
-        // Resize constraints
-        mmi->ptMinTrackSize.X = _minWidth;
-        mmi->ptMinTrackSize.Y = _minHeight;
+        // ptMaxSize [2,3] — size when maximized (work area = excludes taskbar)
+        p[2] = work.Right - work.Left;
+        p[3] = work.Bottom - work.Top;
+
+        // ptMinTrackSize [8,9] — minimum resize size
+        p[8] = _minWidth;
+        p[9] = _minHeight;
     }
 
     public void Dispose()
