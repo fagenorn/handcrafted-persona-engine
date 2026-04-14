@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Silk.NET.GLFW;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
@@ -10,6 +11,9 @@ namespace PersonaEngine.Lib.UI;
 /// </summary>
 public class WindowManager
 {
+    [DllImport("glfw3", EntryPoint = "glfwGetWin32Window")]
+    private static extern nint GlfwGetWin32Window(nint glfwWindow);
+
     private readonly Vector2D<int> _minSize;
 
     public WindowManager(Vector2D<int> size, Vector2D<int> minSize, string title)
@@ -56,7 +60,7 @@ public class WindowManager
         var handle = (WindowHandle*)MainWindow.Handle;
         glfw.SetWindowSizeLimits(handle, _minSize.X, _minSize.Y, Glfw.DontCare, Glfw.DontCare);
 
-        _win32Helper = new Win32WindowHelper(MainWindow.Handle);
+        _win32Helper = new Win32WindowHelper(GlfwGetWin32Window(MainWindow.Handle));
 
         Load?.Invoke();
     }

@@ -117,14 +117,8 @@ public sealed class TopicsSection : IDisposable
         var gap = 6f;
 
         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - buttonWidth - gap);
-        ImGui.InputTextWithHint(
-            "##add_topic",
-            "Add a topic...",
-            ref _inputBuffer,
-            InputBufferSize
-        );
-        var enterPressed =
-            ImGui.IsItemFocused() && ImGui.IsKeyPressed(ImGuiKey.Enter);
+        ImGui.InputTextWithHint("##add_topic", "Add a topic...", ref _inputBuffer, InputBufferSize);
+        var enterPressed = ImGui.IsItemFocused() && ImGui.IsKeyPressed(ImGuiKey.Enter);
 
         ImGui.SameLine(0f, gap);
         var hasInput = _inputBuffer.Trim().Length > 0;

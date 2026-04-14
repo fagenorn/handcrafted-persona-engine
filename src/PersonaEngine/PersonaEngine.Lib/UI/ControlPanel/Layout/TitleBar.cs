@@ -15,10 +15,6 @@ public sealed class TitleBar
     public const float Height = 30f;
 
     private const float ButtonWidth = 46f;
-    private const string MinimizeGlyph = "\u2500"; // ─
-    private const string MaximizeGlyph = "\u25A1"; // □
-    private const string RestoreGlyph = "\u29C9"; // ⧉
-    private const string CloseGlyph = "\u2715"; // ✕
 
     private readonly WindowManager _windowManager;
     private readonly string _title;
@@ -65,7 +61,8 @@ public sealed class TitleBar
 
         RenderWindowButton(
             drawList,
-            MinimizeGlyph,
+            "##wb_minimize",
+            DrawMinimizeIcon,
             buttonsStartX,
             winPos.Y,
             winSize.Y,
@@ -77,7 +74,8 @@ public sealed class TitleBar
 
         RenderWindowButton(
             drawList,
-            _windowHelper.IsMaximized ? RestoreGlyph : MaximizeGlyph,
+            "##wb_maximize",
+            _windowHelper.IsMaximized ? DrawRestoreIcon : DrawMaximizeIcon,
             buttonsStartX + ButtonWidth,
             winPos.Y,
             winSize.Y,
@@ -89,7 +87,8 @@ public sealed class TitleBar
 
         RenderWindowButton(
             drawList,
-            CloseGlyph,
+            "##wb_close",
+            DrawCloseIcon,
             buttonsStartX + ButtonWidth * 2f,
             winPos.Y,
             winSize.Y,
@@ -99,12 +98,13 @@ public sealed class TitleBar
             () => _windowHelper.Close()
         );
 
-        // App title — vertically centered, rendered via draw list so it overlays
-        // the invisible drag button
+        // App title — horizontally centered in the drag area, vertically centered
         var textH = ImGui.GetTextLineHeight();
         var titleY = winPos.Y + (winSize.Y - textH) * 0.5f;
         var titleColor = ImGui.ColorConvertFloat4ToU32(Theme.TextSecondary);
-        ImGui.AddText(drawList, new Vector2(winPos.X + 12f, titleY), titleColor, _title);
+        var titleSize = ImGui.CalcTextSize(_title);
+        var titleX = winPos.X + (buttonsStartX - titleSize.X) * 0.5f;
+        ImGui.AddText(drawList, new Vector2(titleX, titleY), titleColor, _title);
 
         // Update hit-test regions for Win32WindowHelper.
         // All values are window-relative pixels — no DPI conversion needed
@@ -114,7 +114,8 @@ public sealed class TitleBar
 
     private static void RenderWindowButton(
         ImDrawListPtr drawList,
-        string glyph,
+        string id,
+        Action<ImDrawListPtr, Vector2, uint> drawIcon,
         float x,
         float winY,
         float height,
@@ -126,7 +127,7 @@ public sealed class TitleBar
     {
         // Invisible button for interaction — cursor-space (window-relative)
         ImGui.SetCursorPos(new Vector2(x, 0f));
-        ImGui.InvisibleButton($"##wb_{glyph}", new Vector2(ButtonWidth, height));
+        ImGui.InvisibleButton(id, new Vector2(ButtonWidth, height));
 
         var hovered = ImGui.IsItemHovered();
         var active = ImGui.IsItemActive();
@@ -147,14 +148,89 @@ public sealed class TitleBar
             ImGui.AddRectFilled(drawList, min, max, bgCol);
         }
 
-        // Glyph centered in button — screen-space for draw list
-        var textSize = ImGui.CalcTextSize(glyph);
+        // Icon centered in button — screen-space for draw list
         var itemMin = ImGui.GetItemRectMin();
-        var textPos = new Vector2(
-            itemMin.X + (ButtonWidth - textSize.X) * 0.5f,
-            winY + (height - textSize.Y) * 0.5f
+        var center = new Vector2(itemMin.X + ButtonWidth * 0.5f, winY + height * 0.5f);
+        var iconCol = ImGui.ColorConvertFloat4ToU32(hovered ? hoverColor : normalColor);
+        drawIcon(drawList, center, iconCol);
+    }
+
+    private static void DrawMinimizeIcon(ImDrawListPtr dl, Vector2 center, uint color)
+    {
+        const float halfW = 5f;
+        dl.AddLine(
+            new Vector2(center.X - halfW, center.Y),
+            new Vector2(center.X + halfW, center.Y),
+            color,
+            1.2f
         );
-        var textCol = ImGui.ColorConvertFloat4ToU32(hovered ? hoverColor : normalColor);
-        ImGui.AddText(drawList, textPos, textCol, glyph);
+    }
+
+    private static void DrawMaximizeIcon(ImDrawListPtr dl, Vector2 center, uint color)
+    {
+        const float halfSz = 5f;
+        ImGui.AddRect(
+            dl,
+            new Vector2(center.X - halfSz, center.Y - halfSz),
+            new Vector2(center.X + halfSz, center.Y + halfSz),
+            color,
+            0f,
+            0,
+            1.2f
+        );
+    }
+
+    private static void DrawRestoreIcon(ImDrawListPtr dl, Vector2 center, uint color)
+    {
+        const float sz = 8f;
+        const float offset = 2f;
+        const float halfSz = sz * 0.5f;
+
+        // Back (upper-right) rectangle
+        ImGui.AddRect(
+            dl,
+            new Vector2(center.X - halfSz + offset, center.Y - halfSz - offset),
+            new Vector2(center.X + halfSz + offset, center.Y + halfSz - offset),
+            color,
+            0f,
+            0,
+            1.2f
+        );
+
+        // Fill behind front rectangle to cover overlapping back rect edges
+        ImGui.AddRectFilled(
+            dl,
+            new Vector2(center.X - halfSz - 1f, center.Y - halfSz + offset - 1f),
+            new Vector2(center.X + halfSz - offset + 1f, center.Y + halfSz + 1f),
+            ImGui.ColorConvertFloat4ToU32(Theme.TitleBarBg)
+        );
+
+        // Front (lower-left) rectangle
+        ImGui.AddRect(
+            dl,
+            new Vector2(center.X - halfSz, center.Y - halfSz + offset),
+            new Vector2(center.X + halfSz - offset, center.Y + halfSz),
+            color,
+            0f,
+            0,
+            1.2f
+        );
+    }
+
+    private static void DrawCloseIcon(ImDrawListPtr dl, Vector2 center, uint color)
+    {
+        const float halfSz = 5f;
+        dl.AddLine(
+            new Vector2(center.X - halfSz, center.Y - halfSz),
+            new Vector2(center.X + halfSz, center.Y + halfSz),
+            color,
+            1.2f
+        );
+        dl.AddLine(
+            new Vector2(center.X + halfSz, center.Y - halfSz),
+            new Vector2(center.X - halfSz, center.Y + halfSz),
+            color,
+            1.2f
+        );
     }
 }

@@ -42,6 +42,12 @@ public ref struct RowScope
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, padding);
         _outerVarCount++;
 
+        // Shell rows should never have rounded corners — they are full-width
+        // horizontal bands. Push zero rounding for this child window only;
+        // nested children (cards, panels) manage their own rounding.
+        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 0f);
+        _outerVarCount++;
+
         if (style.ChildBg is { } bg)
         {
             ImGui.PushStyleColor(ImGuiCol.ChildBg, bg);
