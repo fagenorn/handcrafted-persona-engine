@@ -21,7 +21,7 @@ public class WindowManager
         options.Title = title;
         options.UpdatesPerSecond = 60;
         options.FramesPerSecond = 30;
-        options.WindowBorder = WindowBorder.Resizable;
+        options.WindowBorder = WindowBorder.Hidden;
         MainWindow = Window.Create(options);
         MainWindow.Load += OnLoad;
         MainWindow.Update += OnUpdate;
@@ -30,9 +30,13 @@ public class WindowManager
         MainWindow.Closing += OnClose;
     }
 
+    private Win32WindowHelper? _win32Helper;
+
     public IWindow MainWindow { get; }
 
     public GL GL { get; private set; }
+
+    public Win32WindowHelper? Win32Helper => _win32Helper;
 
     public event Action<double> RenderFrame;
 
@@ -48,10 +52,11 @@ public class WindowManager
     {
         GL = GL.GetApi(MainWindow);
 
-        // Set GLFW minimum window size so the OS prevents resizing below the limit.
         var glfw = GlfwProvider.GLFW.Value;
         var handle = (WindowHandle*)MainWindow.Handle;
         glfw.SetWindowSizeLimits(handle, _minSize.X, _minSize.Y, Glfw.DontCare, Glfw.DontCare);
+
+        _win32Helper = new Win32WindowHelper(MainWindow.Handle);
 
         Load?.Invoke();
     }
@@ -73,6 +78,7 @@ public class WindowManager
 
     private void OnClose()
     {
+        _win32Helper?.Dispose();
         Close?.Invoke();
     }
 
