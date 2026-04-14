@@ -405,6 +405,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<PresenceOrb>();
         services.AddSingleton<StatusBar>();
         services.AddSingleton<ControlBar>();
+        services.AddSingleton<TitleBar>();
 
         // Persona state bridge for UI effects
         services.AddSingleton<PersonaStateProvider>();

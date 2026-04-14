@@ -19,6 +19,7 @@ public sealed class ControlPanelComponent : IRenderComponent
 {
     private const float SidebarWidth = 170f;
 
+    private const float TitleBarHeight = TitleBar.Height;
     private const float StatusBarHeight = 46f;
     private const float ControlBarHeight = 44f;
 
@@ -31,6 +32,7 @@ public sealed class ControlPanelComponent : IRenderComponent
 
     private readonly AmbientRenderer _ambientRenderer;
     private readonly ControlBar _controlBar;
+    private readonly TitleBar _titleBar;
     private readonly IConfigWriter _configWriter;
     private readonly Navigation _navigation = new();
     private readonly Dictionary<NavSection, Action<float>> _panelRenderers = new();
@@ -55,6 +57,7 @@ public sealed class ControlPanelComponent : IRenderComponent
     public ControlPanelComponent(
         StatusBar statusBar,
         ControlBar controlBar,
+        TitleBar titleBar,
         IConfigWriter configWriter,
         PersonaStateProvider stateProvider,
         AmbientRenderer ambientRenderer,
@@ -73,6 +76,7 @@ public sealed class ControlPanelComponent : IRenderComponent
     {
         _statusBar = statusBar;
         _controlBar = controlBar;
+        _titleBar = titleBar;
         _configWriter = configWriter;
         _stateProvider = stateProvider;
         _ambientRenderer = ambientRenderer;
@@ -125,6 +129,9 @@ public sealed class ControlPanelComponent : IRenderComponent
     {
         using (Ui.Window("##ControlPanel"))
         {
+            using (Ui.Row(Sz.Fixed(TitleBarHeight), Styles.TitleBar))
+                _titleBar.Render(deltaTime);
+
             using (Ui.Row(Sz.Fixed(StatusBarHeight), Styles.StatusBar))
                 _statusBar.Render(deltaTime, _stateProvider);
 
@@ -283,7 +290,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         var targetX = viewport.Pos.X + viewport.Size.X - cardW - rightMargin;
         var offX = (1f - slideIn) * offscreenOffset;
         // Vertically centered inside the status bar band (top StatusBarHeight pixels of viewport)
-        var cardY = viewport.Pos.Y + (StatusBarHeight - cardH) * 0.5f;
+        var cardY = viewport.Pos.Y + TitleBarHeight + (StatusBarHeight - cardH) * 0.5f;
         var cardMin = new Vector2(targetX + offX, cardY);
         var cardMax = cardMin + new Vector2(cardW, cardH);
 
