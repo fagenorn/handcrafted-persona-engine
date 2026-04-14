@@ -60,7 +60,11 @@ public class WindowManager
         var handle = (WindowHandle*)MainWindow.Handle;
         glfw.SetWindowSizeLimits(handle, _minSize.X, _minSize.Y, Glfw.DontCare, Glfw.DontCare);
 
-        _win32Helper = new Win32WindowHelper(GlfwGetWin32Window(MainWindow.Handle));
+        _win32Helper = new Win32WindowHelper(
+            GlfwGetWin32Window(MainWindow.Handle),
+            _minSize.X,
+            _minSize.Y
+        );
 
         Load?.Invoke();
     }

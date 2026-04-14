@@ -13,6 +13,7 @@ public sealed class Win32WindowHelper : IDisposable
     private const int WM_NCRBUTTONUP = 0x00A5;
     private const int WM_GETMINMAXINFO = 0x0024;
     private const int WM_SYSCOMMAND = 0x0112;
+    private const int WM_NCLBUTTONDBLCLK = 0x00A3;
     private const int WM_CLOSE = 0x0010;
 
     private const int HTCLIENT = 1;
@@ -46,6 +47,8 @@ public sealed class Win32WindowHelper : IDisposable
     private readonly nint _hwnd;
     private readonly nint _originalWndProc;
     private readonly WndProcDelegate _wndProcDelegate;
+    private readonly int _minWidth;
+    private readonly int _minHeight;
 
     // Hit-test regions in window-relative pixels.
     // Updated each frame by TitleBar after rendering.
@@ -53,9 +56,11 @@ public sealed class Win32WindowHelper : IDisposable
     private float _buttonsStartX;
     private float _buttonsEndX;
 
-    public Win32WindowHelper(nint hwnd)
+    public Win32WindowHelper(nint hwnd, int minWidth, int minHeight)
     {
         _hwnd = hwnd;
+        _minWidth = minWidth;
+        _minHeight = minHeight;
         _wndProcDelegate = WndProc;
         _originalWndProc = SetWindowLongPtr(
             _hwnd,
@@ -119,6 +124,16 @@ public sealed class Win32WindowHelper : IDisposable
                 // preventing WS_THICKFRAME/WS_CAPTION from adding visible chrome.
                 if (wParam != 0)
                     return 0;
+                break;
+
+            case WM_NCLBUTTONDBLCLK:
+                // Handle double-click on title bar ourselves because GLFW's
+                // WndProc doesn't pass it to DefWindowProc for maximize/restore.
+                if (wParam == HTCAPTION)
+                {
+                    ToggleMaximize();
+                    return 0;
+                }
                 break;
 
             case WM_NCRBUTTONUP:
@@ -205,6 +220,8 @@ public sealed class Win32WindowHelper : IDisposable
         mmi.ptMaxPosition.Y = work.Top - monitorInfo.rcMonitor.Top;
         mmi.ptMaxSize.X = work.Right - work.Left;
         mmi.ptMaxSize.Y = work.Bottom - work.Top;
+        mmi.ptMinTrackSize.X = _minWidth;
+        mmi.ptMinTrackSize.Y = _minHeight;
         Marshal.StructureToPtr(mmi, lParam, false);
     }
 
