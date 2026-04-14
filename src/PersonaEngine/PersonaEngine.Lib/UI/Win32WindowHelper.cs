@@ -14,6 +14,7 @@ public sealed class Win32WindowHelper : IDisposable
     private const int WM_GETMINMAXINFO = 0x0024;
     private const int WM_SYSCOMMAND = 0x0112;
     private const int WM_NCLBUTTONDBLCLK = 0x00A3;
+    private const int WM_SIZING = 0x0214;
     private const int WM_CLOSE = 0x0010;
 
     private const int HTCLIENT = 1;
@@ -148,13 +149,13 @@ public sealed class Win32WindowHelper : IDisposable
                 }
                 break;
 
+            case WM_SIZING:
+                HandleSizing(lParam);
+                return 1;
+
             case WM_GETMINMAXINFO:
-            {
-                // Let GLFW set its defaults first, then override with our constraints.
-                var result = CallWindowProc(_originalWndProc, hWnd, msg, wParam, lParam);
                 HandleGetMinMaxInfo(lParam);
-                return result;
-            }
+                return 0;
         }
 
         return CallWindowProc(_originalWndProc, hWnd, msg, wParam, lParam);
@@ -214,10 +215,8 @@ public sealed class Win32WindowHelper : IDisposable
 
     private unsafe void HandleGetMinMaxInfo(nint lParam)
     {
-        // Write directly to known MINMAXINFO offsets to avoid struct layout issues.
-        // Layout: 10 consecutive ints (5 POINTs × 2 ints each)
-        //   [0,1] ptReserved   [2,3] ptMaxSize      [4,5] ptMaxPosition
-        //   [6,7] ptMaxTrackSize   [8,9] ptMinTrackSize
+        // Only set maximize constraints — min size is enforced by WM_SIZING.
+        // Layout: [0,1] ptReserved  [2,3] ptMaxSize  [4,5] ptMaxPosition
         var p = (int*)lParam;
 
         var monitor = MonitorFromWindow(_hwnd, MONITOR_DEFAULTTONEAREST);
@@ -226,17 +225,27 @@ public sealed class Win32WindowHelper : IDisposable
 
         var work = monitorInfo.rcWork;
 
-        // ptMaxPosition [4,5] — top-left when maximized
+        // ptMaxPosition — top-left when maximized
         p[4] = work.Left - monitorInfo.rcMonitor.Left;
         p[5] = work.Top - monitorInfo.rcMonitor.Top;
 
-        // ptMaxSize [2,3] — size when maximized (work area = excludes taskbar)
+        // ptMaxSize — size when maximized (work area = excludes taskbar)
         p[2] = work.Right - work.Left;
         p[3] = work.Bottom - work.Top;
+    }
 
-        // ptMinTrackSize [8,9] — minimum resize size
-        p[8] = _minWidth;
-        p[9] = _minHeight;
+    private unsafe void HandleSizing(nint lParam)
+    {
+        // Enforce minimum window size during edge resize.
+        // lParam points to a RECT (Left, Top, Right, Bottom).
+        var rect = (int*)lParam;
+        var width = rect[2] - rect[0]; // Right - Left
+        var height = rect[3] - rect[1]; // Bottom - Top
+
+        if (width < _minWidth)
+            rect[2] = rect[0] + _minWidth;
+        if (height < _minHeight)
+            rect[3] = rect[1] + _minHeight;
     }
 
     public void Dispose()
