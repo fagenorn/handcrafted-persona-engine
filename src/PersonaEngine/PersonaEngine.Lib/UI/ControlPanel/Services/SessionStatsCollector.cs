@@ -22,6 +22,7 @@ public sealed class SessionStatsCollector : IDisposable
 
     private readonly MeterListener _listener;
 
+    private bool _firstLatencySkipped;
     private long _latencyCount;
     private double _latencySum;
 
@@ -94,6 +95,12 @@ public sealed class SessionStatsCollector : IDisposable
 
         lock (_latencyLock)
         {
+            if (!_firstLatencySkipped)
+            {
+                _firstLatencySkipped = true;
+                return;
+            }
+
             _latencySum += measurement;
             _latencyCount++;
         }
