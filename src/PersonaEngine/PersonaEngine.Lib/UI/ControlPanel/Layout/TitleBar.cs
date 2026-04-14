@@ -17,8 +17,8 @@ public sealed class TitleBar
     private const float ButtonWidth = 46f;
     private const string MinimizeGlyph = "\u2500"; // ─
     private const string MaximizeGlyph = "\u25A1"; // □
-    private const string RestoreGlyph = "\u29C9";  // ⧉
-    private const string CloseGlyph = "\u2715";    // ✕
+    private const string RestoreGlyph = "\u29C9"; // ⧉
+    private const string CloseGlyph = "\u2715"; // ✕
 
     private readonly WindowManager _windowManager;
     private readonly string _title;
@@ -64,21 +64,38 @@ public sealed class TitleBar
         }
 
         RenderWindowButton(
-            drawList, MinimizeGlyph, buttonsStartX, winPos.Y, winSize.Y,
-            Theme.SurfaceHover, Theme.TextTertiary, Theme.TextPrimary,
+            drawList,
+            MinimizeGlyph,
+            buttonsStartX,
+            winPos.Y,
+            winSize.Y,
+            Theme.SurfaceHover,
+            Theme.TextTertiary,
+            Theme.TextPrimary,
             () => _windowHelper.Minimize()
         );
 
         RenderWindowButton(
-            drawList, _windowHelper.IsMaximized ? RestoreGlyph : MaximizeGlyph,
-            buttonsStartX + ButtonWidth, winPos.Y, winSize.Y,
-            Theme.SurfaceHover, Theme.TextTertiary, Theme.TextPrimary,
+            drawList,
+            _windowHelper.IsMaximized ? RestoreGlyph : MaximizeGlyph,
+            buttonsStartX + ButtonWidth,
+            winPos.Y,
+            winSize.Y,
+            Theme.SurfaceHover,
+            Theme.TextTertiary,
+            Theme.TextPrimary,
             () => _windowHelper.ToggleMaximize()
         );
 
         RenderWindowButton(
-            drawList, CloseGlyph, buttonsStartX + ButtonWidth * 2f, winPos.Y, winSize.Y,
-            Theme.Error, Theme.TextTertiary, Theme.TextPrimary,
+            drawList,
+            CloseGlyph,
+            buttonsStartX + ButtonWidth * 2f,
+            winPos.Y,
+            winSize.Y,
+            Theme.Error,
+            Theme.TextTertiary,
+            Theme.TextPrimary,
             () => _windowHelper.Close()
         );
 

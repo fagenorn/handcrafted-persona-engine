@@ -84,8 +84,7 @@ public sealed class Win32WindowHelper : IDisposable
 
     public void Minimize() => ShowWindow(_hwnd, SW_MINIMIZE);
 
-    public void ToggleMaximize() =>
-        ShowWindow(_hwnd, IsMaximized ? SW_RESTORE : SW_MAXIMIZE);
+    public void ToggleMaximize() => ShowWindow(_hwnd, IsMaximized ? SW_RESTORE : SW_MAXIMIZE);
 
     public void Close() => PostMessage(_hwnd, WM_CLOSE, 0, 0);
 
@@ -132,14 +131,22 @@ public sealed class Win32WindowHelper : IDisposable
             var onTop = relY < ResizeBorderWidth;
             var onBottom = relY >= height - ResizeBorderWidth;
 
-            if (onTop && onLeft) return HTTOPLEFT;
-            if (onTop && onRight) return HTTOPRIGHT;
-            if (onBottom && onLeft) return HTBOTTOMLEFT;
-            if (onBottom && onRight) return HTBOTTOMRIGHT;
-            if (onLeft) return HTLEFT;
-            if (onRight) return HTRIGHT;
-            if (onTop) return HTTOP;
-            if (onBottom) return HTBOTTOM;
+            if (onTop && onLeft)
+                return HTTOPLEFT;
+            if (onTop && onRight)
+                return HTTOPRIGHT;
+            if (onBottom && onLeft)
+                return HTBOTTOMLEFT;
+            if (onBottom && onRight)
+                return HTBOTTOMRIGHT;
+            if (onLeft)
+                return HTLEFT;
+            if (onRight)
+                return HTRIGHT;
+            if (onTop)
+                return HTTOP;
+            if (onBottom)
+                return HTBOTTOM;
         }
 
         // Title bar region
@@ -180,7 +187,11 @@ public sealed class Win32WindowHelper : IDisposable
 
     [DllImport("user32.dll")]
     private static extern nint CallWindowProc(
-        nint lpPrevWndFunc, nint hWnd, uint msg, nint wParam, nint lParam
+        nint lpPrevWndFunc,
+        nint hWnd,
+        uint msg,
+        nint wParam,
+        nint lParam
     );
 
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
@@ -199,12 +210,19 @@ public sealed class Win32WindowHelper : IDisposable
 
     [DllImport("user32.dll")]
     private static extern nint GetSystemMenu(
-        nint hWnd, [MarshalAs(UnmanagedType.Bool)] bool bRevert
+        nint hWnd,
+        [MarshalAs(UnmanagedType.Bool)] bool bRevert
     );
 
     [DllImport("user32.dll")]
     private static extern int TrackPopupMenu(
-        nint hMenu, int uFlags, int x, int y, int nReserved, nint hWnd, nint prcRect
+        nint hMenu,
+        int uFlags,
+        int x,
+        int y,
+        int nReserved,
+        nint hWnd,
+        nint prcRect
     );
 
     [DllImport("user32.dll")]
@@ -223,13 +241,17 @@ public sealed class Win32WindowHelper : IDisposable
     [StructLayout(LayoutKind.Sequential)]
     private struct RECT
     {
-        public int Left, Top, Right, Bottom;
+        public int Left,
+            Top,
+            Right,
+            Bottom;
     }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT
     {
-        public int X, Y;
+        public int X,
+            Y;
     }
 
     [StructLayout(LayoutKind.Sequential)]
