@@ -392,6 +392,7 @@ public partial class ConversationSession : IConversationSession
         return inputEvent switch {
             SttSegmentRecognizing ev => (ConversationTrigger.InputDetected, ev),
             SttSegmentRecognized ev => (ConversationTrigger.InputFinalized, ev),
+            TextSegmentSubmitted ev => (ConversationTrigger.InputFinalized, ev),
             _ => (null, null)
         };
     }
@@ -531,7 +532,14 @@ public partial class ConversationSession : IConversationSession
 
     private async Task PrepareLlmRequestAsync(IInputEvent inputEvent)
     {
-        if ( inputEvent is not SttSegmentRecognized finalizedEvent )
+        var finalText = inputEvent switch
+        {
+            SttSegmentRecognized stt => stt.FinalTranscript,
+            TextSegmentSubmitted txt => txt.Text,
+            _ => null
+        };
+
+        if ( finalText is null )
         {
             _logger.LogWarning("{SessionId} | PrepareLlmRequestAsync received unexpected event type: {EventType}", SessionId, inputEvent.GetType().Name);
             await FireErrorAsync(new ArgumentException("Invalid event type for InputFinalized trigger.", nameof(inputEvent)), false);
@@ -539,7 +547,7 @@ public partial class ConversationSession : IConversationSession
             return;
         }
 
-        _logger.LogDebug("{SessionId} | Action: PrepareLlmRequestAsync for input: \"{InputText}\"", SessionId, finalizedEvent.FinalTranscript);
+        _logger.LogDebug("{SessionId} | Action: PrepareLlmRequestAsync for input: \"{InputText}\"", SessionId, finalText);
 
         // In-case race condition (channel events not consumed fast enough)
         await CancelCurrentTurnProcessingAsync();
@@ -560,13 +568,13 @@ public partial class ConversationSession : IConversationSession
 
         try
         {
-            _context.StartTurn(_currentTurnId.Value, [finalizedEvent.ParticipantId, ASSISTANT_PARTICIPANT.Id]);
-            _context.AppendToTurn(finalizedEvent.ParticipantId, finalizedEvent.FinalTranscript);
+            _context.StartTurn(_currentTurnId.Value, [inputEvent.ParticipantId, ASSISTANT_PARTICIPANT.Id]);
+            _context.AppendToTurn(inputEvent.ParticipantId, finalText);
 
-            var userName = _context.Participants.TryGetValue(finalizedEvent.ParticipantId, out var pInfo) ? pInfo.Name : finalizedEvent.ParticipantId;
-            _logger.LogInformation("{SessionId} | {TurnId} | 📝 | [{Speaker}]{Text}", SessionId, _currentTurnId, userName, _context.GetPendingMessageText(finalizedEvent.ParticipantId));
+            var userName = _context.Participants.TryGetValue(inputEvent.ParticipantId, out var pInfo) ? pInfo.Name : inputEvent.ParticipantId;
+            _logger.LogInformation("{SessionId} | {TurnId} | 📝 | [{Speaker}]{Text}", SessionId, _currentTurnId, userName, _context.GetPendingMessageText(inputEvent.ParticipantId));
 
-            _context.CompleteTurnPart(finalizedEvent.ParticipantId);
+            _context.CompleteTurnPart(inputEvent.ParticipantId);
 
             await _stateMachine.FireAsync(ConversationTrigger.LlmRequestSent);
 
