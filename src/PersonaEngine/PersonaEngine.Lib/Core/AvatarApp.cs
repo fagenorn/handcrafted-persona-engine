@@ -46,7 +46,8 @@ public class AvatarApp : IDisposable
         IOptions<AvatarAppConfig> config,
         IEnumerable<IRenderComponent> renderComponents,
         IEnumerable<IStartupTask> startupTasks,
-        IConversationOrchestrator conversationOrchestrator
+        IConversationOrchestrator conversationOrchestrator,
+        WindowManager windowManager
     )
     {
         _config = config;
@@ -70,11 +71,7 @@ public class AvatarApp : IDisposable
         }
 
         _windowConfig = _config.Value.Window;
-        _windowManager = new WindowManager(
-            new Vector2D<int>(_windowConfig.Width, _windowConfig.Height),
-            new Vector2D<int>(_windowConfig.MinWidth, _windowConfig.MinHeight),
-            _windowConfig.Title
-        );
+        _windowManager = windowManager;
         _window = _windowManager.MainWindow;
 
         _windowManager.Load += OnLoad;

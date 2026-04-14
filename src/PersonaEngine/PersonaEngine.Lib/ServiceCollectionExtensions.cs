@@ -365,6 +365,16 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<FontProvider>();
         services.AddSingleton<IStartupTask>(x => x.GetRequiredService<FontProvider>());
 
+        services.AddSingleton<WindowManager>(sp =>
+        {
+            var config = sp.GetRequiredService<IOptions<AvatarAppConfig>>().Value.Window;
+            return new WindowManager(
+                new Silk.NET.Maths.Vector2D<int>(config.Width, config.Height),
+                new Silk.NET.Maths.Vector2D<int>(config.MinWidth, config.MinHeight),
+                config.Title
+            );
+        });
+
         return services;
     }
 
