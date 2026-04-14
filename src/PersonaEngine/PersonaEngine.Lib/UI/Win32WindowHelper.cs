@@ -149,8 +149,12 @@ public sealed class Win32WindowHelper : IDisposable
                 break;
 
             case WM_GETMINMAXINFO:
+            {
+                // Let GLFW set its defaults first, then override with our constraints.
+                var result = CallWindowProc(_originalWndProc, hWnd, msg, wParam, lParam);
                 HandleGetMinMaxInfo(lParam);
-                return 0;
+                return result;
+            }
         }
 
         return CallWindowProc(_originalWndProc, hWnd, msg, wParam, lParam);
