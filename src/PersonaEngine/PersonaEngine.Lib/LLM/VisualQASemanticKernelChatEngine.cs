@@ -51,6 +51,7 @@ public class VisualQASemanticKernelChatEngine : IVisualChatEngine
             ]);
 
             var chunkCount = 0;
+            var inThinkBlock = false;
 
             var streamingResponse = _chatCompletionService.GetStreamingChatMessageContentsAsync(
                                                                                                 chatHistory,
@@ -64,8 +65,10 @@ public class VisualQASemanticKernelChatEngine : IVisualChatEngine
 
                 chunkCount++;
                 var content = chunk.Content ?? string.Empty;
+                var filtered = StripThinkTags(content, ref inThinkBlock);
+                if ( filtered.Length == 0 ) continue;
 
-                yield return content;
+                yield return filtered;
             }
 
             _logger.LogInformation("Visual QA response streaming completed. Total chunks: {ChunkCount}", chunkCount);
@@ -74,5 +77,36 @@ public class VisualQASemanticKernelChatEngine : IVisualChatEngine
         {
             _semaphore.Release();
         }
+    }
+
+    private static string StripThinkTags(string input, ref bool inThinkBlock)
+    {
+        if ( input.Length == 0 ) return input;
+
+        var output = new System.Text.StringBuilder(input.Length);
+        var i = 0;
+        while ( i < input.Length )
+        {
+            if ( inThinkBlock )
+            {
+                var close = input.IndexOf("</think>", i, StringComparison.OrdinalIgnoreCase);
+                if ( close < 0 ) return output.ToString();
+                i = close + "</think>".Length;
+                inThinkBlock = false;
+            }
+            else
+            {
+                var open = input.IndexOf("<think>", i, StringComparison.OrdinalIgnoreCase);
+                if ( open < 0 )
+                {
+                    output.Append(input, i, input.Length - i);
+                    return output.ToString();
+                }
+                output.Append(input, i, open - i);
+                i = open + "<think>".Length;
+                inThinkBlock = true;
+            }
+        }
+        return output.ToString();
     }
 }

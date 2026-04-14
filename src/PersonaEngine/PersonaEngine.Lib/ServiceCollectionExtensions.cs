@@ -173,7 +173,7 @@ public static class ServiceCollectionExtensions
                                   var kernelBuilder = Kernel.CreateBuilder();
 
                                   kernelBuilder.AddOpenAIChatCompletion(llmOptions.TextModel, new Uri(llmOptions.TextEndpoint), llmOptions.TextApiKey, serviceId: "text");
-                                  kernelBuilder.AddOpenAIChatCompletion(llmOptions.VisionEndpoint, new Uri(llmOptions.VisionEndpoint), llmOptions.VisionApiKey, serviceId: "vision");
+                                  kernelBuilder.AddOpenAIChatCompletion(llmOptions.VisionModel, new Uri(llmOptions.VisionEndpoint), llmOptions.VisionApiKey, serviceId: "vision");
 
                                   configureKernel?.Invoke(kernelBuilder);
 
