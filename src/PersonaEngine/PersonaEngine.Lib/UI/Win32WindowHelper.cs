@@ -220,6 +220,8 @@ public sealed class Win32WindowHelper : IDisposable
         mmi.ptMaxPosition.Y = work.Top - monitorInfo.rcMonitor.Top;
         mmi.ptMaxSize.X = work.Right - work.Left;
         mmi.ptMaxSize.Y = work.Bottom - work.Top;
+        mmi.ptMaxTrackSize.X = work.Right - work.Left;
+        mmi.ptMaxTrackSize.Y = work.Bottom - work.Top;
         mmi.ptMinTrackSize.X = _minWidth;
         mmi.ptMinTrackSize.Y = _minHeight;
         Marshal.StructureToPtr(mmi, lParam, false);
