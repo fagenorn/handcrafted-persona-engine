@@ -191,6 +191,18 @@ public class ConversationContext : IConversationContext
         handler?.Invoke(this, EventArgs.Empty);
     }
 
+    public event EventHandler<TurnStartedEventArgs>? TurnStarted;
+
+    public event EventHandler<MessageAppendedEventArgs>? MessageAppended;
+
+    public event EventHandler<TurnCompletedEventArgs>? TurnCompleted;
+
+    protected virtual void OnTurnStarted(TurnStartedEventArgs args) => TurnStarted?.Invoke(this, args);
+
+    protected virtual void OnMessageAppended(MessageAppendedEventArgs args) => MessageAppended?.Invoke(this, args);
+
+    protected virtual void OnTurnCompleted(TurnCompletedEventArgs args) => TurnCompleted?.Invoke(this, args);
+
     private void InternalAbortTurn(bool raiseEvent = true)
     {
         var wasActive = _currentTurnId != Guid.Empty;
@@ -222,11 +234,17 @@ public class ConversationContext : IConversationContext
             turn.WasInterrupted = _turnInterrupted;
         }
 
+        var completedTurnId  = _currentTurnId;
+        var completedMessages = turn is not null ? turn.Messages.ToList() : new List<ChatMessage>();
+        var interrupted      = _turnInterrupted;
+
         _currentTurnId = Guid.Empty;
         _currentMessageBuffers.Clear();
         _participantsReadyToCommit.Clear();
         _currentTurnParticipantIds.Clear();
         _turnInterrupted = false;
+
+        OnTurnCompleted(new TurnCompletedEventArgs(completedTurnId, completedMessages, interrupted));
     }
 
     private InteractionTurn? CreatePendingTurnSnapshot()
@@ -395,10 +413,16 @@ public class ConversationContext : IConversationContext
                 _currentMessageBuffers[id] = new StringBuilder();
             }
         }
+
+        OnTurnStarted(new TurnStartedEventArgs(turnId, _currentTurnParticipantIds.ToList()));
     }
 
     public void AppendToTurn(string participantId, string chunk)
     {
+        Guid   turnIdSnapshot;
+        string accumulated;
+        bool   isAssistant;
+
         lock (_lock)
         {
             if ( _currentTurnId == Guid.Empty )
@@ -419,8 +443,17 @@ public class ConversationContext : IConversationContext
             }
 
             buffer.Append(chunk);
+
+            turnIdSnapshot = _currentTurnId;
+            accumulated    = buffer.ToString();
+            isAssistant    = _participants.TryGetValue(participantId, out var info)
+                             && info.Role == OpenAI.Chat.ChatMessageRole.Assistant;
+
             OnConversationUpdated();
         }
+
+        var emotion = isAssistant ? EmotionExtractor.Extract(accumulated).Emotion : null;
+        OnMessageAppended(new MessageAppendedEventArgs(turnIdSnapshot, participantId, chunk, accumulated, emotion));
     }
 
     public string GetPendingMessageText(string participantId)
@@ -477,6 +510,11 @@ public class ConversationContext : IConversationContext
                                               false,
                                               participantInfo.Role
                                              );
+
+                if ( participantInfo.Role == OpenAI.Chat.ChatMessageRole.Assistant )
+                {
+                    message.Emotion = EmotionExtractor.Extract(text).Emotion;
+                }
 
                 var turn = _history.FirstOrDefault(t => t.TurnId == _currentTurnId);
                 if ( turn == null )

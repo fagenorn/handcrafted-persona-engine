@@ -39,4 +39,13 @@ public interface IConversationContext : IDisposable
     void ClearHistory();
 
     event EventHandler? ConversationUpdated;
+
+    /// <summary>Fired when a new turn begins (StartTurn).</summary>
+    event EventHandler<TurnStartedEventArgs>? TurnStarted;
+
+    /// <summary>Fired on every AppendToTurn call with the delta + accumulated text + parsed emotion.</summary>
+    event EventHandler<MessageAppendedEventArgs>? MessageAppended;
+
+    /// <summary>Fired once the whole turn finalizes (all participants committed).</summary>
+    event EventHandler<TurnCompletedEventArgs>? TurnCompleted;
 }
