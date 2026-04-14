@@ -14,6 +14,12 @@ public static class Styles
         childBg: Theme.Surface2
     );
 
+    public static readonly Style TitleBar = new(
+        padding: new Vector2(12f, 0f),
+        itemSpacing: new Vector2(0f, 0f),
+        childBg: Theme.TitleBarBg
+    );
+
     public static readonly Style Sidebar = new(
         padding: new Vector2(12f, 12f),
         itemSpacing: new Vector2(10f, 10f),

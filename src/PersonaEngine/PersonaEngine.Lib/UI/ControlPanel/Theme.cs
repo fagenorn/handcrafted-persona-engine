@@ -10,6 +10,7 @@ public static class Theme
 {
     // ── Backgrounds ─────────────────────────────────────────────────────────────
     public static readonly Vector4 Base = ColorFromHex(0x16121F);
+    public static readonly Vector4 TitleBarBg = ColorFromHex(0x110E1A);
     public static readonly Vector4 Surface1 = ColorFromHex(0x1E1A2E);
     public static readonly Vector4 Surface2 = ColorFromHex(0x262040);
     public static readonly Vector4 Surface3 = ColorFromHex(0x2E2848);
