@@ -50,6 +50,11 @@ internal struct TurnMetricsTracker
     public Stopwatch? TurnStopwatch => _turnStopwatch;
     public Stopwatch? FirstAudioLatencyStopwatch => _firstAudioLatencyStopwatch;
 
+    /// <summary>
+    /// Returns the elapsed time since the turn started without stopping the stopwatch.
+    /// </summary>
+    public double? GetTurnElapsedMs() => _turnStopwatch?.Elapsed.TotalMilliseconds;
+
     public TurnMetricsTracker() { }
 
     public void StartTurn(double sttProcessingDurationMs)
