@@ -6,6 +6,8 @@ public interface IConversationSession : IAsyncDisposable
 {
     IConversationContext Context { get; }
 
+    ConversationState CurrentState { get; }
+
     Guid SessionId { get; }
 
     ValueTask RunAsync(CancellationToken cancellationToken);

@@ -5,8 +5,9 @@ using PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard.Sections;
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard;
 
 /// <summary>
-///     Thin orchestrator for the Dashboard panel. Sections stack vertically
-///     inside a single scrollable container.
+///     Thin orchestrator for the Dashboard panel. Uses a three-row layout:
+///     health cards (fixed), transcript (fill), session stats (fixed).
+///     Stats are pinned to the bottom — the transcript fills remaining space.
 /// </summary>
 public sealed class Dashboard(
     SystemHealthSection systemHealth,
@@ -14,24 +15,25 @@ public sealed class Dashboard(
     SessionStatsSection sessionStats
 )
 {
-    /// <summary>
-    ///     Height reserved for the session stats section (header + table + spacing).
-    /// </summary>
-    private const float StatsReservedHeight = 80f;
+    private const float HealthSectionHeight = 132f;
+    private const float StatsSectionHeight = 100f;
 
     public void Render(float deltaTime)
     {
-        using (Ui.FillChild("##dashboard_panel", padding: 4f))
-        {
+        using var rows = Ui.Rows(
+            12f,
+            Sz.Fixed(HealthSectionHeight),
+            Sz.Fill(),
+            Sz.Fixed(StatsSectionHeight)
+        );
+
+        using (rows.Next())
             systemHealth.Render(deltaTime);
-            ImGui.Spacing();
 
-            // Give the transcript all available height minus what stats needs.
-            var transcriptBudget = ImGui.GetContentRegionAvail().Y - StatsReservedHeight;
-            transcript.Render(deltaTime, transcriptBudget);
-            ImGui.Spacing();
+        using (rows.Next())
+            transcript.Render(deltaTime);
 
+        using (rows.Next())
             sessionStats.Render(deltaTime);
-        }
     }
 }

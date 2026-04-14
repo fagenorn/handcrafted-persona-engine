@@ -1,8 +1,8 @@
-using System.Numerics;
 using Hexa.NET.ImGui;
 using OpenAI.Chat;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
+using PersonaEngine.Lib.UI.ControlPanel.Layout;
 using ConversationChatMessage = PersonaEngine.Lib.Core.Conversation.Abstractions.Context.ChatMessage;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard.Sections;
@@ -12,17 +12,11 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard.Sections;
 /// </summary>
 public sealed class TranscriptSection(IConversationOrchestrator orchestrator)
 {
-    private const float Padding = 8f;
-
-    public void Render(float dt, float availableHeight)
+    public void Render(float dt)
     {
         ImGuiHelpers.SectionHeader("Conversation");
 
-        var scrollHeight = MathF.Max(availableHeight, 100f);
-
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(Padding, Padding));
-
-        if (ImGui.BeginChild("##Messages", new Vector2(0f, scrollHeight), ImGuiChildFlags.Borders))
+        using (Ui.FillChild("##Messages", ImGuiChildFlags.Borders, padding: 8f))
         {
             var session = TryGetActiveSession();
 
@@ -40,9 +34,6 @@ public sealed class TranscriptSection(IConversationOrchestrator orchestrator)
             if (ImGui.GetScrollY() >= ImGui.GetScrollMaxY() - 20f)
                 ImGui.SetScrollHereY(1f);
         }
-
-        ImGui.EndChild();
-        ImGui.PopStyleVar();
     }
 
     private static void RenderHistory(IConversationContext context)

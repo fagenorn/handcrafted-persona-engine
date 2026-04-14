@@ -122,6 +122,18 @@ public sealed class StatusBar(IConversationOrchestrator orchestrator, PresenceOr
             return (Theme.TextSecondary, "No Session", null, false);
         }
 
+        var conversationState = session.CurrentState;
+
+        if (
+            conversationState
+            is ConversationState.Ended
+                or ConversationState.Error
+                or ConversationState.Initial
+        )
+        {
+            return (Theme.TextSecondary, "No Session", null, false);
+        }
+
         var pendingTurn = session.Context.PendingTurn;
 
         if (pendingTurn is not null)

@@ -89,6 +89,8 @@ public partial class ConversationSession : IConversationSession
 
     public IConversationContext Context => _context;
 
+    public ConversationState CurrentState => _stateMachine.State;
+
     public Guid SessionId { get; }
 
     public async ValueTask DisposeAsync()

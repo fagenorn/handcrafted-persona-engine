@@ -79,6 +79,18 @@ public sealed class PersonaStateProvider
             return PersonaUiState.NoSession;
         }
 
+        var conversationState = session.CurrentState;
+
+        if (
+            conversationState
+            is ConversationState.Ended
+                or ConversationState.Error
+                or ConversationState.Initial
+        )
+        {
+            return PersonaUiState.NoSession;
+        }
+
         var pendingTurn = session.Context.PendingTurn;
 
         if (pendingTurn is not null)
