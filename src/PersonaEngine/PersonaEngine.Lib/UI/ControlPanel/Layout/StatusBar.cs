@@ -3,6 +3,7 @@ using Hexa.NET.ImGui;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
 using PersonaEngine.Lib.UI.ControlPanel;
+using PersonaEngine.Lib.UI.ControlPanel.Visuals;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Layout;
 

@@ -5,7 +5,7 @@ using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 
-namespace PersonaEngine.Lib.UI;
+namespace PersonaEngine.Lib.UI.Host;
 
 /// <summary>
 ///     Wraps Silk.NET window creation, events, and OpenGL context initialization.

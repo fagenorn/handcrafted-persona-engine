@@ -1,392 +1,386 @@
-using System.Runtime.InteropServices;
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using PersonaEngine.Lib.Configuration;
-using Silk.NET.Input;
-using Silk.NET.Maths;
-using Silk.NET.OpenGL;
-using Silk.NET.Windowing;
+using PersonaEngine.Lib.UI.Native;
+using PersonaEngine.Lib.UI.Overlay.Native;
+using PersonaEngine.Lib.UI.Overlay.Rendering;
+using Vortice.Mathematics;
 
 namespace PersonaEngine.Lib.UI.Overlay;
 
 /// <summary>
-///     A borderless, per-pixel-alpha, always-on-top floating overlay window.
+///     The floating, borderless, per-pixel-alpha, always-on-top overlay window.
 ///
-///     Two-window architecture, required because OpenGL on Windows has known
-///     incompatibilities with <c>WS_EX_LAYERED</c> on the same HWND — the GL
-///     driver claims the window's displayable surface and GDI can't composite
-///     the layered bitmap over it even when <c>UpdateLayeredWindow</c> reports
-///     success.
+///     Renders in pure D3D11 with DirectComposition for transparency. No OpenGL,
+///     no <c>UpdateLayeredWindow</c>, no GDI DIB — every frame is GPU-resident
+///     from Spout receive through the swap chain present. Expected per-frame
+///     cost on the overlay thread: sub-millisecond for modest overlay sizes.
 ///
-///       * Display window (<see cref="GraphicsAPI.None" />): the visible,
-///         layered window. Receives input, is moved/resized, is painted via
-///         <c>UpdateLayeredWindow</c> with per-pixel alpha.
-///       * GL carrier window (hidden, <see cref="GraphicsAPI.Default" />):
-///         exists solely to host a WGL context so we can render the avatar +
-///         chrome into an off-screen FBO and <c>glReadPixels</c> into the
-///         display window's DIB.
-///
-///     Both windows run on the overlay thread. The GL carrier is pumped just
-///     enough for Silk.NET bookkeeping; its Render event is unused — we drive
-///     GL directly from the display window's Render callback after making the
-///     carrier's context current.
+///     Single-window architecture:
+///     Spout sender (main thread, GL, unchanged)
+///       → shared DX11 texture (<c>D3D11_RESOURCE_MISC_SHARED</c>)
+///       → <see cref="SpoutD3D11Source" /> opens it in our D3D11 device
+///       → <see cref="QuadPipeline" /> samples it into the swap chain back buffer
+///       → <see cref="ChromeRenderer" /> overlays the hover buttons
+///       → <see cref="OverlayD3D11Context.Present" /> → DirectComposition → screen
 /// </summary>
 public sealed class OverlayWindow : IDisposable
 {
-    [DllImport("glfw3", EntryPoint = "glfwGetWin32Window")]
-    private static extern nint GlfwGetWin32Window(nint glfwWindow);
-
-    private readonly IWindow _displayWindow;
-    private readonly IWindow _glWindow;
     private readonly OverlayConfiguration _initialConfig;
-    private readonly ILoggerFactory _loggerFactory;
+    private readonly ILogger<OverlayWindow> _logger;
 
-    private GL? _gl;
-    private IInputContext? _inputContext;
-    private OverlayWin32Helper? _win32;
-    private FullscreenQuadRenderer? _quad;
-    private OverlayChromeRenderer? _chrome;
+    private readonly OverlayNativeWindow _nativeWindow;
+    private readonly OverlayWin32Helper _win32;
+
+    private OverlayD3D11Context? _d3d;
+    private QuadPipeline? _quad;
+    private ChromeRenderer? _chrome;
+    private SpoutD3D11Source? _source;
     private OverlayInteractionController? _interaction;
-    private SpoutFrameSource? _source;
-    private OverlayLayeredSurface? _surface;
 
-    private uint _fbo;
-    private uint _fboColor;
-    private uint _fboDepth;
-    private int _fboWidth;
-    private int _fboHeight;
+    private readonly Stopwatch _frameStopwatch = Stopwatch.StartNew();
+    private readonly Stopwatch _stageStopwatch = new();
+    private readonly Stopwatch _fpsStopwatch = Stopwatch.StartNew();
+    private long _lastFrameTicks;
+    private bool _firstFramePresented;
+    private int _frameCounter;
+    private int _framesSinceLastFpsLog;
 
-    private bool _runCompleted;
+    // First 10 frames go to Debug for startup diagnostics. After that, one every
+    // 600 frames (~10 s @ 60 fps) so long-running overlays don't spam the log.
+    private const int InitialFrameLogCount = 10;
+    private const int SteadyFrameLogInterval = 600;
+
+    // Log an FPS summary every 2 s so we can verify the waitable is pacing us.
+    private const double FpsLogIntervalSeconds = 2.0;
+
+    // Hard 60 FPS cap. The Spout sender publishes at whatever rate the main app
+    // runs Live2D (60 fps by default), so rendering faster than that just
+    // resamples identical content. On a 240 Hz display, letting the waitable +
+    // VSync pace us to the monitor's refresh produces 4x the GPU cost with
+    // zero visible benefit.
+    private const double TargetFrameTimeSeconds = 1.0 / 60.0;
+    private long _nextFrameTargetTicks;
 
     private OverlayWindow(
-        IWindow displayWindow,
-        IWindow glWindow,
         OverlayConfiguration config,
-        ILoggerFactory loggerFactory
+        ILogger<OverlayWindow> logger,
+        OverlayNativeWindow nativeWindow,
+        OverlayWin32Helper win32
     )
     {
-        _displayWindow = displayWindow;
-        _glWindow = glWindow;
         _initialConfig = config;
-        _loggerFactory = loggerFactory;
+        _logger = logger;
+        _nativeWindow = nativeWindow;
+        _win32 = win32;
 
-        // Render/update/load/closing events fire on the display window. We pump
-        // the GL window manually inside RunLoop so Silk.NET's bookkeeping stays
-        // happy, but its events are no-ops.
-        _displayWindow.Load += OnLoad;
-        _displayWindow.Update += OnUpdate;
-        _displayWindow.Render += OnRender;
-        _displayWindow.Closing += OnClosing;
+        _nativeWindow.Resized += OnResized;
+        _nativeWindow.Closing += OnClosing;
     }
 
-    /// <summary>Builds both windows. The display window is hidden until the first
-    /// <c>UpdateLayeredWindow</c> succeeds — layered windows misbehave if shown
-    /// before their initial contents are set.</summary>
+    /// <summary>Factory: allocates the raw Win32 HWND but defers D3D11 setup to <see cref="Run" />.</summary>
     public static OverlayWindow Create(OverlayConfiguration config, ILoggerFactory loggerFactory)
     {
-        var displayOptions = WindowOptions.Default with
-        {
-            Size = new Vector2D<int>(
-                Math.Max(config.MinWidth, config.Width),
-                Math.Max(config.MinHeight, config.Height)
-            ),
-            Position = new Vector2D<int>(config.X, config.Y),
-            Title = "PersonaEngine.Overlay",
-            WindowBorder = WindowBorder.Hidden,
-            TopMost = true,
-            IsVisible = false,
-            FramesPerSecond = 60,
-            UpdatesPerSecond = 120,
-            VSync = false,
-            ShouldSwapAutomatically = false,
-            // No GL context on this window — GL lives on the hidden carrier.
-            API = GraphicsAPI.None,
-        };
+        var logger = loggerFactory.CreateLogger<OverlayWindow>();
 
-        var glOptions = WindowOptions.Default with
-        {
-            // Size is meaningless; we render to FBO, never to the default framebuffer.
-            Size = new Vector2D<int>(16, 16),
-            Title = "PersonaEngine.OverlayGL",
-            WindowBorder = WindowBorder.Hidden,
-            IsVisible = false,
-            ShouldSwapAutomatically = false,
-            VSync = false,
-            FramesPerSecond = 0,
-            UpdatesPerSecond = 0,
-        };
+        var width = Math.Max(config.MinWidth, config.Width);
+        var height = Math.Max(config.MinHeight, config.Height);
 
-        var display = Silk.NET.Windowing.Window.Create(displayOptions);
-        var gl = Silk.NET.Windowing.Window.Create(glOptions);
-        return new OverlayWindow(display, gl, config, loggerFactory);
+        var nativeWindow = new OverlayNativeWindow(
+            "PersonaEngine.Overlay",
+            config.X,
+            config.Y,
+            width,
+            height
+        );
+
+        // Click-through is the default (WS_EX_TRANSPARENT set at creation) — the
+        // interaction controller toggles it off on hover.
+        var win32 = new OverlayWin32Helper(nativeWindow.Handle, initialClickThrough: true);
+
+        return new OverlayWindow(config, logger, nativeWindow, win32);
     }
 
-    public IWindow Window => _displayWindow;
+    /// <summary>Native HWND — exposed for test or diagnostic needs only.</summary>
+    public nint Handle => _nativeWindow.Handle;
 
-    public bool IsVisible
-    {
-        get => _displayWindow.IsVisible;
-        set => _displayWindow.IsVisible = value;
-    }
+    public bool IsVisible { get; private set; }
 
     /// <summary>Fires when the user finishes moving the overlay.</summary>
-    public event Action<Vector2D<int>>? PositionCommitted;
+    public event Action<(int X, int Y)>? PositionCommitted;
 
     /// <summary>Fires when the user finishes resizing the overlay.</summary>
-    public event Action<Vector2D<int>>? SizeCommitted;
+    public event Action<(int X, int Y)>? SizeCommitted;
 
     /// <summary>
-    ///     Runs the combined event pump for both windows until the display window
-    ///     closes. Must be called on the thread that wants to own the windows
-    ///     (GLFW requires all window operations on the creating thread).
+    ///     Fires when the window is closed externally (Alt+F4 / task manager).
+    ///     The overlay host uses this to flip the Enabled flag in config.
+    /// </summary>
+    public event Action? ExternalClosed;
+
+    /// <summary>
+    ///     Runs the render + message loop on the calling thread until the
+    ///     window closes. Must be invoked on the same thread that will own
+    ///     the HWND (Win32 delivers messages to the creating thread).
     /// </summary>
     public void Run()
     {
         try
         {
-            _glWindow.Initialize();
-            _displayWindow.Initialize();
+            Initialize();
 
-            while (!_displayWindow.IsClosing)
+            _nextFrameTargetTicks = _frameStopwatch.ElapsedTicks;
+
+            while (!_nativeWindow.IsClosing)
             {
-                _glWindow.DoEvents();
-                _displayWindow.DoEvents();
+                WaitUntilNextFrameTime();
 
-                if (_displayWindow.IsClosing)
+                // Block on the swap chain's frame-latency waitable too — the
+                // stopwatch bounds max FPS, the waitable yields cleanly if DWM
+                // is behind (e.g. during heavy compositor load) so we don't
+                // over-queue presents.
+                _d3d?.WaitForNextFrame();
+
+                _nativeWindow.PumpMessages();
+
+                if (_nativeWindow.IsClosing)
                 {
                     break;
                 }
 
-                _displayWindow.DoUpdate();
-                _displayWindow.DoRender();
+                var deltaTime = ComputeDeltaSeconds();
+                _interaction?.Update(deltaTime);
+                Render();
+
+                _nextFrameTargetTicks += (long)(TargetFrameTimeSeconds * Stopwatch.Frequency);
             }
         }
         finally
         {
-            // Reset destroys the native GLFW windows. After this point the
-            // Silk.NET handle wrappers point at freed memory and any property
-            // access (IsClosing, etc.) crashes. Flag so Dispose doesn't touch
-            // them again.
-            try
-            {
-                _displayWindow.Reset();
-            }
-            catch
-            {
-                /* best-effort */
-            }
-
-            try
-            {
-                _glWindow.Reset();
-            }
-            catch
-            {
-                /* best-effort */
-            }
-
-            _runCompleted = true;
+            TeardownPipelines();
         }
     }
 
-    private void OnLoad()
+    /// <summary>Requests the overlay window to close. Safe to call from any thread.</summary>
+    public void Close()
     {
-        // GL context lives on the hidden carrier; make it current on this thread.
-        _glWindow.MakeCurrent();
-        _gl = GL.GetApi(_glWindow);
+        _nativeWindow.Close();
+    }
 
-        var hwnd = GlfwGetWin32Window(_displayWindow.Handle);
-        _win32 = new OverlayWin32Helper(hwnd);
-        _surface = new OverlayLayeredSurface(
-            hwnd,
-            _loggerFactory.CreateLogger<OverlayLayeredSurface>()
+    public void Dispose()
+    {
+        TeardownPipelines();
+        _nativeWindow.Dispose();
+    }
+
+    private void Initialize()
+    {
+        _logger.LogInformation(
+            "Overlay init: HWND=0x{Hwnd:X} size={Width}x{Height} source='{Source}'",
+            _nativeWindow.Handle,
+            _nativeWindow.Width,
+            _nativeWindow.Height,
+            _initialConfig.Source
         );
 
-        _source = new SpoutFrameSource(_initialConfig.Source);
-        _quad = new FullscreenQuadRenderer(_gl);
-        _chrome = new OverlayChromeRenderer(_gl);
+        _d3d = new OverlayD3D11Context(
+            _nativeWindow.Handle,
+            _nativeWindow.Width,
+            _nativeWindow.Height
+        );
+        _logger.LogInformation("Overlay init: D3D11 + DirectComposition ready.");
 
-        _inputContext = _displayWindow.CreateInput();
+        _quad = new QuadPipeline(_d3d.Device, _d3d.Context);
+        _chrome = new ChromeRenderer(_d3d.Device, _d3d.Context);
+        _logger.LogInformation("Overlay init: HLSL pipelines compiled.");
+
+        _source = new SpoutD3D11Source(_d3d.Device, _initialConfig.Source);
 
         var aspect =
             _initialConfig.Height > 0 ? (double)_initialConfig.Width / _initialConfig.Height : 1.0;
 
         _interaction = new OverlayInteractionController(
-            _displayWindow,
-            _inputContext,
+            _nativeWindow,
             _win32,
             _initialConfig.MinWidth,
             _initialConfig.MinHeight,
-            _initialConfig.ChromeFadeSeconds,
-            _initialConfig.LockAspect,
             aspect
         );
 
         _interaction.PositionCommitted += pos => PositionCommitted?.Invoke(pos);
         _interaction.SizeCommitted += size => SizeCommitted?.Invoke(size);
 
-        EnsureFramebuffer(_displayWindow.Size.X, _displayWindow.Size.Y);
+        _logger.LogInformation("Overlay init complete — entering render loop.");
     }
 
-    private void OnUpdate(double deltaTime)
+    private void Render()
     {
-        _interaction?.Update((float)deltaTime);
-    }
-
-    private unsafe void OnRender(double deltaTime)
-    {
-        if (_gl is null || _quad is null || _chrome is null || _source is null || _surface is null)
+        if (_d3d is null || _quad is null || _chrome is null || _source is null)
         {
             return;
         }
 
-        var size = _displayWindow.Size;
-        if (size.X <= 0 || size.Y <= 0)
+        var w = _nativeWindow.Width;
+        var h = _nativeWindow.Height;
+        if (w <= 0 || h <= 0)
         {
             return;
         }
 
-        // Render happens on the GL carrier's context — switch it current for
-        // this thread. Display window has no GL context so nothing to switch
-        // away from.
-        _glWindow.MakeCurrent();
-
-        EnsureFramebuffer(size.X, size.Y);
-        _surface.Resize(size.X, size.Y);
-
-        // Render scene into offscreen FBO.
-        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _fbo);
-        _gl.Viewport(0, 0, (uint)size.X, (uint)size.Y);
-
-        _gl.ClearColor(0f, 0f, 0f, 0f);
-        _gl.Clear((uint)GLEnum.ColorBufferBit);
-
-        if (_source.Acquire())
+        if (w != _d3d.Width || h != _d3d.Height)
         {
-            _quad.Draw(_source.ColorTextureHandle, flipV: !_source.OriginBottomLeft);
+            _d3d.Resize(w, h);
+        }
+
+        _stageStopwatch.Restart();
+
+        _d3d.Context.OMSetRenderTargets(_d3d.BackBufferRtv, null);
+        _d3d.Context.ClearRenderTargetView(_d3d.BackBufferRtv, new Color4(0, 0, 0, 0));
+
+        var acquired = _source.Acquire();
+        var acquireMs = _stageStopwatch.Elapsed.TotalMilliseconds;
+
+        if (acquired && _source.ShaderResourceView is not null)
+        {
+            _quad.Draw(_source.ShaderResourceView, w, h);
         }
 
         if (_interaction is { ChromeAlpha: > 0f } ic)
         {
-            _chrome.Render(size.X, size.Y, ic.ChromeAlpha, ic.ActiveHandle);
+            _chrome.Render(w, h, ic.ChromeAlpha, ic.ActiveHandle);
         }
 
-        _gl.PixelStore(PixelStoreParameter.PackAlignment, 1);
-        _gl.ReadBuffer(ReadBufferMode.ColorAttachment0);
-        _gl.ReadPixels(
-            0,
-            0,
-            (uint)size.X,
-            (uint)size.Y,
-            PixelFormat.Bgra,
-            PixelType.UnsignedByte,
-            (void*)_surface.Pixels
-        );
+        var drawMs = _stageStopwatch.Elapsed.TotalMilliseconds - acquireMs;
 
-        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+        _d3d.Present();
 
-        var presented = _surface.Present();
+        var totalMs = _stageStopwatch.Elapsed.TotalMilliseconds;
+        var presentMs = totalMs - acquireMs - drawMs;
 
-        // Show after first successful UpdateLayeredWindow — layered windows
-        // misbehave if shown before their contents are set.
-        if (presented && !_displayWindow.IsVisible)
+        LogFrameTiming(w, h, acquireMs, drawMs, presentMs, totalMs);
+        LogFpsIfDue();
+
+        if (!_firstFramePresented)
         {
-            _displayWindow.IsVisible = true;
+            _firstFramePresented = true;
+            _nativeWindow.Show();
+            IsVisible = true;
+            _logger.LogInformation(
+                "Overlay first frame presented — window shown. Spout source connected: {Connected}",
+                acquired
+            );
         }
     }
 
-    private unsafe void EnsureFramebuffer(int width, int height)
+    private void LogFrameTiming(
+        int w,
+        int h,
+        double acquireMs,
+        double drawMs,
+        double presentMs,
+        double totalMs
+    )
     {
-        if (_gl is null)
+        _frameCounter++;
+        var shouldLog =
+            _frameCounter <= InitialFrameLogCount || _frameCounter % SteadyFrameLogInterval == 0;
+        if (!shouldLog)
         {
             return;
         }
 
-        if (width == _fboWidth && height == _fboHeight && _fbo != 0)
+        _logger.LogDebug(
+            "Overlay frame {Frame} {Width}x{Height} — acquire {AcquireMs:F2} ms, draw {DrawMs:F2} ms, present {PresentMs:F2} ms, total {TotalMs:F2} ms",
+            _frameCounter,
+            w,
+            h,
+            acquireMs,
+            drawMs,
+            presentMs,
+            totalMs
+        );
+    }
+
+    private void LogFpsIfDue()
+    {
+        _framesSinceLastFpsLog++;
+
+        if (_fpsStopwatch.Elapsed.TotalSeconds < FpsLogIntervalSeconds)
         {
             return;
         }
 
-        if (_fbo != 0)
+        var fps = _framesSinceLastFpsLog / _fpsStopwatch.Elapsed.TotalSeconds;
+        _logger.LogInformation("Overlay FPS: {Fps:F1}", fps);
+
+        _framesSinceLastFpsLog = 0;
+        _fpsStopwatch.Restart();
+    }
+
+    private void WaitUntilNextFrameTime()
+    {
+        var now = _frameStopwatch.ElapsedTicks;
+        var remainingTicks = _nextFrameTargetTicks - now;
+        if (remainingTicks <= 0)
         {
-            _gl.DeleteFramebuffer(_fbo);
-            _gl.DeleteTexture(_fboColor);
-            _gl.DeleteRenderbuffer(_fboDepth);
+            // We're already late (first frame or a stall). Don't try to catch
+            // up by rendering back-to-back — just reset the target so we don't
+            // build up a backlog.
+            _nextFrameTargetTicks = now;
+            return;
         }
 
-        _fbo = _gl.GenFramebuffer();
-        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _fbo);
+        var remainingMs = remainingTicks * 1000.0 / Stopwatch.Frequency;
 
-        _fboColor = _gl.GenTexture();
-        _gl.BindTexture(TextureTarget.Texture2D, _fboColor);
-        _gl.TexImage2D(
-            TextureTarget.Texture2D,
-            0,
-            (int)InternalFormat.Rgba8,
-            (uint)width,
-            (uint)height,
-            0,
-            PixelFormat.Rgba,
-            PixelType.UnsignedByte,
-            (void*)0
-        );
-        _gl.TexParameter(
-            TextureTarget.Texture2D,
-            TextureParameterName.TextureMinFilter,
-            (int)GLEnum.Linear
-        );
-        _gl.TexParameter(
-            TextureTarget.Texture2D,
-            TextureParameterName.TextureMagFilter,
-            (int)GLEnum.Linear
-        );
-        _gl.TexParameter(
-            TextureTarget.Texture2D,
-            TextureParameterName.TextureWrapS,
-            (int)GLEnum.ClampToEdge
-        );
-        _gl.TexParameter(
-            TextureTarget.Texture2D,
-            TextureParameterName.TextureWrapT,
-            (int)GLEnum.ClampToEdge
-        );
-        _gl.FramebufferTexture2D(
-            FramebufferTarget.Framebuffer,
-            FramebufferAttachment.ColorAttachment0,
-            TextureTarget.Texture2D,
-            _fboColor,
-            0
-        );
-
-        _fboDepth = _gl.GenRenderbuffer();
-        _gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, _fboDepth);
-        _gl.RenderbufferStorage(
-            RenderbufferTarget.Renderbuffer,
-            InternalFormat.DepthComponent24,
-            (uint)width,
-            (uint)height
-        );
-        _gl.FramebufferRenderbuffer(
-            FramebufferTarget.Framebuffer,
-            FramebufferAttachment.DepthAttachment,
-            RenderbufferTarget.Renderbuffer,
-            _fboDepth
-        );
-
-        var status = _gl.CheckFramebufferStatus(FramebufferTarget.Framebuffer);
-        if (status != GLEnum.FramebufferComplete)
+        // Thread.Sleep on Windows has ~15 ms granularity by default; only sleep
+        // when we have clear headroom, then SpinWait the last ~1 ms for
+        // sub-tick precision. This keeps CPU near-zero when waiting.
+        if (remainingMs > 2.0)
         {
-            throw new InvalidOperationException(
-                $"Overlay FBO incomplete at {width}x{height}: {status}"
-            );
+            Thread.Sleep((int)(remainingMs - 1));
         }
 
-        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+        while (_frameStopwatch.ElapsedTicks < _nextFrameTargetTicks)
+        {
+            Thread.SpinWait(100);
+        }
+    }
 
-        _fboWidth = width;
-        _fboHeight = height;
+    private float ComputeDeltaSeconds()
+    {
+        var now = _frameStopwatch.ElapsedTicks;
+        if (_lastFrameTicks == 0)
+        {
+            _lastFrameTicks = now;
+            return 0f;
+        }
+
+        var delta = (float)((now - _lastFrameTicks) / (double)Stopwatch.Frequency);
+        _lastFrameTicks = now;
+        // Cap large deltas on the first few frames / after a stall so the chrome
+        // fade doesn't jump past its target.
+        return Math.Clamp(delta, 0f, 0.25f);
+    }
+
+    private void OnResized(int width, int height)
+    {
+        if (_d3d is null)
+        {
+            return;
+        }
+
+        _d3d.Resize(width, height);
     }
 
     private void OnClosing()
+    {
+        // Native window is being destroyed externally — caller will see IsClosing
+        // on the next loop iteration and break out. Notify the host so it can
+        // flip the Enabled flag.
+        ExternalClosed?.Invoke();
+    }
+
+    private void TeardownPipelines()
     {
         _interaction?.Dispose();
         _interaction = null;
@@ -400,51 +394,7 @@ public sealed class OverlayWindow : IDisposable
         _source?.Dispose();
         _source = null;
 
-        if (_gl is not null && _fbo != 0)
-        {
-            _gl.DeleteFramebuffer(_fbo);
-            _gl.DeleteTexture(_fboColor);
-            _gl.DeleteRenderbuffer(_fboDepth);
-            _fbo = 0;
-            _fboColor = 0;
-            _fboDepth = 0;
-        }
-
-        _surface?.Dispose();
-        _surface = null;
-
-        _inputContext?.Dispose();
-        _inputContext = null;
-
-        _win32 = null;
-        _gl = null;
-
-        if (!_glWindow.IsClosing)
-        {
-            _glWindow.Close();
-        }
-    }
-
-    public void Dispose()
-    {
-        // Run() already Resets both windows inside a finally block. Touching
-        // the Silk.NET handles after Reset dereferences freed GLFW memory and
-        // crashes. If Run completed normally there's nothing left to do.
-        if (_runCompleted)
-        {
-            return;
-        }
-
-        try
-        {
-            if (!_displayWindow.IsClosing)
-            {
-                _displayWindow.Close();
-            }
-        }
-        catch
-        {
-            /* handle already gone */
-        }
+        _d3d?.Dispose();
+        _d3d = null;
     }
 }

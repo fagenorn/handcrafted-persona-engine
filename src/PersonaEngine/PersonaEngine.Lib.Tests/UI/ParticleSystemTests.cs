@@ -1,5 +1,6 @@
 using System.Numerics;
 using PersonaEngine.Lib.UI.ControlPanel;
+using PersonaEngine.Lib.UI.ControlPanel.Visuals;
 using Xunit;
 
 namespace PersonaEngine.Lib.Tests.UI;

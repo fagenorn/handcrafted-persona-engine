@@ -691,6 +691,9 @@ Cargo.lock
 
 # End of https://www.toptal.com/developers/gitignore/api/rust,rider,visualstudiocode,visualstudio,csharp
 
+# App settings (contains API keys and local model paths)
+src/PersonaEngine/PersonaEngine.App/appsettings.json
+
 # Claude Code
 CLAUDE.md
 .claude/

@@ -1,7 +1,8 @@
 using System.Numerics;
 using Hexa.NET.ImGui;
+using PersonaEngine.Lib.UI.ControlPanel;
 
-namespace PersonaEngine.Lib.UI.ControlPanel;
+namespace PersonaEngine.Lib.UI.ControlPanel.Visuals;
 
 /// <summary>
 ///     Animated glowing border drawn along the window edge.

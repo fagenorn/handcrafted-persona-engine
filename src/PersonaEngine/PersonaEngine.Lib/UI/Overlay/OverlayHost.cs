@@ -3,21 +3,20 @@ using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.UI.ControlPanel;
 using PersonaEngine.Lib.UI.Rendering.Spout;
-using Silk.NET.Maths;
-using Silk.NET.Windowing;
 
 namespace PersonaEngine.Lib.UI.Overlay;
 
 /// <summary>
 ///     Lifecycle owner for the floating overlay. Launches the overlay on its own
-///     dedicated thread so it doesn't share a GL context with the main app (removes
-///     the pixel-format compatibility constraint that was breaking DWM transparency)
-///     and doesn't share a render loop with Live2D (removes the ~20 ms/iteration
-///     stall that was making drag feel laggy).
+///     dedicated thread so it doesn't share a device / render loop with Live2D —
+///     the Live2D loop has ~20 ms/iteration stalls that made drag feel laggy when
+///     the overlay rode on the same thread.
 ///
-///     Overlay thread: creates the Silk.NET window, owns its GL context, runs the
-///     message pump, consumes the avatar frame via <see cref="SpoutFrameSource" />,
-///     drives the drag/resize state machine.
+///     Overlay thread: creates the raw Win32 HWND (no Silk.NET), owns a D3D11
+///     device + DirectComposition visual tree, runs the message pump, consumes
+///     the avatar frame via Spout's DX11 shared-handle path
+///     (<see cref="Rendering.SpoutD3D11Source" />), drives the drag /
+///     resize state machine.
 ///
 ///     This thread (main): reacts to config changes, starts / stops the overlay
 ///     thread, persists overlay position and size when the user commits a gesture,
@@ -42,6 +41,7 @@ public sealed class OverlayHost : IDisposable
     private bool _started;
 
     private Thread? _thread;
+    private OverlayWindow? _runningOverlay;
     private volatile bool _stopRequested;
 
     public OverlayHost(
@@ -115,8 +115,12 @@ public sealed class OverlayHost : IDisposable
         }
         else if (!wantOverlay && threadAlive)
         {
-            // Signal; actual join happens inside StopThreadIfRunning.
+            // Mark as a deliberate host-side stop (so the thread's finally-block
+            // doesn't flip Enabled=false again) and post WM_CLOSE to unblock
+            // the overlay thread's message pump. Don't Join here — we're on a
+            // hot config-reload callback and a 3 s block would freeze the UI.
             _stopRequested = true;
+            _runningOverlay?.Close();
         }
     }
 
@@ -169,34 +173,22 @@ public sealed class OverlayHost : IDisposable
         try
         {
             using var overlay = OverlayWindow.Create(cfg, _loggerFactory);
+            lock (_lifecycleLock)
+            {
+                _runningOverlay = overlay;
+            }
 
             overlay.PositionCommitted += OnPositionCommitted;
             overlay.SizeCommitted += OnSizeCommitted;
 
-            overlay.Window.Update += _ =>
-            {
-                if (_stopRequested && !overlay.Window.IsClosing)
-                {
-                    // Deliberate shutdown from the host — not an external close.
-                    externalClose = false;
-                    overlay.Window.Close();
-                }
-            };
-
-            // OverlayWindow.Run pumps both the display window and the hidden GL
-            // carrier window on this thread until the display window closes.
+            // Run pumps messages + renders on this thread. Host shutdown sends
+            // WM_CLOSE cross-thread via overlay.Close() → PostMessage; the
+            // overlay thread picks it up on its next pump and the loop exits.
             overlay.Run();
 
             // If we exited Run() without _stopRequested being set by the host,
             // the window was closed by the user / OS — that's an external close.
-            if (!_stopRequested)
-            {
-                externalClose = true;
-            }
-            else
-            {
-                externalClose = false;
-            }
+            externalClose = !_stopRequested;
         }
         catch (Exception ex)
         {
@@ -209,6 +201,7 @@ public sealed class OverlayHost : IDisposable
         {
             lock (_lifecycleLock)
             {
+                _runningOverlay = null;
                 if (_thread == Thread.CurrentThread)
                 {
                     _thread = null;
@@ -228,18 +221,24 @@ public sealed class OverlayHost : IDisposable
     private void StopThreadIfRunning()
     {
         Thread? toJoin;
+        OverlayWindow? toClose;
         lock (_lifecycleLock)
         {
             _stopRequested = true;
             toJoin = _thread;
+            toClose = _runningOverlay;
         }
 
+        // OverlayWindow.Close is thread-safe (PostMessage WM_CLOSE); posting it
+        // here wakes the overlay thread's message pump so Run() returns promptly
+        // rather than waiting for the next input event.
+        toClose?.Close();
         toJoin?.Join(TimeSpan.FromSeconds(3));
     }
 
     // ── Persistence ─────────────────────────────────────────────────────────────
 
-    private void OnPositionCommitted(Vector2D<int> position)
+    private void OnPositionCommitted((int X, int Y) position)
     {
         var current = _options.CurrentValue;
         var updated = current with
@@ -249,7 +248,7 @@ public sealed class OverlayHost : IDisposable
         _configWriter.Write(updated);
     }
 
-    private void OnSizeCommitted(Vector2D<int> size)
+    private void OnSizeCommitted((int X, int Y) size)
     {
         var current = _options.CurrentValue;
         var updated = current with

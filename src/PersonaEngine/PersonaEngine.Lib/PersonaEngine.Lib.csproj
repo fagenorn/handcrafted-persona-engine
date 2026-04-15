@@ -50,6 +50,10 @@
     <PackageReference Include="Spout.NETCore" Version="2.7.17" />
     <PackageReference Include="Stateless" Version="5.17.0" />
     <PackageReference Include="System.Runtime.Caching" Version="9.0.2" />
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+    <PackageReference Include="Vortice.DXGI" Version="3.8.3" />
+    <PackageReference Include="Vortice.DirectComposition" Version="3.8.3" />
+    <PackageReference Include="Vortice.D3DCompiler" Version="3.8.3" />
     <PackageReference Include="Whisper.net" Version="1.9.0" />
     <PackageReference Include="Whisper.net.Runtime.Cuda.Windows" Version="1.9.0" />
     <PackageReference Include="OpenNLP" Version="1.3.5" />

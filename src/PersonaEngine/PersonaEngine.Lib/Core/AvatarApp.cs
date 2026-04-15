@@ -4,6 +4,7 @@ using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
 using PersonaEngine.Lib.UI;
 using PersonaEngine.Lib.UI.Common;
 using PersonaEngine.Lib.UI.ControlPanel;
+using PersonaEngine.Lib.UI.Host;
 using PersonaEngine.Lib.UI.Overlay;
 using PersonaEngine.Lib.UI.Rendering.Spout;
 using Silk.NET.Input;

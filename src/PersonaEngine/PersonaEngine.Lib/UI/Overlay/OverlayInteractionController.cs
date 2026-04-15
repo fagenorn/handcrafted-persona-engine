@@ -1,7 +1,5 @@
-using System.Runtime.InteropServices;
-using Silk.NET.Input;
-using Silk.NET.Maths;
-using Silk.NET.Windowing;
+using PersonaEngine.Lib.UI.Native;
+using PersonaEngine.Lib.UI.Overlay.Native;
 
 namespace PersonaEngine.Lib.UI.Overlay;
 
@@ -9,25 +7,24 @@ namespace PersonaEngine.Lib.UI.Overlay;
 ///     State machine for the floating overlay's user interaction:
 ///     - Polls the cursor every frame (because a click-through window receives no
 ///       mouse messages) to detect hover enter/leave and toggle click-through.
-///     - When the overlay is not click-through, consumes Silk.NET mouse events to
-///       drive drag-to-move (top-right button) and bottom-right-corner resize
-///       (bottom-right button).
-///     - Produces a fade alpha for <see cref="OverlayChromeRenderer" /> and emits
-///       persisted position/size changes at the end of each gesture.
+///     - When the overlay is not click-through, consumes the native window's mouse
+///       events to drive drag-to-move (top-right button) and bottom-right-corner
+///       resize (bottom-right button).
+///     - Produces a fade alpha for the chrome renderer and emits persisted
+///       position/size changes at the end of each gesture.
 /// </summary>
 public sealed class OverlayInteractionController : IDisposable
 {
-    private readonly IWindow _window;
+    // Fixed — exposing these as config knobs was control-panel clutter.
+    // The overlay always locks aspect (it mirrors a Spout source whose aspect
+    // is inherent) and the chrome fade duration was never tuned by users.
+    private const float ChromeFadeDurationSeconds = 0.12f;
+
+    private readonly OverlayNativeWindow _window;
     private readonly OverlayWin32Helper _win32;
-    private readonly IInputContext _input;
     private readonly int _minWidth;
     private readonly int _minHeight;
-    private readonly float _fadeDuration;
-    private readonly bool _lockAspect;
     private readonly double _aspect;
-
-    private IMouse? _mouse;
-    private StandardCursor _lastCursor = StandardCursor.Default;
 
     private bool _isHovered;
     private bool _isDragging;
@@ -43,34 +40,28 @@ public sealed class OverlayInteractionController : IDisposable
     private int _lastPushedH;
 
     // Anchors captured at the start of a gesture, in screen coords.
-    private POINT _gestureAnchorScreen;
-    private Vector2D<int> _gestureAnchorWinPos;
-    private Vector2D<int> _gestureAnchorWinSize;
+    private Win32.POINT _gestureAnchorScreen;
+    private (int X, int Y) _gestureAnchorWinPos;
+    private (int X, int Y) _gestureAnchorWinSize;
 
     private float _chromeAlpha;
 
     public OverlayInteractionController(
-        IWindow window,
-        IInputContext input,
+        OverlayNativeWindow window,
         OverlayWin32Helper win32,
         int minWidth,
         int minHeight,
-        float fadeDuration,
-        bool lockAspect,
         double aspect
     )
     {
         _window = window;
-        _input = input;
         _win32 = win32;
         _minWidth = Math.Max(1, minWidth);
         _minHeight = Math.Max(1, minHeight);
-        _fadeDuration = MathF.Max(0.01f, fadeDuration);
-        _lockAspect = lockAspect;
         _aspect = aspect <= 0 ? 1 : aspect;
 
-        AttachMouse();
-        _input.ConnectionChanged += OnConnectionChanged;
+        _window.LeftButtonDown += OnLeftButtonDown;
+        _window.LeftButtonUp += OnLeftButtonUp;
     }
 
     public float ChromeAlpha => _chromeAlpha;
@@ -78,10 +69,10 @@ public sealed class OverlayInteractionController : IDisposable
     public OverlayHandle ActiveHandle => _activeHandle;
 
     /// <summary>Fires when the user finishes moving the overlay.</summary>
-    public event Action<Vector2D<int>>? PositionCommitted;
+    public event Action<(int X, int Y)>? PositionCommitted;
 
     /// <summary>Fires when the user finishes resizing the overlay.</summary>
-    public event Action<Vector2D<int>>? SizeCommitted;
+    public event Action<(int X, int Y)>? SizeCommitted;
 
     public void Update(float deltaTime)
     {
@@ -92,7 +83,7 @@ public sealed class OverlayInteractionController : IDisposable
         if (!_isDragging && !_isResizing)
         {
             _activeHandle = cursorInside
-                ? OverlayChromeRenderer.HitTest(relX, relY, _window.Size.X, _window.Size.Y)
+                ? OverlayChromeLayout.HitTest(relX, relY, _window.Width, _window.Height)
                 : OverlayHandle.None;
         }
 
@@ -109,7 +100,7 @@ public sealed class OverlayInteractionController : IDisposable
         UpdateCursorShape();
 
         var targetAlpha = wantInteractive ? 1f : 0f;
-        var step = deltaTime / _fadeDuration;
+        var step = deltaTime / ChromeFadeDurationSeconds;
         if (_chromeAlpha < targetAlpha)
         {
             _chromeAlpha = MathF.Min(targetAlpha, _chromeAlpha + step);
@@ -120,7 +111,7 @@ public sealed class OverlayInteractionController : IDisposable
         }
 
         // Drive drag / resize directly from screen cursor position — avoids jitter
-        // from relying on Silk.NET MouseMove events that fire between frames.
+        // from relying on mouse-move events that fire between frames.
         if (_isDragging)
         {
             ApplyDrag();
@@ -133,42 +124,37 @@ public sealed class OverlayInteractionController : IDisposable
 
     private void UpdateCursorShape()
     {
-        if (_mouse is null)
-        {
-            return;
-        }
-
-        StandardCursor desired;
+        OverlayCursor desired;
         if (_isDragging)
         {
-            desired = StandardCursor.ResizeAll;
+            desired = OverlayCursor.SizeAll;
         }
         else if (_isResizing)
         {
-            desired = StandardCursor.NwseResize;
+            desired = OverlayCursor.SizeNesw;
         }
         else
         {
             desired = _activeHandle switch
             {
-                OverlayHandle.Drag => StandardCursor.ResizeAll,
-                OverlayHandle.Resize => StandardCursor.NwseResize,
-                _ => StandardCursor.Default,
+                OverlayHandle.Drag => OverlayCursor.SizeAll,
+                // NE-SW cursor — the resize button now sits in the top-right
+                // cluster and dragging it stretches the top-right corner
+                // (bottom-left pinned), i.e. movement along the NE↔SW axis.
+                OverlayHandle.Resize => OverlayCursor.SizeNesw,
+                _ => OverlayCursor.Default,
             };
         }
 
-        if (desired == _lastCursor)
+        if (_window.Cursor != desired)
         {
-            return;
+            _window.Cursor = desired;
         }
-
-        _mouse.Cursor.StandardCursor = desired;
-        _lastCursor = desired;
     }
 
     private void ApplyDrag()
     {
-        if (!GetCursorPos(out var pt))
+        if (!Win32.GetCursorPos(out var pt))
         {
             return;
         }
@@ -181,8 +167,7 @@ public sealed class OverlayInteractionController : IDisposable
             return;
         }
 
-        // Direct Win32 move — bypasses Silk.NET's Position setter which does extra
-        // property-change plumbing per call.
+        // Direct Win32 move — bypasses extra property-change plumbing per call.
         _win32.MoveTo(newX, newY);
         _lastPushedX = newX;
         _lastPushedY = newY;
@@ -190,93 +175,67 @@ public sealed class OverlayInteractionController : IDisposable
 
     private void ApplyResize()
     {
-        if (!GetCursorPos(out var pt))
+        if (!Win32.GetCursorPos(out var pt))
         {
             return;
         }
 
-        // Single bottom-right resize handle: the top-left corner stays pinned,
-        // the width and height grow with the cursor delta.
+        // Top-right resize handle: the bottom-left corner stays pinned while
+        // the top-right corner follows the cursor. Dragging right grows the
+        // width; dragging UP (dy < 0) grows the height (top edge moves up,
+        // bottom stays put). Width and height always scale together so the
+        // aspect ratio stays locked.
         var dx = pt.X - _gestureAnchorScreen.X;
         var dy = pt.Y - _gestureAnchorScreen.Y;
 
-        var newWidth = Math.Max(_minWidth, _gestureAnchorWinSize.X + dx);
-        var newHeight = Math.Max(_minHeight, _gestureAnchorWinSize.Y + dy);
+        var scaleX = 1.0 + (double)dx / _gestureAnchorWinSize.X;
+        // Note the sign flip vs. the old bottom-right handle: for a top-right
+        // anchor, upward cursor movement (dy < 0) should enlarge the window.
+        var scaleY = 1.0 - (double)dy / _gestureAnchorWinSize.Y;
 
-        if (_lockAspect)
+        // Take the larger scale so dragging freely in either axis grows the
+        // window. Clamp as a scalar (not per-dimension) so aspect stays locked
+        // even when the gesture would drive one dimension below its minimum.
+        var scale = Math.Max(scaleX, scaleY);
+        var minScale = Math.Max(
+            (double)_minWidth / _gestureAnchorWinSize.X,
+            (double)_minHeight / _gestureAnchorWinSize.Y
+        );
+        if (scale < minScale)
         {
-            // Prefer whichever axis produced the larger proportional delta so the
-            // gesture feels responsive in both directions. The other axis is derived.
-            var widthRatio = (double)newWidth / _gestureAnchorWinSize.X;
-            var heightRatio = (double)newHeight / _gestureAnchorWinSize.Y;
-            if (Math.Abs(widthRatio - 1.0) >= Math.Abs(heightRatio - 1.0))
-            {
-                newHeight = Math.Max(_minHeight, (int)Math.Round(newWidth / _aspect));
-            }
-            else
-            {
-                newWidth = Math.Max(_minWidth, (int)Math.Round(newHeight * _aspect));
-            }
+            scale = minScale;
         }
 
-        if (newWidth == _lastPushedW && newHeight == _lastPushedH)
+        var newWidth = (int)Math.Round(_gestureAnchorWinSize.X * scale);
+        var newHeight = (int)Math.Round(_gestureAnchorWinSize.Y * scale);
+
+        // Keep the bottom-left pixel fixed: anchored bottom = anchor.Y +
+        // anchor.height; with the new height, top-left Y = anchoredBottom -
+        // newHeight. Left X never moves for this gesture.
+        var anchorBottomY = _gestureAnchorWinPos.Y + _gestureAnchorWinSize.Y;
+        var newX = _gestureAnchorWinPos.X;
+        var newY = anchorBottomY - newHeight;
+
+        if (
+            newX == _lastPushedX
+            && newY == _lastPushedY
+            && newWidth == _lastPushedW
+            && newHeight == _lastPushedH
+        )
         {
             return;
         }
 
-        _win32.ResizeTo(newWidth, newHeight);
+        _win32.MoveAndResizeTo(newX, newY, newWidth, newHeight);
+        _lastPushedX = newX;
+        _lastPushedY = newY;
         _lastPushedW = newWidth;
         _lastPushedH = newHeight;
     }
 
-    private void AttachMouse()
+    private void OnLeftButtonDown(int _, int __)
     {
-        if (_mouse is not null)
-        {
-            return;
-        }
-
-        var mouse = _input.Mice.FirstOrDefault();
-        if (mouse is null)
-        {
-            return;
-        }
-
-        _mouse = mouse;
-        _mouse.MouseDown += OnMouseDown;
-        _mouse.MouseUp += OnMouseUp;
-    }
-
-    private void DetachMouse()
-    {
-        if (_mouse is null)
-        {
-            return;
-        }
-
-        _mouse.MouseDown -= OnMouseDown;
-        _mouse.MouseUp -= OnMouseUp;
-        _mouse = null;
-    }
-
-    private void OnConnectionChanged(IInputDevice device, bool connected)
-    {
-        if (device is IMouse)
-        {
-            if (connected)
-            {
-                AttachMouse();
-            }
-            else
-            {
-                DetachMouse();
-            }
-        }
-    }
-
-    private void OnMouseDown(IMouse mouse, MouseButton button)
-    {
-        if (button != MouseButton.Left || _isDragging || _isResizing)
+        if (_isDragging || _isResizing)
         {
             return;
         }
@@ -286,17 +245,17 @@ public sealed class OverlayInteractionController : IDisposable
             return;
         }
 
-        if (!GetCursorPos(out var pt))
+        if (!Win32.GetCursorPos(out var pt))
         {
             return;
         }
 
         _gestureAnchorScreen = pt;
         // Read bounds straight from Win32 so anchors reflect actual on-screen state,
-        // not Silk.NET's cached Position/Size which may lag behind a previous gesture.
+        // not a cached size which may lag behind a previous gesture.
         _win32.GetBounds(out var x, out var y, out var w, out var h);
-        _gestureAnchorWinPos = new Vector2D<int>(x, y);
-        _gestureAnchorWinSize = new Vector2D<int>(w, h);
+        _gestureAnchorWinPos = (x, y);
+        _gestureAnchorWinSize = (w, h);
         _lastPushedX = x;
         _lastPushedY = y;
         _lastPushedW = w;
@@ -311,54 +270,46 @@ public sealed class OverlayInteractionController : IDisposable
                 _isResizing = true;
                 break;
         }
+
+        // Capture so the MouseUp reaches us even if the cursor has left the
+        // overlay rect — common during resize when the user pulls outward.
+        // Without capture, Windows routes subsequent mouse messages to
+        // whatever window is under the cursor and the gesture gets stuck
+        // until the user clicks us again.
+        _window.CaptureMouse();
     }
 
-    private void OnMouseUp(IMouse mouse, MouseButton button)
+    private void OnLeftButtonUp(int _, int __)
     {
-        if (button != MouseButton.Left)
+        if (!_isDragging && !_isResizing)
         {
             return;
         }
 
-        if (_isDragging || _isResizing)
-        {
-            // Read final bounds straight from Win32 — direct SetWindowPos calls
-            // during the gesture bypassed Silk.NET, so its cached Position/Size
-            // are stale until it next polls them.
-            _win32.GetBounds(out var x, out var y, out var w, out var h);
-            var pos = new Vector2D<int>(x, y);
-            var size = new Vector2D<int>(w, h);
+        // Read final bounds straight from Win32 — direct SetWindowPos calls
+        // during the gesture bypassed any cached size fields.
+        _win32.GetBounds(out var x, out var y, out var w, out var h);
+        var pos = (x, y);
+        var size = (w, h);
 
-            if (_isDragging)
-            {
-                _isDragging = false;
-                PositionCommitted?.Invoke(pos);
-            }
-            else
-            {
-                _isResizing = false;
-                SizeCommitted?.Invoke(size);
-                PositionCommitted?.Invoke(pos);
-            }
+        if (_isDragging)
+        {
+            _isDragging = false;
+            PositionCommitted?.Invoke(pos);
         }
+        else
+        {
+            _isResizing = false;
+            SizeCommitted?.Invoke(size);
+            PositionCommitted?.Invoke(pos);
+        }
+
+        _window.ReleaseMouse();
     }
 
     public void Dispose()
     {
-        _input.ConnectionChanged -= OnConnectionChanged;
-        DetachMouse();
+        _window.LeftButtonDown -= OnLeftButtonDown;
+        _window.LeftButtonUp -= OnLeftButtonUp;
     }
-
-    // ── P/Invoke ────────────────────────────────────────────────────────────────
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT
-    {
-        public int X;
-        public int Y;
-    }
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetCursorPos(out POINT lpPoint);
 }

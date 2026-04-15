@@ -44,24 +44,9 @@ public class SpoutRegistry : IDisposable
     }
 
     /// <summary>
-    ///     Returns the in-process frame source for the named Spout target, or null if
-    ///     no such target is registered. Used by the floating overlay to sample the
-    ///     same color texture that Spout publishes.
-    /// </summary>
-    public IFrameSource? GetFrameSource(string spoutName)
-    {
-        if (string.IsNullOrEmpty(spoutName))
-        {
-            return null;
-        }
-
-        return _spoutManagers.TryGetValue(spoutName, out var manager) ? manager : null;
-    }
-
-    /// <summary>
-    ///     Toggles the external Spout sender for the named target. The in-process
-    ///     frame source is unaffected — disabling this only stops publishing to OBS
-    ///     and other external receivers.
+    ///     Toggles the external Spout sender for the named target. Turning it
+    ///     off stops publishing to OBS and other external receivers (including
+    ///     the overlay window, which receives via the same Spout sender path).
     /// </summary>
     public void SetSenderEnabled(string spoutName, bool enabled)
     {

@@ -38,6 +38,10 @@ public class PersonaStateProviderTests
         var context = Substitute.For<IConversationContext>();
         context.PendingTurn.Returns((InteractionTurn?)null);
         session.Context.Returns(context);
+        // Without a CurrentState stub, NSubstitute returns the enum's default
+        // (Initial) — which the provider treats as "not running" → NoSession.
+        // Pin an active state so the under-test Idle/Thinking/Speaking logic runs.
+        session.CurrentState.Returns(ConversationState.Idle);
 
         _orchestrator.GetActiveSessionIds().Returns(new[] { sessionId });
         _orchestrator.GetSession(sessionId).Returns(session);
@@ -56,6 +60,7 @@ public class PersonaStateProviderTests
         var context = Substitute.For<IConversationContext>();
         context.PendingTurn.Returns((InteractionTurn?)null);
         session.Context.Returns(context);
+        session.CurrentState.Returns(ConversationState.Idle);
 
         _orchestrator.GetActiveSessionIds().Returns(new[] { sessionId });
         _orchestrator.GetSession(sessionId).Returns(session);
@@ -141,6 +146,7 @@ public class PersonaStateProviderTests
 
         context.PendingTurn.Returns(pendingTurn);
         session.Context.Returns(context);
+        session.CurrentState.Returns(ConversationState.WaitingForLlm);
 
         _orchestrator.GetActiveSessionIds().Returns(new[] { sessionId });
         _orchestrator.GetSession(sessionId).Returns(session);
@@ -179,6 +185,7 @@ public class PersonaStateProviderTests
 
         context.PendingTurn.Returns(pendingTurn);
         session.Context.Returns(context);
+        session.CurrentState.Returns(ConversationState.Speaking);
 
         _orchestrator.GetActiveSessionIds().Returns(new[] { sessionId });
         _orchestrator.GetSession(sessionId).Returns(session);

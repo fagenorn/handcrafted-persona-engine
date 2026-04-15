@@ -147,6 +147,7 @@ internal static class Program
                 LogEventLevel.Information
             )
             .MinimumLevel.Override("Startup", LogEventLevel.Information)
+            .MinimumLevel.Override("PersonaEngine.Lib.UI.Overlay", LogEventLevel.Information)
             .MinimumLevel.Override("llama.cpp", LogEventLevel.Error)
             .Enrich.FromLogContext()
             .Enrich.With<GuidToEmojiEnricher>()

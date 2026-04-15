@@ -1,6 +1,7 @@
 using System.Numerics;
+using PersonaEngine.Lib.UI.ControlPanel;
 
-namespace PersonaEngine.Lib.UI.ControlPanel;
+namespace PersonaEngine.Lib.UI.ControlPanel.Visuals;
 
 public record struct Particle
 {

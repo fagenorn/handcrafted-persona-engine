@@ -1,7 +1,8 @@
 using System.Numerics;
 using Hexa.NET.ImGui;
+using PersonaEngine.Lib.UI.ControlPanel;
 
-namespace PersonaEngine.Lib.UI.ControlPanel;
+namespace PersonaEngine.Lib.UI.ControlPanel.Visuals;
 
 /// <summary>
 /// The persona's status + voice indicator. A pulsing orb that doubles as a

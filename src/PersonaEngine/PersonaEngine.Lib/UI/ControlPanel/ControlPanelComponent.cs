@@ -5,6 +5,7 @@ using PersonaEngine.Lib.UI.ControlPanel.Panels;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Listening;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Personality;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice;
+using PersonaEngine.Lib.UI.ControlPanel.Visuals;
 using Silk.NET.Input;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
@@ -37,11 +38,16 @@ public sealed class ControlPanelComponent : IRenderComponent
     private readonly WindowFrameGlow _windowFrameGlow;
     private readonly IConfigWriter _configWriter;
     private readonly Navigation _navigation = new();
-    private readonly Dictionary<NavSection, Action<float>> _panelRenderers = new();
+    private readonly Dictionary<NavSection, PanelRegistration> _panelRegistrations = new();
+
+    private readonly record struct PanelRegistration(
+        Action<float> Render,
+        IActivatablePanel? Lifecycle
+    );
     private readonly StatusBar _statusBar;
     private readonly PersonaStateProvider _stateProvider;
 
-    private NavSection _lastSection;
+    private NavSection? _lastSection;
     private OneShotAnimation _panelTransition;
 
     // Saved toast animation state

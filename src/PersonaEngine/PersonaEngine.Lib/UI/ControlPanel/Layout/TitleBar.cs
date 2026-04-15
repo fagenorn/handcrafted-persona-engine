@@ -2,6 +2,7 @@ using System.Numerics;
 using Hexa.NET.ImGui;
 using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Configuration;
+using PersonaEngine.Lib.UI.Host;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Layout;
 

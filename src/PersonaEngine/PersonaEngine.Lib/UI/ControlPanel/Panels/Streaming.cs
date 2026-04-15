@@ -159,26 +159,6 @@ public sealed class Streaming(
             ImGui.TextUnformatted("(no Spout outputs configured)");
         }
 
-        var lockAspect = overlay.LockAspect;
-        ImGuiHelpers.SettingLabel(
-            "Lock aspect",
-            "Keep the overlay's width/height ratio matching the source resolution while resizing."
-        );
-        if (ImGui.Checkbox("##OverlayLockAspect", ref lockAspect))
-        {
-            configWriter.Write(cfg with { Overlay = overlay with { LockAspect = lockAspect } });
-        }
-
-        var fade = overlay.ChromeFadeSeconds;
-        ImGuiHelpers.SettingLabel(
-            "Chrome fade",
-            "How quickly the hover border fades in and out (seconds)."
-        );
-        if (ImGui.SliderFloat("##OverlayFade", ref fade, 0.02f, 0.5f, "%.2f s"))
-        {
-            configWriter.Write(cfg with { Overlay = overlay with { ChromeFadeSeconds = fade } });
-        }
-
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
         ImGui.TextUnformatted(
             $"Position: {overlay.X}, {overlay.Y}    Size: {overlay.Width} x {overlay.Height}"

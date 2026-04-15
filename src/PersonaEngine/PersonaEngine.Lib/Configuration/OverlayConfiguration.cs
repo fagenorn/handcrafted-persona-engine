@@ -38,18 +38,6 @@ public record OverlayConfiguration
     public int Height { get; set; } = 640;
 
     /// <summary>
-    ///     Keeps the width/height ratio equal to the source Spout target's dimensions
-    ///     when the user resizes the overlay. Prevents avatar distortion.
-    /// </summary>
-    public bool LockAspect { get; set; } = true;
-
-    /// <summary>
-    ///     Fade duration (seconds) for the hover chrome (border + resize handles).
-    ///     Applied on both fade-in and fade-out.
-    /// </summary>
-    public float ChromeFadeSeconds { get; set; } = 0.12f;
-
-    /// <summary>
     ///     Minimum overlay size. Prevents the user from collapsing it to nothing.
     /// </summary>
     public int MinWidth { get; set; } = 120;

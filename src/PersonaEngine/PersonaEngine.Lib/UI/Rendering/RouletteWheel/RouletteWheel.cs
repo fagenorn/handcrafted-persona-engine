@@ -217,15 +217,9 @@ public partial class RouletteWheel : IRenderComponent
 
     public void Dispose()
     {
-        // Context is destroyed anyway when app closes.
-
-        return;
-
-        _vao.Dispose();
-        _vertexBuffer.Dispose();
-        _indexBuffer.Dispose();
-        _shader.Dispose();
-        _textRenderer.Dispose();
+        // GL context is destroyed when the app closes — individual resource
+        // disposal is unnecessary and the handles are already invalid by the
+        // time the DI container tears down singletons.
     }
 
     public string GetLabel(int index)

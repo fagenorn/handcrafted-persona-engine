@@ -5,15 +5,15 @@ using Spout.Interop;
 namespace PersonaEngine.Lib.UI.Rendering.Spout;
 
 /// <summary>
-///     Owns the off-screen framebuffer that components render into, and optionally
-///     publishes that framebuffer to other processes via Spout (for OBS, etc.).
-///     Also acts as an <see cref="IFrameSource" /> so in-process consumers (floating
-///     overlay) can sample the same color texture without any extra copy.
+///     Owns the off-screen framebuffer that components render into, and publishes
+///     it to other processes via Spout (OBS, and the floating overlay which
+///     receives through the Spout sender registry — same process, but now via
+///     D3D11 shared-texture handle rather than a GL interop path).
 ///
-///     The Spout sender can be enabled/disabled at runtime without destroying the FBO.
-///     When disabled, the FBO keeps producing frames for in-process consumers only.
+///     The Spout sender can be enabled/disabled at runtime without destroying
+///     the FBO. When disabled, the FBO keeps rendering but nothing reads it.
 /// </summary>
-public class SpoutManager : IDisposable, IFrameSource
+public class SpoutManager : IDisposable
 {
     private readonly GL _gl;
 
@@ -43,18 +43,9 @@ public class SpoutManager : IDisposable, IFrameSource
         SetSenderEnabled(config.Enabled);
     }
 
-    // ── IFrameSource ────────────────────────────────────────────────────────────
-
-    public uint ColorTextureHandle => _customFboInitialized ? _colorAttachment : 0u;
-
     public int Width { get; }
 
     public int Height { get; }
-
-    // SendFbo is called with invertY=true (see SendFrame), meaning the Spout output
-    // is already flipped for DX coordinates. Our FBO itself is GL convention:
-    // origin at bottom-left. Consumers drawing to a swap chain (Y-down) must flip V.
-    public bool OriginBottomLeft => true;
 
     public string OutputName => _outputName;
 
