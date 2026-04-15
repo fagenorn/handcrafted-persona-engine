@@ -44,6 +44,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         Action<float> Render,
         IActivatablePanel? Lifecycle
     );
+
     private readonly StatusBar _statusBar;
     private readonly PersonaStateProvider _stateProvider;
 
@@ -125,15 +126,28 @@ public sealed class ControlPanelComponent : IRenderComponent
 
     public void Dispose()
     {
+        if (
+            _lastSection is { } active
+            && _panelRegistrations.TryGetValue(active, out var reg)
+            && reg.Lifecycle is { } lifecycle
+        )
+        {
+            lifecycle.OnDeactivated();
+        }
+
         _ambientRenderer.Dispose();
     }
 
     /// <summary>
-    ///     Registers a renderer for the given navigation section.
-    ///     Call this before the first frame to wire up panel content.
+    ///     Registers a renderer for the given navigation section. Optionally associates a
+    ///     lifecycle-aware panel object so <see cref="IActivatablePanel.OnActivated" /> /
+    ///     <see cref="IActivatablePanel.OnDeactivated" /> fire on section transitions.
     /// </summary>
-    public void RegisterPanel(NavSection section, Action<float> renderer) =>
-        _panelRenderers[section] = renderer;
+    public void RegisterPanel(
+        NavSection section,
+        Action<float> renderer,
+        IActivatablePanel? lifecycle = null
+    ) => _panelRegistrations[section] = new PanelRegistration(renderer, lifecycle);
 
     public void Render(float deltaTime)
     {
@@ -185,8 +199,9 @@ public sealed class ControlPanelComponent : IRenderComponent
     {
         var current = _navigation.ActiveSection;
 
-        if (current != _lastSection)
+        if (_lastSection is not { } previous || previous != current)
         {
+            HandleSectionTransition(_lastSection, current);
             _panelTransition.Start(PanelFadeInBase);
             _lastSection = current;
         }
@@ -200,9 +215,9 @@ public sealed class ControlPanelComponent : IRenderComponent
         var offsetY = (1f - t) * PanelSlideOffset;
         ImGui.SetCursorPosY(ImGui.GetCursorPosY() + offsetY);
 
-        if (_panelRenderers.TryGetValue(current, out var renderer))
+        if (_panelRegistrations.TryGetValue(current, out var registration))
         {
-            renderer(deltaTime);
+            registration.Render(deltaTime);
         }
         else
         {
@@ -212,6 +227,26 @@ public sealed class ControlPanelComponent : IRenderComponent
         }
 
         ImGui.PopStyleVar();
+    }
+
+    private void HandleSectionTransition(NavSection? previous, NavSection current)
+    {
+        if (
+            previous is { } prev
+            && _panelRegistrations.TryGetValue(prev, out var prevReg)
+            && prevReg.Lifecycle is { } prevLifecycle
+        )
+        {
+            prevLifecycle.OnDeactivated();
+        }
+
+        if (
+            _panelRegistrations.TryGetValue(current, out var currReg)
+            && currReg.Lifecycle is { } currLifecycle
+        )
+        {
+            currLifecycle.OnActivated();
+        }
     }
 
     private void RenderSavedIndicator(float dt)
