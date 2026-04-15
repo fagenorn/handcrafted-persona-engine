@@ -9,7 +9,6 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Layout;
 public sealed class ControlBar(IConversationOrchestrator orchestrator)
 {
     private bool _isMuted;
-    private bool _isPaused;
 
     public void Render(float deltaTime)
     {
@@ -25,22 +24,24 @@ public sealed class ControlBar(IConversationOrchestrator orchestrator)
 
     private void RenderPauseResumeButton()
     {
-        if (_isPaused)
+        var isPaused = IsAnyPaused();
+
+        if (isPaused)
         {
             if (ImGuiHelpers.PrimaryButton("Resume"))
             {
-                _isPaused = false;
+                _ = orchestrator.ResumeAllSessionsAsync().AsTask();
             }
         }
         else
         {
             if (ImGui.Button("Pause"))
             {
-                _isPaused = true;
+                _ = orchestrator.PauseAllSessionsAsync().AsTask();
             }
         }
 
-        ImGuiHelpers.Tooltip(_isPaused ? "Resume the conversation" : "Pause the conversation");
+        ImGuiHelpers.Tooltip(isPaused ? "Resume the conversation" : "Pause the conversation");
     }
 
     private void RenderSkipButton()
@@ -96,6 +97,27 @@ public sealed class ControlBar(IConversationOrchestrator orchestrator)
             {
                 var session = orchestrator.GetSession(id);
                 if (session.Context.PendingTurn is not null)
+                {
+                    return true;
+                }
+            }
+            catch (KeyNotFoundException)
+            {
+                // Session may have ended between enumeration and lookup
+            }
+        }
+
+        return false;
+    }
+
+    private bool IsAnyPaused()
+    {
+        foreach (var id in orchestrator.GetActiveSessionIds())
+        {
+            try
+            {
+                var session = orchestrator.GetSession(id);
+                if (session.IsPaused)
                 {
                     return true;
                 }
