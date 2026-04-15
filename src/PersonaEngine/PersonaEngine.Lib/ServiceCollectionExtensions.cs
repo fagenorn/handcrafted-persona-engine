@@ -450,7 +450,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<CurrentVibeSection>();
         services.AddSingleton<TopicsSection>();
         services.AddSingleton<PersonalityPanel>();
-        services.AddSingleton<Listening>();
+        // TODO: Register ListeningPanel in Task 17
+        // services.AddSingleton<Listening>();
         services.AddSingleton<Avatar>();
         services.AddSingleton<Subtitles>();
         services.AddSingleton<RouletteWheelPanel>();

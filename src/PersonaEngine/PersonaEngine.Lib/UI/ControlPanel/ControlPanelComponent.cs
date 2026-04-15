@@ -66,7 +66,6 @@ public sealed class ControlPanelComponent : IRenderComponent
         Dashboard dashboard,
         VoicePanel voicePanel,
         PersonalityPanel personalityPanel,
-        Listening listening,
         Avatar avatar,
         Subtitles subtitles,
         RouletteWheelPanel rouletteWheelPanel,
@@ -87,7 +86,8 @@ public sealed class ControlPanelComponent : IRenderComponent
         RegisterPanel(NavSection.Dashboard, dt => dashboard.Render(dt));
         RegisterPanel(NavSection.Voice, dt => voicePanel.Render(dt));
         RegisterPanel(NavSection.Personality, dt => personalityPanel.Render(dt));
-        RegisterPanel(NavSection.Listening, dt => listening.Render(dt));
+        // TODO: Wire ListeningPanel in Task 17
+        // RegisterPanel(NavSection.Listening, dt => listening.Render(dt));
         RegisterPanel(NavSection.Avatar, dt => avatar.Render(dt));
         RegisterPanel(NavSection.Subtitles, dt => subtitles.Render(dt));
         RegisterPanel(NavSection.RouletteWheel, dt => rouletteWheelPanel.Render(dt));
