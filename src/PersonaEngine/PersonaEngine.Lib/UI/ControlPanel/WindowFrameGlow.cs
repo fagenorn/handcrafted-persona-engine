@@ -14,7 +14,7 @@ public sealed class WindowFrameGlow
     // Visual constants
     private const float CornerRadius = 8f;
     private const float InnerInset = 1f;
-    private const float OuterGlowThickness = 2.5f;
+    private const float OuterGlowThickness = 2f;
     private const float InnerLineThickness = 1f;
 
     // Breathing oscillator — ~4s cycle, gentle ±0.05 amplitude around 0f.
