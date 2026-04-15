@@ -186,6 +186,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMicrophone, MicrophoneInputNAudioSource>();
         services.AddSingleton<IAwaitableAudioSource>(sp => sp.GetRequiredService<IMicrophone>());
 
+        services.AddSingleton<IMicrophoneAmplitudeProvider, MicrophoneAmplitudeProvider>();
+        services.AddSingleton<IVadProbabilityProvider, VadProbabilityProvider>();
+
         return services;
     }
 
