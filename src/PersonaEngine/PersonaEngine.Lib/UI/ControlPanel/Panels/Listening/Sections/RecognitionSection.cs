@@ -1,15 +1,278 @@
+using System.Numerics;
 using Hexa.NET.ImGui;
+using Microsoft.Extensions.Options;
+using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Listening.Sections;
 
-public sealed class RecognitionSection
+/// <summary>
+///     Recognition card: Whisper decoder preset (Fast/Balanced/Accurate) + a chip-based
+///     Custom Vocabulary editor backed by <see cref="AsrConfiguration.TtsPrompt" />.
+/// </summary>
+public sealed class RecognitionSection : IDisposable
 {
+    private const int InputBufferSize = 128;
+    private const int MaxVocabulary = 30;
+    private const float ChipGap = 6f;
+    private const float ChipPaddingX = 10f;
+    private const float ChipPaddingY = 4f;
+    private const float ChipRounding = 12f;
+    private const float ChipCloseSize = 14f;
+    private const float ChipCloseGap = 6f;
+
+    private static readonly (string Label, WhisperConfigTemplate Value)[] QualityOptions =
+    {
+        ("Fast", WhisperConfigTemplate.Performant),
+        ("Balanced", WhisperConfigTemplate.Balanced),
+        ("Accurate", WhisperConfigTemplate.Precise),
+    };
+
+    private readonly IConfigWriter _configWriter;
+    private readonly IDisposable? _changeSubscription;
+
+    private AsrConfiguration _asr;
+    private string _inputBuffer = string.Empty;
+    private List<string> _vocabulary = new();
+
+    public RecognitionSection(IOptionsMonitor<AsrConfiguration> monitor, IConfigWriter configWriter)
+    {
+        _configWriter = configWriter;
+        _asr = monitor.CurrentValue;
+        _vocabulary = ParseVocabulary(_asr.TtsPrompt);
+        _changeSubscription = monitor.OnChange(
+            (updated, _) =>
+            {
+                _asr = updated;
+                _vocabulary = ParseVocabulary(updated.TtsPrompt);
+            }
+        );
+    }
+
+    public void Dispose() => _changeSubscription?.Dispose();
+
     public void Render(float dt)
     {
         using (Ui.Card("##recognition", padding: 12f))
         {
-            ImGui.TextUnformatted("Recognition (stub)");
+            RenderHeader();
+            RenderQuality();
+            ImGui.Spacing();
+            RenderVocabulary();
         }
+    }
+
+    private static void RenderHeader()
+    {
+        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextTertiary);
+        ImGui.TextUnformatted("Recognition");
+        ImGui.PopStyleColor();
+
+        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
+        ImGui.TextUnformatted("How we turn your speech into text for the avatar");
+        ImGui.PopStyleColor();
+
+        ImGui.Spacing();
+    }
+
+    private void RenderQuality()
+    {
+        ImGuiHelpers.SettingLabel(
+            "Quality",
+            "Trade-off between speed and accuracy of transcription."
+        );
+
+        for (var i = 0; i < QualityOptions.Length; i++)
+        {
+            var (label, value) = QualityOptions[i];
+            var selected = _asr.TtsMode == value;
+            if (ImGuiHelpers.Chip(label, selected))
+            {
+                _asr = _asr with { TtsMode = value };
+                _configWriter.Write(_asr);
+            }
+
+            if (i < QualityOptions.Length - 1)
+                ImGui.SameLine(0f, ChipGap);
+        }
+    }
+
+    private void RenderVocabulary()
+    {
+        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextTertiary);
+        ImGui.TextUnformatted("Custom Vocabulary");
+        ImGui.PopStyleColor();
+
+        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
+        ImGui.TextUnformatted(
+            "Words we should recognize correctly — your avatar's name, show name, recurring topics."
+        );
+        ImGui.PopStyleColor();
+
+        ImGui.Spacing();
+
+        RenderChips();
+        RenderAddInput();
+    }
+
+    private void RenderChips()
+    {
+        if (_vocabulary.Count == 0)
+            return;
+
+        int? removeIndex = null;
+        var availableWidth = ImGui.GetContentRegionAvail().X;
+        var currentLineWidth = 0f;
+        var isFirstOnLine = true;
+
+        for (var i = 0; i < _vocabulary.Count; i++)
+        {
+            var label = _vocabulary[i];
+            var chipWidth = MeasureRemovableChipWidth(label);
+
+            if (!isFirstOnLine && currentLineWidth + ChipGap + chipWidth > availableWidth)
+            {
+                currentLineWidth = 0f;
+                isFirstOnLine = true;
+            }
+
+            if (!isFirstOnLine)
+            {
+                ImGui.SameLine(0f, ChipGap);
+                currentLineWidth += ChipGap;
+            }
+
+            if (RenderRemovableChip(label, i))
+            {
+                removeIndex = i;
+            }
+
+            currentLineWidth += chipWidth;
+            isFirstOnLine = false;
+        }
+
+        if (removeIndex.HasValue)
+        {
+            _vocabulary.RemoveAt(removeIndex.Value);
+            CommitVocabulary();
+        }
+
+        ImGui.Spacing();
+    }
+
+    private void RenderAddInput()
+    {
+        ImGui.SetNextItemWidth(-1f);
+        if (
+            ImGui.InputTextWithHint(
+                "##addvoc",
+                "Add a word...",
+                ref _inputBuffer,
+                InputBufferSize,
+                ImGuiInputTextFlags.EnterReturnsTrue
+            )
+        )
+        {
+            var trimmed = _inputBuffer.Trim();
+            if (
+                trimmed.Length > 0
+                && _vocabulary.Count < MaxVocabulary
+                && !_vocabulary.Contains(trimmed, StringComparer.OrdinalIgnoreCase)
+            )
+            {
+                _vocabulary.Add(trimmed);
+                CommitVocabulary();
+            }
+
+            _inputBuffer = string.Empty;
+        }
+    }
+
+    private void CommitVocabulary()
+    {
+        _asr = _asr with { TtsPrompt = string.Join(", ", _vocabulary) };
+        _configWriter.Write(_asr);
+    }
+
+    private static List<string> ParseVocabulary(string? prompt)
+    {
+        if (string.IsNullOrWhiteSpace(prompt))
+            return new List<string>();
+
+        var parts = prompt.Split(
+            ',',
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+        );
+        return new List<string>(parts);
+    }
+
+    /// <summary>
+    ///     Renders a chip with an integrated close (x) icon. Returns true if the user
+    ///     clicked the close area.
+    /// </summary>
+    private static bool RenderRemovableChip(string label, int index)
+    {
+        var textSize = ImGui.CalcTextSize(label);
+        var totalWidth = ChipPaddingX + textSize.X + ChipCloseGap + ChipCloseSize + ChipPaddingX;
+        var totalHeight = textSize.Y + ChipPaddingY * 2f;
+        var size = new Vector2(totalWidth, totalHeight);
+
+        var cursor = ImGui.GetCursorScreenPos();
+        var clicked = ImGui.InvisibleButton($"##vocab_{index}", size);
+        ImGuiHelpers.HandCursorOnHover();
+        var hovered = ImGui.IsItemHovered();
+
+        var drawList = ImGui.GetWindowDrawList();
+        var min = cursor;
+        var max = cursor + size;
+
+        // Background
+        Vector4 fill = hovered ? Theme.SurfaceHover : Theme.Surface2;
+        ImGui.AddRectFilled(drawList, min, max, ImGui.ColorConvertFloat4ToU32(fill), ChipRounding);
+
+        // Border
+        ImGui.AddRect(
+            drawList,
+            min,
+            max,
+            ImGui.ColorConvertFloat4ToU32(Theme.AccentPrimary with { W = 0.3f }),
+            ChipRounding,
+            0,
+            1f
+        );
+
+        // Label text
+        var textPos = new Vector2(min.X + ChipPaddingX, min.Y + ChipPaddingY);
+        drawList.AddText(textPos, ImGui.ColorConvertFloat4ToU32(Theme.TextPrimary), label);
+
+        // Close icon (x)
+        var closeCenter = new Vector2(
+            max.X - ChipPaddingX - ChipCloseSize * 0.5f,
+            min.Y + totalHeight * 0.5f
+        );
+        var crossHalf = 4f;
+        var closeColor = ImGui.ColorConvertFloat4ToU32(
+            hovered ? Theme.TextPrimary : Theme.TextSecondary
+        );
+        drawList.AddLine(
+            closeCenter - new Vector2(crossHalf, crossHalf),
+            closeCenter + new Vector2(crossHalf, crossHalf),
+            closeColor,
+            1.5f
+        );
+        drawList.AddLine(
+            closeCenter + new Vector2(-crossHalf, crossHalf),
+            closeCenter + new Vector2(crossHalf, -crossHalf),
+            closeColor,
+            1.5f
+        );
+
+        return clicked;
+    }
+
+    private static float MeasureRemovableChipWidth(string label)
+    {
+        var textWidth = ImGui.CalcTextSize(label).X;
+        return ChipPaddingX + textWidth + ChipCloseGap + ChipCloseSize + ChipPaddingX;
     }
 }
