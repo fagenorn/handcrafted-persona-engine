@@ -27,6 +27,14 @@ public partial class ConversationSession
                     break;
                 }
 
+                if (!_inputGate.IsOpen)
+                {
+                    // Input gated (e.g., operator is tuning the microphone via the Listening
+                    // panel). Drop the event without processing — mic/VAD/ASR upstream keep
+                    // running so calibration feedback stays live.
+                    continue;
+                }
+
                 try
                 {
                     if (inputEvent is SttSegmentRecognizing && !_metricsTracker.HasSttStart)
