@@ -5,7 +5,6 @@ using PersonaEngine.Lib.UI.ControlPanel.Panels;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Listening;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Personality;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice;
-using PersonaEngine.Lib.UI.ControlPanel.Visuals;
 using Silk.NET.Input;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;

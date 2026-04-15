@@ -56,8 +56,6 @@ using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Audition;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Models;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Sections;
 using PersonaEngine.Lib.UI.ControlPanel.Services;
-using PersonaEngine.Lib.UI.ControlPanel.Visuals;
-using PersonaEngine.Lib.UI.Host;
 using PersonaEngine.Lib.UI.Overlay;
 using PersonaEngine.Lib.UI.Rendering.RouletteWheel;
 using PersonaEngine.Lib.UI.Rendering.Subtitles;

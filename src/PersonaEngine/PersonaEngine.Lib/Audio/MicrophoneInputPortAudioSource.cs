@@ -31,6 +31,8 @@ public sealed class MicrophoneInputPortAudioSource : AwaitableWaveFileSource, IM
 
     private Dictionary<string, string> _metadata;
 
+    public event AudioSamplesHandler? SamplesAvailable;
+
     public MicrophoneInputPortAudioSource(
         ILogger<MicrophoneInputPortAudioSource> logger,
         int deviceNumber = -1,
