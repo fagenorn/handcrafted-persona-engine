@@ -27,8 +27,10 @@ public sealed class LiveMeterWidget
     // so the threshold relationship is direct.
     private const float MicPipSmoothingRate = 15f;
 
-    // EMA weight for push-interval estimation. Lower = smoother but slower to adapt.
-    private const float IntervalEmaAlpha = 0.2f;
+    // Silero VAD processes 512-sample batches at 16 kHz — one probability sample every
+    // 32 ms, i.e. ~31.25 Hz. This is deterministic so we skip any adaptive interval
+    // estimation (the previous EMA version oscillated on frame-quantized observations).
+    private const float VadPushInterval = 512f / 16000f;
 
     private readonly IMicrophoneAmplitudeProvider _micAmp;
     private readonly IVadProbabilityProvider _vadProb;
@@ -36,7 +38,7 @@ public sealed class LiveMeterWidget
     private float _displayMicAmp;
 
     // Scroll-interpolation state — one per trace source.
-    private TraceScroll _vadScroll = TraceScroll.Initial(1f / 31f);
+    private TraceScroll _vadScroll = TraceScroll.Initial(VadPushInterval);
 
     // Draggable threshold line state.
     private bool _isDraggingThreshold;
@@ -253,13 +255,20 @@ public sealed class LiveMeterWidget
             ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeNs);
         }
 
+        // Clip trace + fill to the plot region so points sliding in from the right edge
+        // (see DrawTrace for the +1 step shift) don't spill outside the card.
+        ImGui.PushClipRect(drawList, plotMin, plotMax, true);
+
         // Above-threshold fill — quads from trace points down to threshold line, in accent color.
         DrawAboveThresholdFill(drawList, plotMin, plotMax, threshold, thresholdY);
 
         // The probability trace itself.
         DrawTrace(drawList, plotMin, plotMax, threshold);
 
-        // Threshold line (drawn last so it sits on top).
+        ImGui.PopClipRect(drawList);
+
+        // Threshold line (drawn last so it sits on top, OUTSIDE the clip so the label
+        // remains visible even when it would otherwise sit beyond the plot bounds).
         var isHot = isExternallyActive || _isDraggingThreshold || nearLine;
         DrawThresholdLine(drawList, plotMin, plotMax, thresholdY, isHot);
 
@@ -279,6 +288,8 @@ public sealed class LiveMeterWidget
 
         var width = plotMax.X - plotMin.X;
         var height = plotMax.Y - plotMin.Y;
+        // step sized so N history points span exactly the plot width when offset == 1
+        // (the instant just before the next push). See below for the +1 shift rationale.
         var step = width / (history.Length - 1);
         var offset = _vadScroll.SubSlotOffset;
         var head = _vadProb.HistoryHead;
@@ -286,12 +297,20 @@ public sealed class LiveMeterWidget
         var aboveCol = ImGui.ColorConvertFloat4ToU32(Theme.AccentPrimary);
         var belowCol = ImGui.ColorConvertFloat4ToU32(Theme.TextSecondary);
 
+        // X-position formula: `(i + 1 - offset) * step`.
+        // - Just after push (offset=0): newest point sits at plotMax.X + step (off-screen
+        //   right, hidden by clip rect). As offset grows over the next interval it slides
+        //   into view, reaching plotMax.X exactly at offset=1 (the instant before the
+        //   next push). The OLDEST point slides from plotMin.X + step to plotMin.X over
+        //   the same interval, then is overwritten by the next push.
+        // - Without this +1 step shift new data would pop into existence at plotMax.X;
+        //   the scroll looked smooth on the left but jittery on the right.
         Vector2 previous = default;
         for (var i = 0; i < history.Length; i++)
         {
             var idx = (head + i) % history.Length;
             var v = Math.Clamp(history[idx], 0f, 1f);
-            var point = new Vector2(plotMin.X + step * (i - offset), plotMax.Y - height * v);
+            var point = new Vector2(plotMin.X + step * (i + 1 - offset), plotMax.Y - height * v);
             if (i > 0)
             {
                 // Segment color: accent if either endpoint is above threshold, muted below.
@@ -325,6 +344,9 @@ public sealed class LiveMeterWidget
 
         // Render as a series of thin vertical strips from threshold line down to the trace
         // where the trace is above threshold. Cheap, no polygon triangulation needed.
+        // X-positions match DrawTrace's +1 step shift so the shading stays aligned with
+        // the trace as it scrolls. The caller pushes a clip rect over the plot region so
+        // we don't need per-strip bounds checks here.
         for (var i = 0; i < history.Length; i++)
         {
             var idx = (head + i) % history.Length;
@@ -332,15 +354,9 @@ public sealed class LiveMeterWidget
             if (v <= threshold)
                 continue;
 
-            var x0 = plotMin.X + step * (i - offset);
-            var x1 = plotMin.X + step * (i + 1 - offset);
+            var x0 = plotMin.X + step * (i + 1 - offset);
+            var x1 = plotMin.X + step * (i + 2 - offset);
             var y = plotMax.Y - height * v;
-
-            // Clip to plot bounds.
-            if (x1 < plotMin.X || x0 > plotMax.X)
-                continue;
-            x0 = MathF.Max(x0, plotMin.X);
-            x1 = MathF.Min(x1, plotMax.X);
 
             ImGui.AddRectFilled(drawList, new Vector2(x0, y), new Vector2(x1, thresholdY), fillCol);
         }
@@ -410,20 +426,31 @@ public sealed class LiveMeterWidget
     /// <summary>
     ///     Tracks sub-slot scroll offset for a single history-based trace so the draw code
     ///     can render between sample arrivals at pixel resolution.
+    ///     <para>
+    ///         Uses a fixed expected push interval (no EMA): frame-quantized observations
+    ///         of the head counter produce noisy interval estimates that visibly oscillate
+    ///         the scroll speed. Providers publish their nominal rate up-front — the scroll
+    ///         can trust it. If the real rate drifts a little the scroll will briefly fall
+    ///         behind or ahead of the data ring; the safety clamp below keeps it bounded.
+    ///     </para>
+    ///     <para>
+    ///         The offset is advanced continuously each frame and decremented by
+    ///         <c>slotsAdvanced</c> on every head transition — this preserves sub-slot
+    ///         phase across push boundaries instead of snapping back to zero, which would
+    ///         make the trace briefly stall on every push arrival.
+    ///     </para>
     /// </summary>
     private struct TraceScroll
     {
         private int _lastKnownHead;
-        private float _elapsedSinceUpdate;
-        private float _estimatedInterval;
+        private float _expectedInterval;
         private float _subSlotOffset;
         private bool _initialized;
 
-        public static TraceScroll Initial(float defaultInterval) =>
+        public static TraceScroll Initial(float expectedInterval) =>
             new()
             {
-                _estimatedInterval = defaultInterval,
-                _elapsedSinceUpdate = 0f,
+                _expectedInterval = expectedInterval,
                 _subSlotOffset = 0f,
                 _initialized = false,
                 _lastKnownHead = 0,
@@ -433,7 +460,7 @@ public sealed class LiveMeterWidget
 
         public void Update(float dt, int currentHead, int historyLength)
         {
-            if (historyLength <= 0)
+            if (historyLength <= 0 || _expectedInterval <= 0f)
             {
                 _subSlotOffset = 0f;
                 return;
@@ -442,35 +469,34 @@ public sealed class LiveMeterWidget
             if (!_initialized)
             {
                 _lastKnownHead = currentHead;
+                _subSlotOffset = 0f;
                 _initialized = true;
+                return;
             }
 
-            _elapsedSinceUpdate += dt;
+            // Continuously advance offset by elapsed fraction of an interval.
+            _subSlotOffset += dt / _expectedInterval;
 
+            // On new samples, decrement offset by the number of slots that advanced —
+            // this preserves the fractional phase across the push boundary instead of
+            // snapping to zero.
             if (currentHead != _lastKnownHead)
             {
                 var slotsAdvanced = (currentHead - _lastKnownHead + historyLength) % historyLength;
                 if (slotsAdvanced == 0)
-                    slotsAdvanced = historyLength; // full wraparound — treat as full window
+                    slotsAdvanced = historyLength;
 
-                var observedInterval =
-                    slotsAdvanced > 0 ? _elapsedSinceUpdate / slotsAdvanced : _estimatedInterval;
-
-                // Clamp observed to sane bounds — guards against very first frame after
-                // app start when providers may have been running long before the UI opened.
-                observedInterval = Math.Clamp(observedInterval, 1f / 240f, 1f / 4f);
-
-                _estimatedInterval =
-                    _estimatedInterval * (1f - IntervalEmaAlpha)
-                    + observedInterval * IntervalEmaAlpha;
-                _elapsedSinceUpdate = 0f;
-                _subSlotOffset = MathF.Max(0f, _subSlotOffset - slotsAdvanced);
+                _subSlotOffset -= slotsAdvanced;
                 _lastKnownHead = currentHead;
             }
 
-            // Advance sub-slot offset by the fraction of an interval that has passed.
-            var fraction = _elapsedSinceUpdate / _estimatedInterval;
-            _subSlotOffset = Math.Clamp(fraction, 0f, 1.25f);
+            // Safety clamp: if the widget was hidden for a while (no updates) or the
+            // provider rate drifted a lot, snap toward zero rather than drawing with
+            // a giant stale offset.
+            if (_subSlotOffset > 2f || _subSlotOffset < -1f)
+            {
+                _subSlotOffset = 0f;
+            }
         }
     }
 }
