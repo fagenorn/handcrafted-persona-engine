@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NAudio.Wave;
@@ -26,6 +27,12 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
     private bool _wasRecordingBeforeReconfigure = false;
 
     private WaveInEvent? _waveIn;
+
+    public event AudioSamplesHandler? SamplesAvailable;
+
+    // Scratch float buffer for int16 → float conversion before raising SamplesAvailable.
+    // Pre-allocated for 1 second at 16 kHz (16000 samples), grown via Array.Resize if needed.
+    private float[] _samplesScratch = new float[16000];
 
     public MicrophoneInputNAudioSource(
         ILogger<MicrophoneInputNAudioSource> logger,
@@ -347,6 +354,30 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
 
         var sourceSpan = e.Buffer.AsMemory(0, e.BytesRecorded);
         WriteData(sourceSpan);
+
+        RaiseSamplesAvailable(e.Buffer, e.BytesRecorded);
+    }
+
+    private void RaiseSamplesAvailable(byte[] buffer, int bytesRecorded)
+    {
+        var handler = SamplesAvailable;
+        if (handler is null)
+            return;
+
+        // WaveFormat is fixed at 16-bit mono 16 kHz (see InitializeMicrophone).
+        var int16s = MemoryMarshal.Cast<byte, short>(buffer.AsSpan(0, bytesRecorded));
+        if (_samplesScratch.Length < int16s.Length)
+        {
+            Array.Resize(ref _samplesScratch, int16s.Length);
+        }
+
+        var floatSpan = _samplesScratch.AsSpan(0, int16s.Length);
+        for (var i = 0; i < int16s.Length; i++)
+        {
+            floatSpan[i] = int16s[i] / 32768f;
+        }
+
+        handler(floatSpan, 16000);
     }
 
     private void WaveInRecordingStopped(object? sender, StoppedEventArgs e)
