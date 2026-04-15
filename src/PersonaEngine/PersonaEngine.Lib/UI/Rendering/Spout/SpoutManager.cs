@@ -1,17 +1,23 @@
-﻿using PersonaEngine.Lib.Configuration;
+using PersonaEngine.Lib.Configuration;
 using Silk.NET.OpenGL;
 using Spout.Interop;
 
 namespace PersonaEngine.Lib.UI.Rendering.Spout;
 
 /// <summary>
-///     Provides real-time frame sharing via Spout with custom framebuffer support.
+///     Owns the off-screen framebuffer that components render into, and optionally
+///     publishes that framebuffer to other processes via Spout (for OBS, etc.).
+///     Also acts as an <see cref="IFrameSource" /> so in-process consumers (floating
+///     overlay) can sample the same color texture without any extra copy.
+///
+///     The Spout sender can be enabled/disabled at runtime without destroying the FBO.
+///     When disabled, the FBO keeps producing frames for in-process consumers only.
 /// </summary>
-public class SpoutManager : IDisposable
+public class SpoutManager : IDisposable, IFrameSource
 {
-    private readonly SpoutConfiguration _config;
-
     private readonly GL _gl;
+
+    private readonly string _outputName;
 
     private readonly SpoutSender _spoutSender;
 
@@ -19,29 +25,64 @@ public class SpoutManager : IDisposable
 
     private uint _customFbo;
 
-    private bool _customFboInitialized = false;
+    private bool _customFboInitialized;
 
     private uint _depthAttachment;
+
+    private bool _senderCreated;
 
     public SpoutManager(GL gl, SpoutConfiguration config)
     {
         _gl = gl;
-        _config = config;
+        _outputName = config.OutputName;
+        Width = config.Width;
+        Height = config.Height;
         _spoutSender = new SpoutSender();
 
         InitializeCustomFramebuffer();
+        SetSenderEnabled(config.Enabled);
+    }
 
-        if (
-            !_spoutSender.CreateSender(
-                config.OutputName,
-                (uint)_config.Width,
-                (uint)_config.Height,
-                0
-            )
-        )
+    // ── IFrameSource ────────────────────────────────────────────────────────────
+
+    public uint ColorTextureHandle => _customFboInitialized ? _colorAttachment : 0u;
+
+    public int Width { get; }
+
+    public int Height { get; }
+
+    // SendFbo is called with invertY=true (see SendFrame), meaning the Spout output
+    // is already flipped for DX coordinates. Our FBO itself is GL convention:
+    // origin at bottom-left. Consumers drawing to a swap chain (Y-down) must flip V.
+    public bool OriginBottomLeft => true;
+
+    public string OutputName => _outputName;
+
+    /// <summary>
+    ///     Turn the Spout sender on or off without touching the FBO. The in-process
+    ///     frame source keeps working either way.
+    /// </summary>
+    public void SetSenderEnabled(bool enabled)
+    {
+        if (enabled == _senderCreated)
         {
-            _spoutSender.Dispose();
-            Console.WriteLine($"Failed to create Spout Sender '{config.OutputName}'.");
+            return;
+        }
+
+        if (enabled)
+        {
+            if (!_spoutSender.CreateSender(_outputName, (uint)Width, (uint)Height, 0))
+            {
+                Console.WriteLine($"Failed to create Spout sender '{_outputName}'.");
+                return;
+            }
+
+            _senderCreated = true;
+        }
+        else
+        {
+            _spoutSender.ReleaseSender();
+            _senderCreated = false;
         }
     }
 
@@ -52,9 +93,16 @@ public class SpoutManager : IDisposable
             _gl.DeleteTexture(_colorAttachment);
             _gl.DeleteTexture(_depthAttachment);
             _gl.DeleteFramebuffer(_customFbo);
+            _customFboInitialized = false;
         }
 
-        _spoutSender?.Dispose();
+        if (_senderCreated)
+        {
+            _spoutSender.ReleaseSender();
+            _senderCreated = false;
+        }
+
+        _spoutSender.Dispose();
     }
 
     private unsafe void InitializeCustomFramebuffer()
@@ -68,8 +116,8 @@ public class SpoutManager : IDisposable
             GLEnum.Texture2D,
             0,
             (int)GLEnum.Rgba8,
-            (uint)_config.Width,
-            (uint)_config.Height,
+            (uint)Width,
+            (uint)Height,
             0,
             GLEnum.Rgba,
             GLEnum.UnsignedByte,
@@ -78,6 +126,8 @@ public class SpoutManager : IDisposable
 
         _gl.TexParameter(GLEnum.Texture2D, GLEnum.TextureMinFilter, (int)GLEnum.Linear);
         _gl.TexParameter(GLEnum.Texture2D, GLEnum.TextureMagFilter, (int)GLEnum.Linear);
+        _gl.TexParameter(GLEnum.Texture2D, GLEnum.TextureWrapS, (int)GLEnum.ClampToEdge);
+        _gl.TexParameter(GLEnum.Texture2D, GLEnum.TextureWrapT, (int)GLEnum.ClampToEdge);
         _gl.FramebufferTexture2D(
             GLEnum.Framebuffer,
             GLEnum.ColorAttachment0,
@@ -92,8 +142,8 @@ public class SpoutManager : IDisposable
             GLEnum.Texture2D,
             0,
             (int)GLEnum.DepthComponent,
-            (uint)_config.Width,
-            (uint)_config.Height,
+            (uint)Width,
+            (uint)Height,
             0,
             GLEnum.DepthComponent,
             GLEnum.Float,
@@ -125,31 +175,33 @@ public class SpoutManager : IDisposable
     /// </summary>
     public void BeginFrame()
     {
-        if (_customFboInitialized)
+        if (!_customFboInitialized)
         {
-            _gl.BindFramebuffer(GLEnum.Framebuffer, _customFbo);
+            return;
+        }
 
-            _gl.Viewport(0, 0, (uint)_config.Width, (uint)_config.Height);
+        _gl.BindFramebuffer(GLEnum.Framebuffer, _customFbo);
 
-            var blendEnabled = _gl.IsEnabled(EnableCap.Blend);
+        _gl.Viewport(0, 0, (uint)Width, (uint)Height);
 
-            // Enable blending for transparency
-            _gl.Enable(EnableCap.Blend);
-            _gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+        var blendEnabled = _gl.IsEnabled(EnableCap.Blend);
 
-            // Clear with transparency (RGBA: 0,0,0,0)
-            _gl.ClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-            _gl.Clear((uint)(GLEnum.ColorBufferBit | GLEnum.DepthBufferBit));
+        // Enable blending for transparency
+        _gl.Enable(EnableCap.Blend);
+        _gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
 
-            if (!blendEnabled)
-            {
-                _gl.Disable(EnableCap.Blend);
-            }
+        // Clear with transparency (RGBA: 0,0,0,0)
+        _gl.ClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+        _gl.Clear((uint)(GLEnum.ColorBufferBit | GLEnum.DepthBufferBit));
+
+        if (!blendEnabled)
+        {
+            _gl.Disable(EnableCap.Blend);
         }
     }
 
     /// <summary>
-    ///     Sends the current frame to Spout and returns to the default framebuffer
+    ///     Sends the current frame to Spout (if enabled) and returns to the default framebuffer.
     /// </summary>
     /// <param name="blitToScreen">Whether to copy the framebuffer to the screen</param>
     /// <param name="windowWidth">Window width if blitting to screen</param>
@@ -158,12 +210,15 @@ public class SpoutManager : IDisposable
     {
         if (_customFboInitialized)
         {
-            _gl.GetInteger(GetPName.UnpackAlignment, out var previousUnpackAlignment);
-            _gl.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
+            if (_senderCreated)
+            {
+                _gl.GetInteger(GetPName.UnpackAlignment, out var previousUnpackAlignment);
+                _gl.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
 
-            _spoutSender.SendFbo(_customFbo, (uint)_config.Width, (uint)_config.Height, true);
+                _spoutSender.SendFbo(_customFbo, (uint)Width, (uint)Height, true);
 
-            _gl.PixelStore(PixelStoreParameter.UnpackAlignment, previousUnpackAlignment);
+                _gl.PixelStore(PixelStoreParameter.UnpackAlignment, previousUnpackAlignment);
+            }
 
             if (blitToScreen && windowWidth > 0 && windowHeight > 0)
             {
@@ -180,8 +235,8 @@ public class SpoutManager : IDisposable
                 _gl.BlitFramebuffer(
                     0,
                     0,
-                    _config.Width,
-                    _config.Height,
+                    Width,
+                    Height,
                     0,
                     0,
                     windowWidth,
@@ -198,10 +253,10 @@ public class SpoutManager : IDisposable
 
             _gl.BindFramebuffer(GLEnum.Framebuffer, 0);
         }
-        else
+        else if (_senderCreated)
         {
             _gl.GetInteger(GetPName.ReadFramebufferBinding, out var fboId);
-            _spoutSender.SendFbo((uint)fboId, (uint)_config.Width, (uint)_config.Height, true);
+            _spoutSender.SendFbo((uint)fboId, (uint)Width, (uint)Height, true);
         }
     }
 
@@ -210,24 +265,9 @@ public class SpoutManager : IDisposable
     /// </summary>
     public void ResizeFramebuffer(int width, int height)
     {
-        // if ( _config.Width == width && _config.Height == height )
-        // {
-        //     return;
-        // }
-
-        // _config.Width  = width;
-        // _config.Height = height;
-
-        // if ( _customFboInitialized )
-        // {
-        //     _gl.DeleteTexture(_colorAttachment);
-        //     _gl.DeleteTexture(_depthAttachment);
-        //     _gl.DeleteFramebuffer(_customFbo);
-        //     _customFboInitialized = false;
-        // }
-        //
-        // InitializeCustomFramebuffer();
-        //
-        // _spoutSender.UpdateSender(_config.OutputName, (uint)width, (uint)height);
+        // Not implemented — SpoutConfiguration dimensions are fixed at startup.
+        // Resizing would require tearing down and rebuilding both the FBO and the
+        // Spout sender, which invalidates any existing receivers. Left as a stub
+        // to preserve the public surface.
     }
 }

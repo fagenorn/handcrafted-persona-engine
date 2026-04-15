@@ -4,6 +4,7 @@ using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
 using PersonaEngine.Lib.UI;
 using PersonaEngine.Lib.UI.Common;
 using PersonaEngine.Lib.UI.ControlPanel;
+using PersonaEngine.Lib.UI.Overlay;
 using PersonaEngine.Lib.UI.Rendering.Spout;
 using Silk.NET.Input;
 using Silk.NET.Maths;
@@ -42,16 +43,20 @@ public class AvatarApp : IDisposable
 
     private SpoutRegistry _spoutRegistry;
 
+    private readonly OverlayHost _overlayHost;
+
     public AvatarApp(
         IOptions<AvatarAppConfig> config,
         IEnumerable<IRenderComponent> renderComponents,
         IEnumerable<IStartupTask> startupTasks,
         IConversationOrchestrator conversationOrchestrator,
-        WindowManager windowManager
+        WindowManager windowManager,
+        OverlayHost overlayHost
     )
     {
         _config = config;
         _conversationOrchestrator = conversationOrchestrator;
+        _overlayHost = overlayHost;
 
         var allComponents = renderComponents.OrderByDescending(x => x.Priority).ToList();
 
@@ -86,11 +91,7 @@ public class AvatarApp : IDisposable
     public void Dispose()
     {
         // Context is destroyed anyway when app closes.
-
-        return;
-
-        _spoutRegistry?.Dispose();
-        _imGui.Dispose();
+        _overlayHost.Dispose();
     }
 
     private void OnLoad()
@@ -112,6 +113,10 @@ public class AvatarApp : IDisposable
         }
 
         _spoutRegistry = new SpoutRegistry(_gl, _config.Value.SpoutConfigs);
+
+        // Overlay runs on its own thread with its own GL context and consumes
+        // the avatar via Spout's cross-context DX11 shared texture bridge.
+        _overlayHost.Start(_spoutRegistry);
 
         _imGui = new ImGuiController(
             _gl,

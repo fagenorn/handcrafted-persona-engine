@@ -54,6 +54,7 @@ using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Audition;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Models;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Sections;
 using PersonaEngine.Lib.UI.ControlPanel.Services;
+using PersonaEngine.Lib.UI.Overlay;
 using PersonaEngine.Lib.UI.Rendering.RouletteWheel;
 using PersonaEngine.Lib.UI.Rendering.Subtitles;
 using PersonaEngine.Lib.Vision;
@@ -374,6 +375,8 @@ public static class ServiceCollectionExtensions
                 config.Title
             );
         });
+
+        services.AddSingleton<OverlayHost>();
 
         return services;
     }

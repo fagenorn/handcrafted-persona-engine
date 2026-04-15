@@ -1,4 +1,4 @@
-﻿using PersonaEngine.Lib.Configuration;
+using PersonaEngine.Lib.Configuration;
 using Silk.NET.OpenGL;
 
 namespace PersonaEngine.Lib.UI.Rendering.Spout;
@@ -41,6 +41,37 @@ public class SpoutRegistry : IDisposable
         }
 
         return manager;
+    }
+
+    /// <summary>
+    ///     Returns the in-process frame source for the named Spout target, or null if
+    ///     no such target is registered. Used by the floating overlay to sample the
+    ///     same color texture that Spout publishes.
+    /// </summary>
+    public IFrameSource? GetFrameSource(string spoutName)
+    {
+        if (string.IsNullOrEmpty(spoutName))
+        {
+            return null;
+        }
+
+        return _spoutManagers.TryGetValue(spoutName, out var manager) ? manager : null;
+    }
+
+    /// <summary>
+    ///     Toggles the external Spout sender for the named target. The in-process
+    ///     frame source is unaffected — disabling this only stops publishing to OBS
+    ///     and other external receivers.
+    /// </summary>
+    public void SetSenderEnabled(string spoutName, bool enabled)
+    {
+        if (
+            !string.IsNullOrEmpty(spoutName)
+            && _spoutManagers.TryGetValue(spoutName, out var manager)
+        )
+        {
+            manager.SetSenderEnabled(enabled);
+        }
     }
 
     public void BeginFrame(string spoutName)
