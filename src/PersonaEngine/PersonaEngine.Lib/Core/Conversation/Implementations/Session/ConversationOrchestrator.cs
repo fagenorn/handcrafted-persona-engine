@@ -197,6 +197,48 @@ public class ConversationOrchestrator : IConversationOrchestrator
         }
     }
 
+    public async ValueTask PauseAllSessionsAsync(CancellationToken cancellationToken = default)
+    {
+        var activeSessionIds = _activeSessions.Keys.ToList();
+        foreach (var sessionId in activeSessionIds)
+        {
+            if (!_activeSessions.TryGetValue(sessionId, out var sessionInfo))
+            {
+                continue;
+            }
+
+            try
+            {
+                await sessionInfo.Session.PauseAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error pausing session {SessionId}.", sessionId);
+            }
+        }
+    }
+
+    public async ValueTask ResumeAllSessionsAsync(CancellationToken cancellationToken = default)
+    {
+        var activeSessionIds = _activeSessions.Keys.ToList();
+        foreach (var sessionId in activeSessionIds)
+        {
+            if (!_activeSessions.TryGetValue(sessionId, out var sessionInfo))
+            {
+                continue;
+            }
+
+            try
+            {
+                await sessionInfo.Session.ResumeAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error resuming session {SessionId}.", sessionId);
+            }
+        }
+    }
+
     public event EventHandler? SessionsUpdated;
 
     private async ValueTask HandleSessionCompletionAsync(

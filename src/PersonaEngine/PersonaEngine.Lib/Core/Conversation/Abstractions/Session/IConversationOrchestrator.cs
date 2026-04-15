@@ -12,5 +12,19 @@ public interface IConversationOrchestrator : IAsyncDisposable
 
     ValueTask StopAllSessionsAsync();
 
+    /// <summary>
+    ///     Pauses every active session by invoking <see cref="IConversationSession.PauseAsync" />.
+    ///     Errors on individual sessions are logged and do not prevent other sessions from
+    ///     being paused.
+    /// </summary>
+    ValueTask PauseAllSessionsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Resumes every paused session by invoking <see cref="IConversationSession.ResumeAsync" />.
+    ///     Errors on individual sessions are logged and do not prevent other sessions from
+    ///     being resumed.
+    /// </summary>
+    ValueTask ResumeAllSessionsAsync(CancellationToken cancellationToken = default);
+
     event EventHandler? SessionsUpdated;
 }
