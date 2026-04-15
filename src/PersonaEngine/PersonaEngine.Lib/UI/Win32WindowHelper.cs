@@ -41,6 +41,10 @@ public sealed class Win32WindowHelper : IDisposable
     private const int MONITOR_DEFAULTTONEAREST = 2;
     private const int TPM_RETURNCMD = 0x0100;
 
+    // DWM rounded corners (Windows 11+).
+    private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    private const int DWMWCP_ROUND = 2;
+
     private const int ResizeBorderWidth = 6;
 
     private delegate nint WndProcDelegate(nint hWnd, uint msg, nint wParam, nint lParam);
@@ -75,6 +79,16 @@ public sealed class Win32WindowHelper : IDisposable
         var style = GetWindowLong(_hwnd, GWL_STYLE);
         style |= WS_THICKFRAME | WS_CAPTION;
         SetWindowLong(_hwnd, GWL_STYLE, style);
+
+        // Request native rounded corners on Windows 11. Silently ignored on Windows 10
+        // where the attribute is not recognized.
+        var cornerPref = DWMWCP_ROUND;
+        _ = DwmSetWindowAttribute(
+            _hwnd,
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            ref cornerPref,
+            sizeof(int)
+        );
     }
 
     public bool IsMaximized
@@ -307,6 +321,14 @@ public sealed class Win32WindowHelper : IDisposable
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetMonitorInfo(nint hMonitor, ref MONITORINFO lpmi);
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(
+        nint hwnd,
+        int dwAttribute,
+        ref int pvAttribute,
+        int cbAttribute
+    );
 
     // ── Native structs ──────────────────────────────────────────────────────────
 

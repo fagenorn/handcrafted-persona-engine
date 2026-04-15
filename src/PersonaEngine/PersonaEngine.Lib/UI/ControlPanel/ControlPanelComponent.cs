@@ -33,6 +33,7 @@ public sealed class ControlPanelComponent : IRenderComponent
     private readonly AmbientRenderer _ambientRenderer;
     private readonly ControlBar _controlBar;
     private readonly TitleBar _titleBar;
+    private readonly WindowFrameGlow _windowFrameGlow;
     private readonly IConfigWriter _configWriter;
     private readonly Navigation _navigation = new();
     private readonly Dictionary<NavSection, Action<float>> _panelRenderers = new();
@@ -61,6 +62,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         IConfigWriter configWriter,
         PersonaStateProvider stateProvider,
         AmbientRenderer ambientRenderer,
+        WindowFrameGlow windowFrameGlow,
         Dashboard dashboard,
         VoicePanel voicePanel,
         PersonalityPanel personalityPanel,
@@ -80,6 +82,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         _configWriter = configWriter;
         _stateProvider = stateProvider;
         _ambientRenderer = ambientRenderer;
+        _windowFrameGlow = windowFrameGlow;
 
         RegisterPanel(NavSection.Dashboard, dt => dashboard.Render(dt));
         RegisterPanel(NavSection.Voice, dt => voicePanel.Render(dt));
@@ -166,6 +169,9 @@ public sealed class ControlPanelComponent : IRenderComponent
         }
 
         RenderSavedIndicator(deltaTime);
+
+        // Rendered last on the foreground drawlist so it sits above everything.
+        _windowFrameGlow.Render(deltaTime);
     }
 
     private void RenderActivePanel(float deltaTime)

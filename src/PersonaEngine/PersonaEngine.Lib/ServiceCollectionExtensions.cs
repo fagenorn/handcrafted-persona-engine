@@ -410,6 +410,7 @@ public static class ServiceCollectionExtensions
         // Persona state bridge for UI effects
         services.AddSingleton<PersonaStateProvider>();
         services.AddSingleton<AmbientRenderer>();
+        services.AddSingleton<WindowFrameGlow>();
         services.AddSingleton<IUiSoundEmitter, NoOpUiSoundEmitter>();
 
         // Voice panel sections
