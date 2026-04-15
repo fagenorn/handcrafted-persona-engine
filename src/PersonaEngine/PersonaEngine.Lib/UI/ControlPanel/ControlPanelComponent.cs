@@ -2,8 +2,10 @@ using System.Numerics;
 using Hexa.NET.ImGui;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
 using PersonaEngine.Lib.UI.ControlPanel.Panels;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Listening;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Personality;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice;
+using PersonaEngine.Lib.UI.ControlPanel.Visuals;
 using Silk.NET.Input;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
@@ -66,6 +68,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         Dashboard dashboard,
         VoicePanel voicePanel,
         PersonalityPanel personalityPanel,
+        ListeningPanel listeningPanel,
         Avatar avatar,
         Subtitles subtitles,
         RouletteWheelPanel rouletteWheelPanel,
@@ -86,8 +89,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         RegisterPanel(NavSection.Dashboard, dt => dashboard.Render(dt));
         RegisterPanel(NavSection.Voice, dt => voicePanel.Render(dt));
         RegisterPanel(NavSection.Personality, dt => personalityPanel.Render(dt));
-        // TODO: Wire ListeningPanel in Task 17
-        // RegisterPanel(NavSection.Listening, dt => listening.Render(dt));
+        RegisterPanel(NavSection.Listening, dt => listeningPanel.Render(dt));
         RegisterPanel(NavSection.Avatar, dt => avatar.Render(dt));
         RegisterPanel(NavSection.Subtitles, dt => subtitles.Render(dt));
         RegisterPanel(NavSection.RouletteWheel, dt => rouletteWheelPanel.Render(dt));
