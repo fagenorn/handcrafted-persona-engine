@@ -39,12 +39,13 @@ public sealed class SpeechDetectionSection : IDisposable
         {
             RenderHeader();
 
-            // Meter first, sliders below. Because ImGui.IsItemActive reads the PREVIOUS
-            // widget's state and we want the threshold line to light up while dragging
-            // the sensitivity slider (which is drawn below the meter), we use a
-            // one-frame lag: pass last frame's active flag to the meter, capture the
-            // new value after the slider is drawn, use it next frame.
-            _meter.Render(dt, _asr.VadThreshold, _thresholdSliderActive);
+            var threshold = _asr.VadThreshold;
+            var meterModified = _meter.Render(dt, ref threshold, _thresholdSliderActive);
+            if (meterModified)
+            {
+                _asr = _asr with { VadThreshold = threshold };
+                _configWriter.Write(_asr);
+            }
 
             ImGui.Spacing();
             RenderSensitivitySlider(dt);
