@@ -123,6 +123,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IInputAdapter, MicrophoneInputAdapter>();
 
+        services.AddSingleton<IConversationInputGate, ConversationInputGate>();
         services.AddSingleton<IConversationSessionFactory, ConversationSessionFactory>();
         services.AddSingleton<IConversationOrchestrator, ConversationOrchestrator>();
 
