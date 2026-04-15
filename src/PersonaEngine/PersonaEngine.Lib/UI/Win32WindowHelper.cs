@@ -15,6 +15,16 @@ public sealed class Win32WindowHelper : IDisposable
     private const int WM_SYSCOMMAND = 0x0112;
     private const int WM_NCLBUTTONDBLCLK = 0x00A3;
     private const int WM_SIZING = 0x0214;
+
+    // WM_SIZING edge flags (wParam)
+    private const int WMSZ_LEFT = 1;
+    private const int WMSZ_RIGHT = 2;
+    private const int WMSZ_TOP = 3;
+    private const int WMSZ_TOPLEFT = 4;
+    private const int WMSZ_TOPRIGHT = 5;
+    private const int WMSZ_BOTTOM = 6;
+    private const int WMSZ_BOTTOMLEFT = 7;
+    private const int WMSZ_BOTTOMRIGHT = 8;
     private const int WM_CLOSE = 0x0010;
 
     private const int HTCLIENT = 1;
@@ -164,7 +174,7 @@ public sealed class Win32WindowHelper : IDisposable
                 break;
 
             case WM_SIZING:
-                HandleSizing(lParam);
+                HandleSizing((int)wParam, lParam);
                 return 1;
 
             case WM_GETMINMAXINFO:
@@ -246,9 +256,11 @@ public sealed class Win32WindowHelper : IDisposable
         Marshal.WriteInt32(lParam, 20, work.Top - monitorInfo.rcMonitor.Top);
     }
 
-    private void HandleSizing(nint lParam)
+    private void HandleSizing(int edge, nint lParam)
     {
-        // Enforce minimum window size during edge resize.
+        // Enforce minimum window size during edge resize. Clamp the edge being
+        // dragged — clamping the opposite edge would make the window move instead
+        // of stopping the resize.
         // lParam points to a RECT: Left(0), Top(4), Right(8), Bottom(12).
         var left = Marshal.ReadInt32(lParam, 0);
         var top = Marshal.ReadInt32(lParam, 4);
@@ -256,9 +268,22 @@ public sealed class Win32WindowHelper : IDisposable
         var bottom = Marshal.ReadInt32(lParam, 12);
 
         if (right - left < _minWidth)
-            Marshal.WriteInt32(lParam, 8, left + _minWidth);
+        {
+            var draggingLeft = edge is WMSZ_LEFT or WMSZ_TOPLEFT or WMSZ_BOTTOMLEFT;
+            if (draggingLeft)
+                Marshal.WriteInt32(lParam, 0, right - _minWidth); // clamp Left
+            else
+                Marshal.WriteInt32(lParam, 8, left + _minWidth); // clamp Right
+        }
+
         if (bottom - top < _minHeight)
-            Marshal.WriteInt32(lParam, 12, top + _minHeight);
+        {
+            var draggingTop = edge is WMSZ_TOP or WMSZ_TOPLEFT or WMSZ_TOPRIGHT;
+            if (draggingTop)
+                Marshal.WriteInt32(lParam, 4, bottom - _minHeight); // clamp Top
+            else
+                Marshal.WriteInt32(lParam, 12, top + _minHeight); // clamp Bottom
+        }
     }
 
     public void Dispose()
