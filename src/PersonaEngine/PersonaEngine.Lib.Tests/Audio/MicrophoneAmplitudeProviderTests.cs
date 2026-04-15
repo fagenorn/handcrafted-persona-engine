@@ -53,6 +53,47 @@ public class MicrophoneAmplitudeProviderTests
     }
 
     [Fact]
+    public void OnSamplesAvailable_WithMultipleSubWindows_PushesMultipleHistoryEntries()
+    {
+        var mic = new FakeMicrophone();
+        var provider = new MicrophoneAmplitudeProvider(mic);
+        var startHead = provider.HistoryHead;
+
+        // 1600 samples at 16 kHz = 100 ms = one NAudio buffer at BufferMilliseconds=100.
+        // The implementation should split this into N sub-windows and push N entries.
+        var samples = new float[1600];
+        Array.Fill(samples, 0.3f);
+        mic.Raise(samples, 16000);
+
+        var advanced =
+            (provider.HistoryHead - startHead + provider.History.Length) % provider.History.Length;
+        // Allow for future tuning but require clearly more than one push.
+        Assert.True(
+            advanced >= 8,
+            $"Expected multiple sub-window pushes from a 100 ms buffer; got {advanced}."
+        );
+    }
+
+    [Fact]
+    public void OnSamplesAvailable_WithBufferSmallerThanSubWindow_StillPushesOnce()
+    {
+        var mic = new FakeMicrophone();
+        var provider = new MicrophoneAmplitudeProvider(mic);
+        var startHead = provider.HistoryHead;
+
+        // Tiny buffer — fewer samples than a single sub-window. Should still be processed
+        // as one window (no divide-by-zero, no dropped samples).
+        var samples = new float[32];
+        Array.Fill(samples, 0.5f);
+        mic.Raise(samples, 16000);
+
+        var advanced =
+            (provider.HistoryHead - startHead + provider.History.Length) % provider.History.Length;
+        Assert.Equal(1, advanced);
+        Assert.True(provider.CurrentAmplitude > 0f);
+    }
+
+    [Fact]
     public void Dispose_UnsubscribesFromEvent()
     {
         var mic = new FakeMicrophone();
