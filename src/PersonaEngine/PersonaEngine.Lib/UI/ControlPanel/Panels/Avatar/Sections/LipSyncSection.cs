@@ -31,10 +31,7 @@ public sealed class LipSyncSection : IDisposable
     private AnimatedFloat _useGpuKnob;
     private bool _initialized;
 
-    public LipSyncSection(
-        IOptionsMonitor<LipSyncOptions> monitor,
-        IConfigWriter configWriter
-    )
+    public LipSyncSection(IOptionsMonitor<LipSyncOptions> monitor, IConfigWriter configWriter)
     {
         _configWriter = configWriter;
         _lipSync = monitor.CurrentValue;
@@ -136,10 +133,7 @@ public sealed class LipSyncSection : IDisposable
         var useGpu = _lipSync.Audio2Face.UseGpu;
         if (ImGuiHelpers.ToggleSwitch("##a2f_use_gpu", ref useGpu, ref _useGpuKnob, dt))
         {
-            _lipSync = _lipSync with
-            {
-                Audio2Face = _lipSync.Audio2Face with { UseGpu = useGpu },
-            };
+            _lipSync = _lipSync with { Audio2Face = _lipSync.Audio2Face with { UseGpu = useGpu } };
             _configWriter.Write(_lipSync);
         }
     }
@@ -174,10 +168,7 @@ public sealed class LipSyncSection : IDisposable
 
     private void WriteSolver(string solver)
     {
-        _lipSync = _lipSync with
-        {
-            Audio2Face = _lipSync.Audio2Face with { SolverType = solver },
-        };
+        _lipSync = _lipSync with { Audio2Face = _lipSync.Audio2Face with { SolverType = solver } };
         _configWriter.Write(_lipSync);
     }
 }

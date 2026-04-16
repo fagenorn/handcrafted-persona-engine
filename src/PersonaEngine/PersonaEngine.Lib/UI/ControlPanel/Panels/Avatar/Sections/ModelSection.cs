@@ -29,10 +29,7 @@ public sealed class ModelSection : IDisposable
     private bool _currentModelMissing;
     private bool _initialized;
 
-    public ModelSection(
-        IOptionsMonitor<Live2DOptions> monitor,
-        IConfigWriter configWriter
-    )
+    public ModelSection(IOptionsMonitor<Live2DOptions> monitor, IConfigWriter configWriter)
     {
         _configWriter = configWriter;
         _live2d = monitor.CurrentValue;
@@ -92,10 +89,7 @@ public sealed class ModelSection : IDisposable
 
     private void RenderCharacterRow()
     {
-        ImGuiHelpers.SettingLabel(
-            "Character",
-            "The Live2D model to load from your models folder."
-        );
+        ImGuiHelpers.SettingLabel("Character", "The Live2D model to load from your models folder.");
 
         var selectedIndex = ComputeSelectedIndex();
 
@@ -182,10 +176,7 @@ public sealed class ModelSection : IDisposable
 
     private void RenderFolderRow()
     {
-        ImGuiHelpers.SettingLabel(
-            "Models Folder",
-            "Where to look for Live2D models on disk."
-        );
+        ImGuiHelpers.SettingLabel("Models Folder", "Where to look for Live2D models on disk.");
 
         if (ImGui.InputText("##ModelPath", ref _modelPathBuffer, ModelPathBufferSize))
         {
@@ -239,18 +230,15 @@ public sealed class ModelSection : IDisposable
     {
         var discovered = ScanModels(_live2d.ModelPath);
         var savedName = _live2d.ModelName;
-        var savedExists = discovered.Any(
-            n => string.Equals(n, savedName, StringComparison.Ordinal)
+        var savedExists = discovered.Any(n =>
+            string.Equals(n, savedName, StringComparison.Ordinal)
         );
 
         if (!savedExists && !string.IsNullOrEmpty(savedName))
         {
             // Prepend a "(not found)"-suffixed entry so the combo can still show the
             // saved model selected, even though it isn't on disk.
-            var prefixed = new List<string>(discovered.Count + 1)
-            {
-                savedName + MissingSuffix,
-            };
+            var prefixed = new List<string>(discovered.Count + 1) { savedName + MissingSuffix };
             prefixed.AddRange(discovered);
             _modelChoices = prefixed.ToArray();
             _currentModelMissing = true;
@@ -265,23 +253,21 @@ public sealed class ModelSection : IDisposable
     private void RecomputeMissingFlag()
     {
         // Called when ModelName changes but folder didn't — avoid a full rescan.
-        var exists = _modelChoices.Any(
-            entry =>
-            {
-                var name = entry.EndsWith(MissingSuffix, StringComparison.Ordinal)
-                    ? entry[..^MissingSuffix.Length]
-                    : entry;
-                return string.Equals(name, _live2d.ModelName, StringComparison.Ordinal)
-                    && !entry.EndsWith(MissingSuffix, StringComparison.Ordinal);
-            }
-        );
+        var exists = _modelChoices.Any(entry =>
+        {
+            var name = entry.EndsWith(MissingSuffix, StringComparison.Ordinal)
+                ? entry[..^MissingSuffix.Length]
+                : entry;
+            return string.Equals(name, _live2d.ModelName, StringComparison.Ordinal)
+                && !entry.EndsWith(MissingSuffix, StringComparison.Ordinal);
+        });
         _currentModelMissing = !exists && !string.IsNullOrEmpty(_live2d.ModelName);
 
         // If the flag state no longer matches the choices array (either direction —
         // newly missing with no placeholder, or newly found with a stale placeholder),
         // refresh so the combo reflects it correctly.
-        var hasMissingEntry = _modelChoices.Any(
-            e => e.EndsWith(MissingSuffix, StringComparison.Ordinal)
+        var hasMissingEntry = _modelChoices.Any(e =>
+            e.EndsWith(MissingSuffix, StringComparison.Ordinal)
         );
         if (_currentModelMissing != hasMissingEntry)
         {
