@@ -1,9 +1,9 @@
-﻿namespace PersonaEngine.Lib.Configuration;
+namespace PersonaEngine.Lib.Configuration;
 
 /// <summary>
-///     Configuration for the subtitle renderer
+///     Configuration for the subtitle renderer.
 /// </summary>
-public class SubtitleOptions
+public record SubtitleOptions
 {
     public string Font { get; set; } = "DynaPuff_Condensed-Bold.ttf";
 
