@@ -8,8 +8,8 @@ namespace PersonaEngine.Lib.UI.Overlay;
 ///     - Polls the cursor every frame (because a click-through window receives no
 ///       mouse messages) to detect hover enter/leave and toggle click-through.
 ///     - When the overlay is not click-through, consumes the native window's mouse
-///       events to drive drag-to-move (top-right button) and bottom-right-corner
-///       resize (bottom-right button).
+///       events to drive drag-to-move (top-right button) and SE-corner resize
+///       (bottom-right button, pinning the top-left corner).
 ///     - Produces a fade alpha for the chrome renderer and emits persisted
 ///       position/size changes at the end of each gesture.
 /// </summary>
@@ -131,17 +131,17 @@ public sealed class OverlayInteractionController : IDisposable
         }
         else if (_isResizing)
         {
-            desired = OverlayCursor.SizeNesw;
+            desired = OverlayCursor.SizeNwse;
         }
         else
         {
             desired = _activeHandle switch
             {
                 OverlayHandle.Drag => OverlayCursor.SizeAll,
-                // NE-SW cursor — the resize button now sits in the top-right
-                // cluster and dragging it stretches the top-right corner
-                // (bottom-left pinned), i.e. movement along the NE↔SW axis.
-                OverlayHandle.Resize => OverlayCursor.SizeNesw,
+                // NW-SE cursor — the resize button sits in the bottom-right
+                // corner and dragging it stretches the bottom-right corner
+                // (top-left pinned), i.e. movement along the NW↔SE axis.
+                OverlayHandle.Resize => OverlayCursor.SizeNwse,
                 _ => OverlayCursor.Default,
             };
         }
@@ -180,18 +180,15 @@ public sealed class OverlayInteractionController : IDisposable
             return;
         }
 
-        // Top-right resize handle: the bottom-left corner stays pinned while
-        // the top-right corner follows the cursor. Dragging right grows the
-        // width; dragging UP (dy < 0) grows the height (top edge moves up,
-        // bottom stays put). Width and height always scale together so the
-        // aspect ratio stays locked.
+        // Bottom-right resize handle: the top-left corner stays pinned while
+        // the bottom-right corner follows the cursor. Dragging right grows the
+        // width; dragging DOWN grows the height. Width and height always
+        // scale together so the aspect ratio stays locked.
         var dx = pt.X - _gestureAnchorScreen.X;
         var dy = pt.Y - _gestureAnchorScreen.Y;
 
         var scaleX = 1.0 + (double)dx / _gestureAnchorWinSize.X;
-        // Note the sign flip vs. the old bottom-right handle: for a top-right
-        // anchor, upward cursor movement (dy < 0) should enlarge the window.
-        var scaleY = 1.0 - (double)dy / _gestureAnchorWinSize.Y;
+        var scaleY = 1.0 + (double)dy / _gestureAnchorWinSize.Y;
 
         // Take the larger scale so dragging freely in either axis grows the
         // window. Clamp as a scalar (not per-dimension) so aspect stays locked
@@ -209,12 +206,9 @@ public sealed class OverlayInteractionController : IDisposable
         var newWidth = (int)Math.Round(_gestureAnchorWinSize.X * scale);
         var newHeight = (int)Math.Round(_gestureAnchorWinSize.Y * scale);
 
-        // Keep the bottom-left pixel fixed: anchored bottom = anchor.Y +
-        // anchor.height; with the new height, top-left Y = anchoredBottom -
-        // newHeight. Left X never moves for this gesture.
-        var anchorBottomY = _gestureAnchorWinPos.Y + _gestureAnchorWinSize.Y;
+        // Keep the top-left pixel fixed — neither X nor Y moves for this gesture.
         var newX = _gestureAnchorWinPos.X;
-        var newY = anchorBottomY - newHeight;
+        var newY = _gestureAnchorWinPos.Y;
 
         if (
             newX == _lastPushedX

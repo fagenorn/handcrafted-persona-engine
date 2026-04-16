@@ -5,9 +5,8 @@ namespace PersonaEngine.Lib.Tests.UI.Overlay;
 
 /// <summary>
 ///     Verifies the cursor-to-handle classification for the overlay's two buttons.
-///     Both the drag and resize buttons now live in the top-right cluster — drag
-///     is the rightmost slot, resize sits immediately to its left separated by
-///     <see cref="OverlayChromeLayout.ButtonGap" /> pixels.
+///     The drag button sits in the top-right corner; the resize button sits in
+///     the bottom-right corner and drives an SE-corner resize (top-left pinned).
 /// </summary>
 public class OverlayChromeLayoutTests
 {
@@ -16,12 +15,11 @@ public class OverlayChromeLayoutTests
 
     private const int P = OverlayChromeLayout.ButtonEdgePadding;
     private const int S = OverlayChromeLayout.ButtonSize;
-    private const int G = OverlayChromeLayout.ButtonGap;
 
     [Fact]
     public void HitTest_OnDragButton_ReturnsDrag()
     {
-        // Center of the drag button (rightmost slot of the top cluster).
+        // Center of the drag button (top-right corner).
         var x = Width - P - S / 2;
         var y = P + S / 2;
 
@@ -31,10 +29,9 @@ public class OverlayChromeLayoutTests
     [Fact]
     public void HitTest_OnResizeButton_ReturnsResize()
     {
-        // Center of the resize button — one button + one gap to the left of drag,
-        // same top-edge padding.
-        var x = Width - P - S - G - S / 2;
-        var y = P + S / 2;
+        // Center of the resize button (bottom-right corner).
+        var x = Width - P - S / 2;
+        var y = Height - P - S / 2;
 
         Assert.Equal(OverlayHandle.Resize, OverlayChromeLayout.HitTest(x, y, Width, Height));
     }
@@ -43,7 +40,7 @@ public class OverlayChromeLayoutTests
     [InlineData(10, 10)] // top-left: no button
     [InlineData(200, 300)] // dead center
     [InlineData(10, 590)] // bottom-left: no button
-    [InlineData(Width - P - S / 2, Height - P - S / 2)] // bottom-right: used to be resize, now empty
+    [InlineData(Width - P - S - 4 - S / 2, P + S / 2)] // slot left of drag: used to be resize, now empty
     public void HitTest_OutsideButtons_ReturnsNone(int x, int y)
     {
         Assert.Equal(OverlayHandle.None, OverlayChromeLayout.HitTest(x, y, Width, Height));
@@ -65,6 +62,16 @@ public class OverlayChromeLayoutTests
         // 1 pixel to the left of the drag button's left edge.
         var x = Width - P - S - 1;
         var y = P + S / 2;
+
+        Assert.Equal(OverlayHandle.None, OverlayChromeLayout.HitTest(x, y, Width, Height));
+    }
+
+    [Fact]
+    public void HitTest_JustOutsideResizeButton_ReturnsNone()
+    {
+        // 1 pixel above the resize button's top edge.
+        var x = Width - P - S / 2;
+        var y = Height - P - S - 1;
 
         Assert.Equal(OverlayHandle.None, OverlayChromeLayout.HitTest(x, y, Width, Height));
     }

@@ -2,8 +2,8 @@ namespace PersonaEngine.Lib.UI.Overlay;
 
 /// <summary>
 ///     The two interactive elements the floating overlay exposes on hover:
-///     a drag button and a resize button, both clustered in the top-right
-///     corner. Everything else is click-through.
+///     a drag button anchored top-right and a resize button anchored
+///     bottom-right. Everything else is click-through.
 /// </summary>
 public enum OverlayHandle
 {
@@ -24,10 +24,6 @@ public static class OverlayChromeLayout
     public const int ButtonSize = 30;
     public const int ButtonCornerRadius = 7;
     public const int ButtonEdgePadding = 6;
-
-    // Gap between the resize and drag buttons when sitting side-by-side in the
-    // top-right cluster.
-    public const int ButtonGap = 4;
 
     /// <summary>
     ///     Classifies a cursor position in window-relative pixels into the drag button,
@@ -55,23 +51,18 @@ public static class OverlayChromeLayout
         return OverlayHandle.None;
     }
 
-    /// <summary>Drag button — rightmost slot in the top cluster.</summary>
+    /// <summary>Drag button — top-right corner.</summary>
     public static (int X, int Y) DragButtonPosition(int width) =>
         (width - ButtonEdgePadding - ButtonSize, ButtonEdgePadding);
 
     /// <summary>
-    ///     Resize button — sits immediately to the left of the drag button in the
-    ///     top-right cluster. It still drives SE-corner resizes; co-locating both
-    ///     chrome buttons keeps the interactive region compact so the avatar
-    ///     isn't visually clipped by handles on opposite ends of the window.
-    ///     The <paramref name="height" /> parameter is retained for API stability
-    ///     (was previously needed when the resize anchored to the bottom corner).
+    ///     Resize button — bottom-right corner. Anchoring the handle at the
+    ///     grow-direction corner makes the gesture intuitive: the button moves
+    ///     directly under the cursor as the window grows toward the SE, and the
+    ///     top-left corner stays pinned as a natural anchor.
     /// </summary>
-    public static (int X, int Y) ResizeButtonPosition(int width, int height)
-    {
-        _ = height;
-        return (width - ButtonEdgePadding - 2 * ButtonSize - ButtonGap, ButtonEdgePadding);
-    }
+    public static (int X, int Y) ResizeButtonPosition(int width, int height) =>
+        (width - ButtonEdgePadding - ButtonSize, height - ButtonEdgePadding - ButtonSize);
 
     private static bool IsInsideButton(int x, int y, int buttonX, int buttonY) =>
         x >= buttonX && x < buttonX + ButtonSize && y >= buttonY && y < buttonY + ButtonSize;

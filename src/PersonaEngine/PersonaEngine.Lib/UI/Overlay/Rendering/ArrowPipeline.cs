@@ -22,11 +22,11 @@ internal sealed class ArrowPipeline(ID3D11Device device, ID3D11DeviceContext con
     private const float StemHalfThick = 1.5f; // 3-px perpendicular stem thickness, matches drag bars
     private const float HeadHalfBase = 3.5f; // 7-px arrowhead base — clearly flares beyond stem
 
-    // -pi/4 rotates the arrow to point NE<->SW. This matches the IDC_SIZENESW
-    // cursor shown on hover and reflects the new geometry: the resize
-    // button lives in the top-right cluster, so dragging it stretches the
-    // top-right corner (bottom-left pinned) — the SW-NE diagonal.
-    private const float DiagonalAngle = -0.7853982f;
+    // +pi/4 rotates the arrow to point NW<->SE. This matches the IDC_SIZENWSE
+    // cursor shown on hover: the resize button sits in the bottom-right
+    // corner, so dragging it stretches the bottom-right corner (top-left
+    // pinned) — the NW-SE diagonal.
+    private const float DiagonalAngle = 0.7853982f;
 
     private const string ShaderSource = """
         // Smooth SDF-based double-headed arrow. Evaluated in a rotated
