@@ -2,6 +2,7 @@ using System.Numerics;
 using Hexa.NET.ImGui;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
 using PersonaEngine.Lib.UI.ControlPanel.Panels;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Avatar;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Listening;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Personality;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice;
@@ -75,7 +76,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         VoicePanel voicePanel,
         PersonalityPanel personalityPanel,
         ListeningPanel listeningPanel,
-        Avatar avatar,
+        AvatarPanel avatarPanel,
         Subtitles subtitles,
         RouletteWheelPanel rouletteWheelPanel,
         ScreenAwareness screenAwareness,
@@ -96,7 +97,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         RegisterPanel(NavSection.Voice, dt => voicePanel.Render(dt));
         RegisterPanel(NavSection.Personality, dt => personalityPanel.Render(dt));
         RegisterPanel(NavSection.Listening, dt => listeningPanel.Render(dt), listeningPanel);
-        RegisterPanel(NavSection.Avatar, dt => avatar.Render(dt));
+        RegisterPanel(NavSection.Avatar, dt => avatarPanel.Render(dt));
         RegisterPanel(NavSection.Subtitles, dt => subtitles.Render(dt));
         RegisterPanel(NavSection.RouletteWheel, dt => rouletteWheelPanel.Render(dt));
         RegisterPanel(NavSection.ScreenAwareness, dt => screenAwareness.Render(dt));

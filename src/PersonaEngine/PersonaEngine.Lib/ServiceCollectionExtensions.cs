@@ -46,6 +46,8 @@ using PersonaEngine.Lib.UI.Common;
 using PersonaEngine.Lib.UI.ControlPanel;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
 using PersonaEngine.Lib.UI.ControlPanel.Panels;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Avatar;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Avatar.Sections;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard.Sections;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Listening;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Listening.Sections;
@@ -461,7 +463,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<InterruptionSection>();
         services.AddSingleton<LiveMeterWidget>();
         services.AddSingleton<ListeningPanel>();
-        services.AddSingleton<Avatar>();
+        // Avatar panel sections
+        services.AddSingleton<ModelSection>();
+        services.AddSingleton<LipSyncSection>();
+        services.AddSingleton<AvatarPanel>();
         services.AddSingleton<Subtitles>();
         services.AddSingleton<RouletteWheelPanel>();
         services.AddSingleton<ScreenAwareness>();
