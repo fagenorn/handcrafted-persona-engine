@@ -4,8 +4,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.UI.Common;
-using PersonaEngine.Lib.UI.ControlPanel;
 using PersonaEngine.Lib.UI.Rendering.Text;
+using Silk.NET.GLFW;
 using Silk.NET.OpenGL;
 
 namespace PersonaEngine.Lib.UI.Rendering.Subtitles;
@@ -141,9 +141,18 @@ public sealed class SubtitlePreviewRenderer : IDisposable
         }
 
         _disposed = true;
+
         _changeSub?.Dispose();
-        _textRenderer?.Dispose();
-        _fb?.Dispose();
+
+        try
+        {
+            _textRenderer?.Dispose();
+            _fb?.Dispose();
+        }
+        catch (GlfwException)
+        {
+            // GL context may already be destroyed during app shutdown — safe to ignore.
+        }
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
@@ -194,11 +203,8 @@ public sealed class SubtitlePreviewRenderer : IDisposable
         // _font is guaranteed non-null by Bake()'s caller guard.
         var font = _font!;
 
-        Theme.TryParseHex(_opts.Color, out var textVec);
-        Theme.TryParseHex(_opts.HighlightColor, out var highlightVec);
-
-        var textColor = ToFSColor(textVec);
-        var highlightColor = ToFSColor(highlightVec);
+        var textColor = ParseColorOrWhite(_opts.Color);
+        var highlightColor = ParseColorOrWhite(_opts.HighlightColor);
 
         var line1Size = font.MeasureString(Line1);
         var prefixSize = font.MeasureString(Line2Prefix);
@@ -253,6 +259,21 @@ public sealed class SubtitlePreviewRenderer : IDisposable
         );
     }
 
-    private static FSColor ToFSColor(Vector4 v) =>
-        new((byte)(v.X * 255f), (byte)(v.Y * 255f), (byte)(v.Z * 255f), (byte)(v.W * 255f));
+    private static FSColor ParseColorOrWhite(string? hex)
+    {
+        if (string.IsNullOrWhiteSpace(hex))
+        {
+            return new FSColor(255, 255, 255, 255);
+        }
+
+        try
+        {
+            var c = System.Drawing.ColorTranslator.FromHtml(hex);
+            return new FSColor(c.R, c.G, c.B, c.A);
+        }
+        catch
+        {
+            return new FSColor(255, 255, 255, 255);
+        }
+    }
 }
