@@ -59,8 +59,9 @@ public static class Ui
     public static FillChildScope FillChild(
         string id,
         ImGuiChildFlags childFlags = ImGuiChildFlags.None,
+        ImGuiWindowFlags windowFlags = ImGuiWindowFlags.None,
         float padding = 0f
-    ) => new(id, new System.Numerics.Vector2(padding, padding), childFlags);
+    ) => new(id, new System.Numerics.Vector2(padding, padding), childFlags, windowFlags);
 
     /// <summary>
     ///     Creates a bordered, padded card scope. Auto-sizes vertically by default

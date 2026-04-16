@@ -60,7 +60,13 @@ public sealed class ListeningPanel : IActivatablePanel
 
     public void Render(float dt)
     {
-        using (Ui.FillChild("##listening_panel", padding: 4f))
+        using (
+            Ui.FillChild(
+                "##listening_panel",
+                windowFlags: ImGuiWindowFlags.AlwaysVerticalScrollbar,
+                padding: 4f
+            )
+        )
         {
             _deviceSection.Render(dt);
             ImGui.Spacing();

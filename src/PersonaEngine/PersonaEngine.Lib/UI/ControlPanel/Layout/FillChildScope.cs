@@ -12,7 +12,12 @@ public ref struct FillChildScope
     private float _indentX;
     private bool _disposed;
 
-    internal FillChildScope(string id, Vector2 padding, ImGuiChildFlags childFlags)
+    internal FillChildScope(
+        string id,
+        Vector2 padding,
+        ImGuiChildFlags childFlags,
+        ImGuiWindowFlags windowFlags = ImGuiWindowFlags.None
+    )
     {
         _disposed = false;
         _indentX = 0f;
@@ -21,7 +26,7 @@ public ref struct FillChildScope
         // Left/top is applied manually after BeginChild (see below).
         ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, padding);
 
-        ImGui.BeginChild(id, ImGui.GetContentRegionAvail(), childFlags);
+        ImGui.BeginChild(id, ImGui.GetContentRegionAvail(), childFlags, windowFlags);
 
         // Apply padding manually via Indent/Dummy — WindowPadding is not
         // reliably applied to child windows in this ImGui binding.

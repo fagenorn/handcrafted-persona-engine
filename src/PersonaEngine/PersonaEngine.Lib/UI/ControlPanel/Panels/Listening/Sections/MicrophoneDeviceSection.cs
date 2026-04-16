@@ -166,24 +166,46 @@ public sealed class MicrophoneDeviceSection : IDisposable
 
             case TestState.Recording:
             {
-                var remaining = (int)MathF.Ceiling(TestDurationSeconds - _testElapsed);
-                if (remaining < 1)
-                    remaining = 1;
-                ImGui.BeginDisabled();
+                // "Speak now" + progress bar — no ambiguous countdown that could
+                // be mistaken for a pre-recording delay.
                 ImGui.PushStyleColor(ImGuiCol.Button, Theme.Error with { W = 0.6f });
-                ImGui.Button($"● Recording {remaining}…");
-                ImGui.PopStyleColor();
-                ImGui.EndDisabled();
+                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, Theme.Error with { W = 0.6f });
+                ImGui.PushStyleColor(ImGuiCol.ButtonActive, Theme.Error with { W = 0.6f });
+                ImGui.Button("● Speak now…");
+                ImGui.PopStyleColor(3);
+
+                var progress = Math.Clamp(_testElapsed / TestDurationSeconds, 0f, 1f);
+                ImGui.PushStyleColor(ImGuiCol.PlotHistogram, Theme.Error);
+                ImGui.PushStyleColor(ImGuiCol.FrameBg, Theme.Surface3 with { W = 0.5f });
+                ImGui.ProgressBar(progress, new Vector2(-1f, 3f), "");
+                ImGui.PopStyleColor(2);
                 break;
             }
 
             case TestState.Playing:
-                ImGui.BeginDisabled();
+            {
                 ImGui.PushStyleColor(ImGuiCol.Button, Theme.AccentPrimary with { W = 0.6f });
-                ImGui.Button("▶ Playing back…");
-                ImGui.PopStyleColor();
-                ImGui.EndDisabled();
+                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, Theme.AccentPrimary with { W = 0.6f });
+                ImGui.PushStyleColor(ImGuiCol.ButtonActive, Theme.AccentPrimary with { W = 0.6f });
+                // Leave space on the left for a custom-drawn play triangle.
+                ImGui.Button("       Playing back…");
+                ImGui.PopStyleColor(3);
+
+                // Draw a play triangle at consistent size regardless of font.
+                var btnMin = ImGui.GetItemRectMin();
+                var btnMax = ImGui.GetItemRectMax();
+                var triSize = 6f;
+                var triCenter = new Vector2(btnMin.X + 12f + triSize, (btnMin.Y + btnMax.Y) * 0.5f);
+                ImGui
+                    .GetWindowDrawList()
+                    .AddTriangleFilled(
+                        new Vector2(triCenter.X - triSize * 0.5f, triCenter.Y - triSize),
+                        new Vector2(triCenter.X - triSize * 0.5f, triCenter.Y + triSize),
+                        new Vector2(triCenter.X + triSize, triCenter.Y),
+                        ImGui.ColorConvertFloat4ToU32(Theme.TextPrimary with { W = 0.6f })
+                    );
                 break;
+            }
         }
     }
 

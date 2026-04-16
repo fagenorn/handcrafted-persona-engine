@@ -6,15 +6,16 @@ using PersonaEngine.Lib.Audio;
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Listening.Sections;
 
 /// <summary>
-///     Live calibration meter for the Listening panel. Shows a single primary trace of the
-///     Silero VAD probability with above-threshold shading (literal visual of "this is when
-///     the avatar would react"), a draggable threshold line labelled "Sensitivity", a state
-///     banner at the top ("Silent" / "Picking up sound" / "Listening to you"), and a
-///     compact mic-alive amplitude pip on the right.
+///     Live calibration meter for the Listening panel. Shows a scrolling trace of the
+///     Silero VAD probability with above-threshold shading, a draggable threshold line
+///     labelled "Sensitivity", a state banner ("Silent" / "Picking up sound" /
+///     "Listening to you"), and a compact mic-alive amplitude pip.
 ///     <para>
-///         Scrolling uses sub-slot interpolation: between sample arrivals the trace scrolls
-///         smoothly on the UI render thread, producing fluid motion regardless of whether
-///         the underlying provider updates at 160 Hz (amplitude) or 31 Hz (VAD probability).
+///         The trace samples <see cref="IVadProbabilityProvider.CurrentProbability" />
+///         once per render frame and applies an asymmetric envelope follower (instant
+///         attack, slow release) so speech onset is sharp while the decay flows smoothly.
+///         Points use wall-clock timestamps for X positioning, producing continuous
+///         scrolling with no discrete ring-buffer jumps.
 ///     </para>
 /// </summary>
 public sealed class LiveMeterWidget
@@ -22,26 +23,22 @@ public sealed class LiveMeterWidget
     private const float WidgetHeight = 176f;
     private const float BannerHeight = 34f;
     private const float BannerGap = 6f;
-
-    // UI-side smoothing for the mic-alive pip only — the primary VAD trace is shown raw
-    // so the threshold relationship is direct.
     private const float MicPipSmoothingRate = 15f;
+    private const float TimeWindow = 4f;
 
-    // Silero VAD processes 512-sample batches at 16 kHz — one probability sample every
-    // 32 ms, i.e. ~31.25 Hz. This is deterministic so we skip any adaptive interval
-    // estimation (the previous EMA version oscillated on frame-quantized observations).
-    private const float VadPushInterval = 512f / 16000f;
+    // Asymmetric envelope on VAD probability: instant attack preserves sharp speech
+    // onset; slow release creates a flowing tail instead of a hard drop.
+    private const float AttackTime = 0.005f;
+    private const float ReleaseTime = 0.250f;
 
     private readonly IMicrophoneAmplitudeProvider _micAmp;
     private readonly IVadProbabilityProvider _vadProb;
 
     private float _displayMicAmp;
-
-    // Scroll-interpolation state — one per trace source.
-    private TraceScroll _vadScroll = TraceScroll.Initial(VadPushInterval);
-
-    // Draggable threshold line state.
+    private float _envelope;
+    private float _elapsed;
     private bool _isDraggingThreshold;
+    private readonly List<TraceSample> _samples = new(256);
 
     public LiveMeterWidget(IMicrophoneAmplitudeProvider micAmp, IVadProbabilityProvider vadProb)
     {
@@ -49,55 +46,74 @@ public sealed class LiveMeterWidget
         _vadProb = vadProb;
     }
 
+    // ── Public API ──────────────────────────────────────────────────────────
+
     /// <summary>
-    ///     Renders the meter. The <paramref name="threshold" /> parameter is bidirectional —
-    ///     the user can drag the threshold line on the meter to adjust it directly. Returns
-    ///     <see langword="true" /> when the user modified the value this frame.
+    ///     Renders the meter. <paramref name="threshold" /> is bidirectional — the user
+    ///     can drag the threshold line to adjust it. Returns <see langword="true" /> when
+    ///     the user modified the value this frame.
     /// </summary>
-    /// <param name="dt">Frame delta time (seconds).</param>
-    /// <param name="threshold">
-    ///     The VAD threshold in <c>[0, 1]</c>. May be modified if the user drags the
-    ///     threshold line.
-    /// </param>
-    /// <param name="isExternallyActive">
-    ///     <see langword="true" /> when the "Voice Sensitivity" slider below the meter is
-    ///     actively being dragged — causes the meter's threshold line to brighten even when
-    ///     the user isn't dragging the line itself.
-    /// </param>
     public bool Render(float dt, ref float threshold, bool isExternallyActive)
     {
         AdvanceMicSmoothing(dt);
-        _vadScroll.Update(dt, _vadProb.HistoryHead, _vadProb.History.Length);
+        UpdateTrace(dt);
 
-        var origin = ImGui.GetCursorScreenPos();
         var availableWidth = ImGui.GetContentRegionAvail().X;
-        var size = new Vector2(availableWidth, WidgetHeight);
         var drawList = ImGui.GetWindowDrawList();
 
-        var bannerMin = origin;
-        var bannerMax = origin + new Vector2(size.X, BannerHeight);
-        var traceMin = origin + new Vector2(0f, BannerHeight + BannerGap);
-        var traceMax = origin + size;
+        // Banner — drawn via draw list; Dummy reserves layout space.
+        var bannerMin = ImGui.GetCursorScreenPos();
+        var bannerSize = new Vector2(availableWidth, BannerHeight);
+        ImGui.Dummy(bannerSize);
+        RenderStateBanner(drawList, bannerMin, bannerMin + bannerSize, threshold);
 
-        RenderStateBanner(drawList, bannerMin, bannerMax, threshold);
+        ImGui.Dummy(new Vector2(0f, BannerGap));
 
-        var thresholdChanged = RenderTraceWithDraggableThreshold(
+        // Trace area — Dummy reserves layout; draw list renders on top.
+        var traceHeight = WidgetHeight - BannerHeight - BannerGap;
+        var traceOrigin = ImGui.GetCursorScreenPos();
+        var traceSize = new Vector2(availableWidth, traceHeight);
+        ImGui.Dummy(traceSize);
+
+        return RenderTraceWithDraggableThreshold(
             drawList,
-            traceMin,
-            traceMax,
+            traceOrigin,
+            traceOrigin + traceSize,
             ref threshold,
             isExternallyActive
         );
-
-        ImGui.Dummy(size);
-        return thresholdChanged;
     }
+
+    // ── Data update ─────────────────────────────────────────────────────────
 
     private void AdvanceMicSmoothing(float dt)
     {
         var target = _micAmp.CurrentAmplitude;
         var alpha = 1f - MathF.Exp(-MicPipSmoothingRate * dt);
         _displayMicAmp += (target - _displayMicAmp) * alpha;
+    }
+
+    private void UpdateTrace(float dt)
+    {
+        _elapsed += dt;
+
+        // Asymmetric envelope: snap up on speech onset, flow down on speech end.
+        var rawProb = _vadProb.CurrentProbability;
+        var coeff =
+            rawProb > _envelope
+                ? 1f - MathF.Exp(-dt / AttackTime)
+                : 1f - MathF.Exp(-dt / ReleaseTime);
+        _envelope += (rawProb - _envelope) * coeff;
+
+        _samples.Add(new TraceSample(_elapsed, _envelope));
+
+        // Evict samples older than the visible time window.
+        var cutoff = _elapsed - TimeWindow;
+        var removeCount = 0;
+        while (removeCount < _samples.Count && _samples[removeCount].Time < cutoff)
+            removeCount++;
+        if (removeCount > 0)
+            _samples.RemoveRange(0, removeCount);
     }
 
     // ── Banner ──────────────────────────────────────────────────────────────
@@ -109,20 +125,20 @@ public sealed class LiveMeterWidget
         float threshold
     )
     {
-        var rounding = 8f;
-        var bg = ImGui.ColorConvertFloat4ToU32(Theme.Surface1);
-        ImGui.AddRectFilled(drawList, min, max, bg, rounding);
+        ImGui.AddRectFilled(drawList, min, max, ImGui.ColorConvertFloat4ToU32(Theme.Surface1), 8f);
 
         var (label, color) = ClassifyState(threshold);
 
         var padX = 14f;
         var dotRadius = 5f;
         var dotCenter = new Vector2(min.X + padX + dotRadius, (min.Y + max.Y) * 0.5f);
-        var dotCol = ImGui.ColorConvertFloat4ToU32(color);
-        ImGui.AddCircleFilled(drawList, dotCenter, dotRadius, dotCol);
-        // Soft glow
-        var glowCol = ImGui.ColorConvertFloat4ToU32(color with { W = 0.25f });
-        ImGui.AddCircleFilled(drawList, dotCenter, dotRadius * 2.2f, glowCol);
+        ImGui.AddCircleFilled(drawList, dotCenter, dotRadius, ImGui.ColorConvertFloat4ToU32(color));
+        ImGui.AddCircleFilled(
+            drawList,
+            dotCenter,
+            dotRadius * 2.2f,
+            ImGui.ColorConvertFloat4ToU32(color with { W = 0.25f })
+        );
 
         var textSize = ImGui.CalcTextSize(label);
         var textPos = new Vector2(
@@ -141,8 +157,8 @@ public sealed class LiveMeterWidget
         const float pipGap = 2f;
         const float pipTallest = 16f;
         const float pipShortest = 4f;
+        const float padX = 14f;
 
-        var padX = 14f;
         var totalWidth = pipCount * pipWidth + (pipCount - 1) * pipGap;
         var startX = bannerMax.X - padX - totalWidth;
         var centerY = bannerMax.Y - BannerHeight * 0.5f;
@@ -170,28 +186,16 @@ public sealed class LiveMeterWidget
 
     private (string Label, Vector4 Color) ClassifyState(float threshold)
     {
-        // Derived purely from current-frame signals; no historical logic.
-        // - Probability well above threshold → "Listening to you"
-        // - Probability below threshold but mic picking up real signal → "Picking up sound"
-        // - Otherwise → "Silent"
-        var prob = _vadProb.CurrentProbability;
-        var amp = _displayMicAmp;
-
-        if (prob > threshold)
-        {
+        if (_vadProb.CurrentProbability > threshold)
             return ("Listening to you", Theme.AccentPrimary);
-        }
 
-        const float NoiseFloor = 0.02f;
-        if (amp > NoiseFloor)
-        {
+        if (_displayMicAmp > 0.02f)
             return ("Picking up sound", Theme.AccentSecondary);
-        }
 
         return ("Silent", Theme.TextTertiary);
     }
 
-    // ── Primary trace + draggable threshold ──────────────────────────────────
+    // ── Trace + draggable threshold ─────────────────────────────────────────
 
     private bool RenderTraceWithDraggableThreshold(
         ImDrawListPtr drawList,
@@ -201,33 +205,24 @@ public sealed class LiveMeterWidget
         bool isExternallyActive
     )
     {
-        var rounding = 8f;
-        ImGui.AddRectFilled(
-            drawList,
-            min,
-            max,
-            ImGui.ColorConvertFloat4ToU32(Theme.Surface3),
-            rounding
-        );
+        ImGui.AddRectFilled(drawList, min, max, ImGui.ColorConvertFloat4ToU32(Theme.Surface3), 8f);
 
-        var inset = 8f;
+        const float inset = 8f;
         var plotMin = min + new Vector2(inset, inset);
         var plotMax = max - new Vector2(inset, inset);
         var plotWidth = plotMax.X - plotMin.X;
         var plotHeight = plotMax.Y - plotMin.Y;
-
-        // Threshold line position.
         var thresholdY = plotMax.Y - plotHeight * Math.Clamp(threshold, 0f, 1f);
 
-        // Drag region spans the full trace area — grabbing anywhere near the line works.
-        // We hit-test a ±10px band around the current threshold line.
+        // Drag interaction — positioned explicitly so InvisibleButton doesn't
+        // consume layout space (the parent Dummy already reserved it).
         const float grabHalfHeight = 10f;
-        _ = ImGui.InvisibleButton(
-            "##meter_drag",
-            new Vector2(plotMax.X - min.X, plotMax.Y - min.Y)
-        );
+        var cursorBefore = ImGui.GetCursorScreenPos();
+        ImGui.SetCursorScreenPos(plotMin);
+        _ = ImGui.InvisibleButton("##meter_drag", plotMax - plotMin);
         var hovered = ImGui.IsItemHovered();
         var held = ImGui.IsItemActive();
+        ImGui.SetCursorScreenPos(cursorBefore);
 
         var thresholdChanged = false;
         var mousePos = ImGui.GetMousePos();
@@ -236,7 +231,6 @@ public sealed class LiveMeterWidget
         if (held && (nearLine || _isDraggingThreshold))
         {
             _isDraggingThreshold = true;
-            // Map mouse Y to threshold value. Invert because top of plot = 1.0.
             var normalized = Math.Clamp((plotMax.Y - mousePos.Y) / plotHeight, 0.1f, 0.95f);
             if (MathF.Abs(normalized - threshold) > 1e-4f)
             {
@@ -245,79 +239,71 @@ public sealed class LiveMeterWidget
                 thresholdY = plotMax.Y - plotHeight * threshold;
             }
         }
+
         if (!held)
-        {
             _isDraggingThreshold = false;
-        }
 
         if (nearLine || _isDraggingThreshold)
-        {
             ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeNs);
-        }
 
-        // Clip trace + fill to the plot region so points sliding in from the right edge
-        // (see DrawTrace for the +1 step shift) don't spill outside the card.
+        // Draw trace + fill inside a clip rect; threshold line outside so its
+        // label can extend beyond the plot area if needed.
         ImGui.PushClipRect(drawList, plotMin, plotMax, true);
-
-        // Above-threshold fill — quads from trace points down to threshold line, in accent color.
-        DrawAboveThresholdFill(drawList, plotMin, plotMax, threshold, thresholdY);
-
-        // The probability trace itself.
-        DrawTrace(drawList, plotMin, plotMax, threshold);
-
+        DrawAboveThresholdFill(
+            drawList,
+            plotMin,
+            plotMax,
+            plotWidth,
+            plotHeight,
+            threshold,
+            thresholdY
+        );
+        DrawTrace(drawList, plotMin, plotMax, plotWidth, plotHeight, threshold);
         ImGui.PopClipRect(drawList);
 
-        // Threshold line (drawn last so it sits on top, OUTSIDE the clip so the label
-        // remains visible even when it would otherwise sit beyond the plot bounds).
         var isHot = isExternallyActive || _isDraggingThreshold || nearLine;
         DrawThresholdLine(drawList, plotMin, plotMax, thresholdY, isHot);
 
         return thresholdChanged;
     }
 
+    // ── Trace drawing ───────────────────────────────────────────────────────
+
+    private float TimeToX(float sampleTime, float plotLeft, float plotWidth)
+    {
+        var age = _elapsed - sampleTime;
+        return plotLeft + plotWidth * (1f - age / TimeWindow);
+    }
+
     private void DrawTrace(
         ImDrawListPtr drawList,
         Vector2 plotMin,
         Vector2 plotMax,
+        float plotWidth,
+        float plotHeight,
         float threshold
     )
     {
-        var history = _vadProb.History;
-        if (history.Length < 2)
+        if (_samples.Count < 2)
             return;
-
-        var width = plotMax.X - plotMin.X;
-        var height = plotMax.Y - plotMin.Y;
-        // step sized so N history points span exactly the plot width when offset == 1
-        // (the instant just before the next push). See below for the +1 shift rationale.
-        var step = width / (history.Length - 1);
-        var offset = _vadScroll.SubSlotOffset;
-        var head = _vadProb.HistoryHead;
 
         var aboveCol = ImGui.ColorConvertFloat4ToU32(Theme.AccentPrimary);
         var belowCol = ImGui.ColorConvertFloat4ToU32(Theme.TextSecondary);
 
-        // X-position formula: `(i + 1 - offset) * step`.
-        // - Just after push (offset=0): newest point sits at plotMax.X + step (off-screen
-        //   right, hidden by clip rect). As offset grows over the next interval it slides
-        //   into view, reaching plotMax.X exactly at offset=1 (the instant before the
-        //   next push). The OLDEST point slides from plotMin.X + step to plotMin.X over
-        //   the same interval, then is overwritten by the next push.
-        // - Without this +1 step shift new data would pop into existence at plotMax.X;
-        //   the scroll looked smooth on the left but jittery on the right.
         Vector2 previous = default;
-        for (var i = 0; i < history.Length; i++)
+        for (var i = 0; i < _samples.Count; i++)
         {
-            var idx = (head + i) % history.Length;
-            var v = Math.Clamp(history[idx], 0f, 1f);
-            var point = new Vector2(plotMin.X + step * (i + 1 - offset), plotMax.Y - height * v);
+            var s = _samples[i];
+            var x = TimeToX(s.Time, plotMin.X, plotWidth);
+            var y = plotMax.Y - plotHeight * Math.Clamp(s.Value, 0f, 1f);
+            var point = new Vector2(x, y);
+
             if (i > 0)
             {
-                // Segment color: accent if either endpoint is above threshold, muted below.
-                var highSegment =
-                    history[(head + i - 1) % history.Length] > threshold || v > threshold;
-                ImGui.AddLine(drawList, previous, point, highSegment ? aboveCol : belowCol, 1.75f);
+                var speaking = _samples[i - 1].Value > threshold || s.Value > threshold;
+                ImGui.AddLine(drawList, previous, point, speaking ? aboveCol : belowCol, 1.75f);
             }
+
             previous = point;
         }
     }
@@ -326,41 +312,35 @@ public sealed class LiveMeterWidget
         ImDrawListPtr drawList,
         Vector2 plotMin,
         Vector2 plotMax,
+        float plotWidth,
+        float plotHeight,
         float threshold,
         float thresholdY
     )
     {
-        var history = _vadProb.History;
-        if (history.Length < 2)
+        if (_samples.Count < 2)
             return;
-
-        var width = plotMax.X - plotMin.X;
-        var height = plotMax.Y - plotMin.Y;
-        var step = width / (history.Length - 1);
-        var offset = _vadScroll.SubSlotOffset;
-        var head = _vadProb.HistoryHead;
 
         var fillCol = ImGui.ColorConvertFloat4ToU32(Theme.AccentPrimary with { W = 0.18f });
 
-        // Render as a series of thin vertical strips from threshold line down to the trace
-        // where the trace is above threshold. Cheap, no polygon triangulation needed.
-        // X-positions match DrawTrace's +1 step shift so the shading stays aligned with
-        // the trace as it scrolls. The caller pushes a clip rect over the plot region so
-        // we don't need per-strip bounds checks here.
-        for (var i = 0; i < history.Length; i++)
+        for (var i = 0; i < _samples.Count; i++)
         {
-            var idx = (head + i) % history.Length;
-            var v = Math.Clamp(history[idx], 0f, 1f);
-            if (v <= threshold)
+            var s = _samples[i];
+            if (s.Value <= threshold)
                 continue;
 
-            var x0 = plotMin.X + step * (i + 1 - offset);
-            var x1 = plotMin.X + step * (i + 2 - offset);
-            var y = plotMax.Y - height * v;
+            var x0 = TimeToX(s.Time, plotMin.X, plotWidth);
+            var x1 =
+                i + 1 < _samples.Count
+                    ? TimeToX(_samples[i + 1].Time, plotMin.X, plotWidth)
+                    : plotMin.X + plotWidth;
 
+            var y = plotMax.Y - plotHeight * Math.Clamp(s.Value, 0f, 1f);
             ImGui.AddRectFilled(drawList, new Vector2(x0, y), new Vector2(x1, thresholdY), fillCol);
         }
     }
+
+    // ── Threshold line ──────────────────────────────────────────────────────
 
     private static void DrawThresholdLine(
         ImDrawListPtr drawList,
@@ -373,7 +353,6 @@ public sealed class LiveMeterWidget
         var col = isHot ? Theme.AccentPrimary : Theme.TextSecondary with { W = 0.75f };
         var thickness = isHot ? 2f : 1.25f;
 
-        // Dashed when cold, solid when hot — dashes communicate "adjustable".
         if (isHot)
         {
             ImGui.AddLine(
@@ -404,13 +383,14 @@ public sealed class LiveMeterWidget
             }
         }
 
-        // "Sensitivity" label near the left edge, hovering above the line.
         var label = "Sensitivity";
         var labelSize = ImGui.CalcTextSize(label);
         var labelPos = new Vector2(plotMin.X + 6f, thresholdY - labelSize.Y - 2f);
         var labelCol = isHot ? Theme.AccentPrimary : Theme.TextTertiary;
         drawList.AddText(labelPos, ImGui.ColorConvertFloat4ToU32(labelCol), label);
     }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
 
     private static Vector4 LerpColor(Vector4 a, Vector4 b, float t)
     {
@@ -423,80 +403,5 @@ public sealed class LiveMeterWidget
         );
     }
 
-    /// <summary>
-    ///     Tracks sub-slot scroll offset for a single history-based trace so the draw code
-    ///     can render between sample arrivals at pixel resolution.
-    ///     <para>
-    ///         Uses a fixed expected push interval (no EMA): frame-quantized observations
-    ///         of the head counter produce noisy interval estimates that visibly oscillate
-    ///         the scroll speed. Providers publish their nominal rate up-front — the scroll
-    ///         can trust it. If the real rate drifts a little the scroll will briefly fall
-    ///         behind or ahead of the data ring; the safety clamp below keeps it bounded.
-    ///     </para>
-    ///     <para>
-    ///         The offset is advanced continuously each frame and decremented by
-    ///         <c>slotsAdvanced</c> on every head transition — this preserves sub-slot
-    ///         phase across push boundaries instead of snapping back to zero, which would
-    ///         make the trace briefly stall on every push arrival.
-    ///     </para>
-    /// </summary>
-    private struct TraceScroll
-    {
-        private int _lastKnownHead;
-        private float _expectedInterval;
-        private float _subSlotOffset;
-        private bool _initialized;
-
-        public static TraceScroll Initial(float expectedInterval) =>
-            new()
-            {
-                _expectedInterval = expectedInterval,
-                _subSlotOffset = 0f,
-                _initialized = false,
-                _lastKnownHead = 0,
-            };
-
-        public float SubSlotOffset => _subSlotOffset;
-
-        public void Update(float dt, int currentHead, int historyLength)
-        {
-            if (historyLength <= 0 || _expectedInterval <= 0f)
-            {
-                _subSlotOffset = 0f;
-                return;
-            }
-
-            if (!_initialized)
-            {
-                _lastKnownHead = currentHead;
-                _subSlotOffset = 0f;
-                _initialized = true;
-                return;
-            }
-
-            // Continuously advance offset by elapsed fraction of an interval.
-            _subSlotOffset += dt / _expectedInterval;
-
-            // On new samples, decrement offset by the number of slots that advanced —
-            // this preserves the fractional phase across the push boundary instead of
-            // snapping to zero.
-            if (currentHead != _lastKnownHead)
-            {
-                var slotsAdvanced = (currentHead - _lastKnownHead + historyLength) % historyLength;
-                if (slotsAdvanced == 0)
-                    slotsAdvanced = historyLength;
-
-                _subSlotOffset -= slotsAdvanced;
-                _lastKnownHead = currentHead;
-            }
-
-            // Safety clamp: if the widget was hidden for a while (no updates) or the
-            // provider rate drifted a lot, snap toward zero rather than drawing with
-            // a giant stale offset.
-            if (_subSlotOffset > 2f || _subSlotOffset < -1f)
-            {
-                _subSlotOffset = 0f;
-            }
-        }
-    }
+    private readonly record struct TraceSample(float Time, float Value);
 }

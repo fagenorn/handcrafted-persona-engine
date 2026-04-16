@@ -626,6 +626,35 @@ public static class ImGuiHelpers
     }
 
     /// <summary>
+    ///     Renders a low-emphasis button for secondary actions like "Reset defaults".
+    ///     When <paramref name="enabled" /> is <see langword="false" /> the button is
+    ///     dimmed and non-interactive; when <see langword="true" /> it uses secondary
+    ///     text color with surface-hover feedback so it's clearly clickable.
+    /// </summary>
+    public static bool SubtleButton(string label, bool enabled = true)
+    {
+        if (!enabled)
+            ImGui.BeginDisabled();
+
+        ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(10f, 5f));
+        ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, 4f);
+        ImGui.PushStyleColor(ImGuiCol.Button, Theme.Surface3);
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, Theme.SurfaceHover);
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, Theme.AccentPrimary with { W = 0.4f });
+        ImGui.PushStyleColor(ImGuiCol.Text, enabled ? Theme.TextSecondary : Theme.TextTertiary);
+        var clicked = ImGui.Button(label);
+        ImGui.PopStyleColor(4);
+        ImGui.PopStyleVar(2);
+
+        if (!enabled)
+            ImGui.EndDisabled();
+        else
+            HandCursorOnHover();
+
+        return clicked;
+    }
+
+    /// <summary>
     ///     Renders an error-colored button for destructive actions.
     /// </summary>
     public static bool DangerButton(string label)

@@ -37,7 +37,11 @@ public sealed class SpeechDetectionSection : IDisposable
     {
         using (Ui.Card("##speech_detection", padding: 12f))
         {
-            RenderHeader();
+            if (RenderHeader())
+            {
+                _asr = new AsrConfiguration { TtsMode = _asr.TtsMode, TtsPrompt = _asr.TtsPrompt };
+                _configWriter.Write(_asr);
+            }
 
             var threshold = _asr.VadThreshold;
             var meterModified = _meter.Render(dt, ref threshold, _thresholdSliderActive);
@@ -54,17 +58,31 @@ public sealed class SpeechDetectionSection : IDisposable
         }
     }
 
-    private static void RenderHeader()
+    private static readonly AsrConfiguration Defaults = new();
+
+    private bool IsModified =>
+        MathF.Abs(_asr.VadThreshold - Defaults.VadThreshold) > 1e-4f
+        || MathF.Abs(_asr.VadMinSilenceDuration - Defaults.VadMinSilenceDuration) > 0.5f
+        || MathF.Abs(_asr.VadMinSpeechDuration - Defaults.VadMinSpeechDuration) > 0.5f;
+
+    private bool RenderHeader()
     {
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextTertiary);
         ImGui.TextUnformatted("Speech Detection");
         ImGui.PopStyleColor();
+
+        // Right-aligned reset button on the title line, following the VoiceCard
+        // header-action pattern. Enabled only when values differ from defaults.
+        var modified = IsModified;
+        ImGui.SameLine(ImGui.GetContentRegionAvail().X - 110f);
+        var reset = ImGuiHelpers.SubtleButton("Reset defaults", enabled: modified);
 
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
         ImGui.TextUnformatted("When we think you've started — and finished — speaking");
         ImGui.PopStyleColor();
 
         ImGui.Spacing();
+        return reset;
     }
 
     private void RenderSensitivitySlider(float dt)

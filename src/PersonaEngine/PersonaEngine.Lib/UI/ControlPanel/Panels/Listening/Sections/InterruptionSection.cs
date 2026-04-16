@@ -67,6 +67,20 @@ public sealed class InterruptionSection : IDisposable
 
             ImGui.BeginDisabled(!enabled);
 
+            // Mid-speech toggle
+            rowY = ImGui.GetCursorPosY();
+            ImGuiHelpers.SettingLabel(
+                "During responses",
+                "If off, you can only interrupt when the avatar is already listening or waiting — not in the middle of its response."
+            );
+            var midChanged = ImGuiHelpers.ToggleSwitch(
+                "##mid_speech",
+                ref allowDuringSpeech,
+                ref _midSpeechKnob,
+                dt
+            );
+            ImGuiHelpers.SettingEndRow(rowY);
+
             // Words-to-trigger slider
             var minWords = _conversation.BargeInMinWords;
             rowY = ImGui.GetCursorPosY();
@@ -81,20 +95,6 @@ public sealed class InterruptionSection : IDisposable
                 10,
                 "Any sound",
                 "Real sentences",
-                dt
-            );
-            ImGuiHelpers.SettingEndRow(rowY);
-
-            // Mid-speech toggle
-            rowY = ImGui.GetCursorPosY();
-            ImGuiHelpers.SettingLabel(
-                "Allow while the avatar is speaking",
-                "If off, you can only interrupt when the avatar is already listening or waiting — not in the middle of its response."
-            );
-            var midChanged = ImGuiHelpers.ToggleSwitch(
-                "##mid_speech",
-                ref allowDuringSpeech,
-                ref _midSpeechKnob,
                 dt
             );
             ImGuiHelpers.SettingEndRow(rowY);

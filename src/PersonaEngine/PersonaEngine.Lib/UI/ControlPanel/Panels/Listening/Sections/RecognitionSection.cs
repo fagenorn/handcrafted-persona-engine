@@ -162,21 +162,27 @@ public sealed class RecognitionSection : IDisposable
 
     private void RenderAddInput()
     {
-        ImGui.SetNextItemWidth(-1f);
-        if (
-            ImGui.InputTextWithHint(
-                "##addvoc",
-                "Add a word...",
-                ref _inputBuffer,
-                InputBufferSize,
-                ImGuiInputTextFlags.EnterReturnsTrue
-            )
-        )
+        var buttonWidth = ImGui.CalcTextSize("Add").X + ImGui.GetStyle().FramePadding.X * 2f;
+        var gap = 6f;
+
+        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - buttonWidth - gap);
+        ImGui.InputTextWithHint("##addvoc", "Add a word...", ref _inputBuffer, InputBufferSize);
+        var enterPressed = ImGui.IsItemFocused() && ImGui.IsKeyPressed(ImGuiKey.Enter);
+
+        ImGui.SameLine(0f, gap);
+        var hasInput = _inputBuffer.Trim().Length > 0;
+        if (!hasInput)
+            ImGui.BeginDisabled();
+        var buttonPressed = ImGui.Button("Add##add_vocab_btn");
+        ImGuiHelpers.HandCursorOnHover();
+        if (!hasInput)
+            ImGui.EndDisabled();
+
+        if ((enterPressed || buttonPressed) && _vocabulary.Count < MaxVocabulary)
         {
             var trimmed = _inputBuffer.Trim();
             if (
                 trimmed.Length > 0
-                && _vocabulary.Count < MaxVocabulary
                 && !_vocabulary.Contains(trimmed, StringComparer.OrdinalIgnoreCase)
             )
             {

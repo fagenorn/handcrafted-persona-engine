@@ -4,7 +4,9 @@ namespace PersonaEngine.Lib.ASR.VAD;
 
 /// <summary>
 ///     Subscribes to <see cref="IVadDetector.ProbabilityObserved" /> and exposes the latest
-///     value plus a trailing history ring buffer for UI consumers.
+///     raw probability plus a trailing history ring buffer for UI consumers. Smoothing is
+///     handled on the UI side (<see cref="LiveMeterWidget" />) so the display can be tuned
+///     independently of the data source.
 /// </summary>
 public sealed class VadProbabilityProvider : IVadProbabilityProvider, IDisposable
 {

@@ -12,9 +12,9 @@ public record AsrConfiguration
 
     public float VadThresholdGap { get; init; } = 0.15f;
 
-    public float VadMinSpeechDuration { get; init; } = 250f;
+    public float VadMinSpeechDuration { get; init; } = 150f;
 
-    public float VadMinSilenceDuration { get; init; } = 200f;
+    public float VadMinSilenceDuration { get; init; } = 450f;
 }
 
 public enum WhisperConfigTemplate
