@@ -901,60 +901,6 @@ public static class ImGuiHelpers
         return changed;
     }
 
-    /// <summary>
-    ///     Draws <paramref name="text" /> at <paramref name="position" /> with an
-    ///     8-offset stroke simulation — the same text is drawn at +/-<paramref name="strokePx" />
-    ///     offsets in <paramref name="strokeColor" />, then once more in
-    ///     <paramref name="fillColor" /> on top. Approximates FontStashSharp's
-    ///     <c>FontSystemEffect.Stroked</c> at the fidelity appropriate for a preview.
-    /// </summary>
-    /// <param name="drawList">Target draw list (usually <c>ImGui.GetWindowDrawList()</c>).</param>
-    /// <param name="font">ImGui font pointer (usually <c>ImGui.GetFont()</c>).</param>
-    /// <param name="fontSize">Font size in pixels.</param>
-    /// <param name="position">Top-left position of the fill pass.</param>
-    /// <param name="text">Text to draw.</param>
-    /// <param name="fillColor">Packed ABGR color for the fill pass.</param>
-    /// <param name="strokeColor">Packed ABGR color for the stroke pass.</param>
-    /// <param name="strokePx">Stroke offset in pixels. <c>&lt;= 0</c> disables the stroke pass.</param>
-    public static void DrawOutlinedText(
-        ImDrawListPtr drawList,
-        ImFontPtr font,
-        float fontSize,
-        Vector2 position,
-        string text,
-        uint fillColor,
-        uint strokeColor,
-        float strokePx
-    )
-    {
-        unsafe
-        {
-            if (strokePx > 0f)
-            {
-                // 8-direction offset pattern gives a more uniform outline than a simple
-                // 4-direction one, at twice the draw cost — still cheap for a preview.
-                Span<Vector2> offsets =
-                    stackalloc Vector2[] {
-                        new(-strokePx, 0f),
-                        new(strokePx, 0f),
-                        new(0f, -strokePx),
-                        new(0f, strokePx),
-                        new(-strokePx, -strokePx),
-                        new(strokePx, -strokePx),
-                        new(-strokePx, strokePx),
-                        new(strokePx, strokePx),
-                    };
-
-                foreach (var off in offsets)
-                {
-                    drawList.AddText(font, fontSize, position + off, strokeColor, text);
-                }
-            }
-
-            drawList.AddText(font, fontSize, position, fillColor, text);
-        }
-    }
-
     // ── Resolution Picker ────────────────────────────────────────────────────────
 
     private static readonly (int Width, int Height, string Label)[] LandscapeResolutions =
