@@ -33,7 +33,7 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
     private readonly Qwen3ModelConfig _config;
     private readonly Qwen3TextTokenizer _tokenizer;
     private readonly GgufEmbeddingManager _embeddings;
-    private readonly LlamaTtsInference _llama;
+    private readonly LlamaTtsModel _model;
     private readonly InferenceSession _decoderSession;
     private readonly IForcedAligner _aligner;
     private readonly ILogger? _logger;
@@ -44,7 +44,7 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
         Qwen3ModelConfig config,
         Qwen3TextTokenizer tokenizer,
         GgufEmbeddingManager embeddings,
-        LlamaTtsInference llama,
+        LlamaTtsModel model,
         InferenceSession decoderSession,
         IForcedAligner aligner,
         ILogger? logger
@@ -53,7 +53,7 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
         _config = config;
         _tokenizer = tokenizer;
         _embeddings = embeddings;
-        _llama = llama;
+        _model = model;
         _decoderSession = decoderSession;
         _aligner = aligner;
         _logger = logger;
@@ -86,7 +86,7 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
         );
 
         // Load GGUF models via LLamaSharp
-        var llama = LlamaTtsInference.Load(
+        var model = LlamaTtsModel.Load(
             modelProvider.GetModelPath(IO.ModelType.Qwen3.Talker),
             modelProvider.GetModelPath(IO.ModelType.Qwen3.Predictor),
             logger
@@ -107,7 +107,7 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
             config,
             tokenizer,
             embeddings,
-            llama,
+            model,
             decoderSession,
             aligner,
             logger
@@ -128,7 +128,9 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
             warmupCodecPrefix,
             null
         );
-        llama.TalkerPrefill(warmupEmb, warmupLen);
+        var warmupCtx = model.RentContext();
+        warmupCtx.TalkerPrefill(warmupEmb, warmupLen);
+        model.ReturnContext(warmupCtx);
         logger?.LogInformation("Warmup complete in {Elapsed}ms total", sw.ElapsedMilliseconds);
 
         return engine;
@@ -173,7 +175,9 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
             instructTokens
         );
 
-        var (logits, hidden) = _llama.TalkerPrefill(prefillEmbedding, prefillLen);
+        var ctx = _model.RentContext();
+        var contextCorrupted = false;
+        var (logits, hidden) = ctx.TalkerPrefill(prefillEmbedding, prefillLen);
 
         _logger?.LogInformation("Streaming: prefill done in {Elapsed}ms", sw.ElapsedMilliseconds);
 
@@ -201,6 +205,7 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                 {
                     foreach (
                         var codes in GenerateCodeFrames(
+                            ctx,
                             logits,
                             hidden,
                             prefillLen,
@@ -330,13 +335,12 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                         producerSw.ElapsedMilliseconds
                     );
 
+                    contextCorrupted = true;
                     throw;
                 }
                 finally
                 {
                     // Await any in-flight decoder task before completing the channel.
-                    // Without this, the decoder could be disposed (via session dispose)
-                    // while still running ONNX inference on the GPU, corrupting CUDA state.
                     if (pendingDecode != null)
                     {
                         try
@@ -348,6 +352,10 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                             // Swallow — we're cleaning up, the result is discarded
                         }
                     }
+
+                    // Return the inference context to the pool. All TalkerDecode/PredictCodes
+                    // calls are done at this point (GenerateCodeFrames has finished iterating).
+                    _model.ReturnContext(ctx, contextCorrupted);
 
                     audioChannel.Writer.Complete();
                 }
@@ -662,12 +670,13 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
             return;
         }
 
-        _llama.Dispose();
+        _model.Dispose();
         _decoderSession.Dispose();
         _disposed = true;
     }
 
     private IEnumerable<int[]> GenerateCodeFrames(
+        LlamaTtsContext ctx,
         float[] initialLogits,
         float[] initialHidden,
         int prefillLen,
@@ -742,7 +751,7 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
 
             var group0Token = Qwen3Sampler.SampleTalkerToken(
                 currentLogits,
-                _llama.TalkerVocabSize,
+                _model.TalkerVocabSize,
                 codecEos,
                 recentTokens,
                 options,
@@ -790,7 +799,7 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
 
             // Project hidden 2048→1024 and run code predictor
             _embeddings.ProjectTo1024(currentHidden, projectedHidden);
-            _llama.PredictCodes(
+            ctx.PredictCodes(
                 projectedHidden,
                 codes,
                 numCodeGroups,
@@ -806,7 +815,7 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
             _embeddings.BuildFeedbackEmbedding(codes, feedbackBuffer);
 
             // Talker decode with feedback (incremental, KV cache preserved)
-            (currentLogits, currentHidden) = _llama.TalkerDecode(feedbackBuffer, prefillLen + step);
+            (currentLogits, currentHidden) = ctx.TalkerDecode(feedbackBuffer, prefillLen + step);
 
             totalSteps = step + 1;
             var stepMs = stepSw.ElapsedMilliseconds;
