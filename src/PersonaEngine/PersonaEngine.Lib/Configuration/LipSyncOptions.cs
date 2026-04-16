@@ -3,7 +3,7 @@ namespace PersonaEngine.Lib.Configuration;
 /// <summary>
 ///     Configuration for the lip-sync subsystem.
 /// </summary>
-public class LipSyncOptions
+public record LipSyncOptions
 {
     /// <summary>
     ///     Which lip-sync engine to use. Must match an <see cref="PersonaEngine.Lib.TTS.Synthesis.LipSync.ILipSyncProcessor.EngineId" />.
@@ -17,12 +17,12 @@ public class LipSyncOptions
 /// <summary>
 ///     Configuration for the Audio2Face lip-sync engine.
 /// </summary>
-public class Audio2FaceOptions
+public record Audio2FaceOptions
 {
     /// <summary>
     ///     The identity (character) to use when generating lip-sync data.
     /// </summary>
-    public string Identity { get; set; } = "Claire";
+    public string Identity { get; set; } = "James";
 
     /// <summary>
     ///     Whether to use the GPU for inference.
