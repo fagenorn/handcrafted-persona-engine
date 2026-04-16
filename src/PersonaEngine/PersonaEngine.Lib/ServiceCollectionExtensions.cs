@@ -53,6 +53,8 @@ using PersonaEngine.Lib.UI.ControlPanel.Panels.Listening;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Listening.Sections;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Personality;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Personality.Sections;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Subtitles;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Subtitles.Sections;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Audition;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Models;
@@ -467,7 +469,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ModelSection>();
         services.AddSingleton<LipSyncSection>();
         services.AddSingleton<AvatarPanel>();
-        services.AddSingleton<Subtitles>();
+        // Subtitles panel sections
+        services.AddSingleton<PreviewSection>();
+        services.AddSingleton<TextStyleSection>();
+        services.AddSingleton<ColorsSection>();
+        services.AddSingleton<PlacementSection>();
+        services.AddSingleton<CanvasSection>();
+        services.AddSingleton<SubtitlesPanel>();
         services.AddSingleton<RouletteWheelPanel>();
         services.AddSingleton<ScreenAwareness>();
         services.AddSingleton<Streaming>();

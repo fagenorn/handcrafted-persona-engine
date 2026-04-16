@@ -5,6 +5,7 @@ using PersonaEngine.Lib.UI.ControlPanel.Panels;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Avatar;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Listening;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Personality;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Subtitles;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice;
 using PersonaEngine.Lib.UI.ControlPanel.Visuals;
 using Silk.NET.Input;
@@ -77,7 +78,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         PersonalityPanel personalityPanel,
         ListeningPanel listeningPanel,
         AvatarPanel avatarPanel,
-        Subtitles subtitles,
+        SubtitlesPanel subtitlesPanel,
         RouletteWheelPanel rouletteWheelPanel,
         ScreenAwareness screenAwareness,
         Streaming streaming,
@@ -98,7 +99,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         RegisterPanel(NavSection.Personality, dt => personalityPanel.Render(dt));
         RegisterPanel(NavSection.Listening, dt => listeningPanel.Render(dt), listeningPanel);
         RegisterPanel(NavSection.Avatar, dt => avatarPanel.Render(dt));
-        RegisterPanel(NavSection.Subtitles, dt => subtitles.Render(dt));
+        RegisterPanel(NavSection.Subtitles, dt => subtitlesPanel.Render(dt));
         RegisterPanel(NavSection.RouletteWheel, dt => rouletteWheelPanel.Render(dt));
         RegisterPanel(NavSection.ScreenAwareness, dt => screenAwareness.Render(dt));
         RegisterPanel(NavSection.Streaming, dt => streaming.Render(dt));
