@@ -15,16 +15,12 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Avatar.Sections;
 /// </summary>
 public sealed class ModelSection : IDisposable
 {
-    private const int ModelNameBufferSize = 512;
-    private const int ModelPathBufferSize = 1024;
     private const string MissingSuffix = "  (not found)";
 
     private readonly IConfigWriter _configWriter;
     private readonly IDisposable? _changeSubscription;
 
     private Live2DOptions _live2d;
-    private string _modelNameBuffer = string.Empty;
-    private string _modelPathBuffer = string.Empty;
     private string[] _modelChoices = Array.Empty<string>();
     private bool _currentModelMissing;
     private bool _initialized;
@@ -44,8 +40,6 @@ public sealed class ModelSection : IDisposable
                 _live2d = updated;
                 if (!_initialized)
                     return;
-                _modelNameBuffer = updated.ModelName;
-                _modelPathBuffer = updated.ModelPath;
                 if (folderChanged)
                     RefreshModels();
                 else
@@ -60,8 +54,6 @@ public sealed class ModelSection : IDisposable
     {
         if (!_initialized)
         {
-            _modelNameBuffer = _live2d.ModelName;
-            _modelPathBuffer = _live2d.ModelPath;
             RefreshModels();
             _initialized = true;
         }
@@ -80,7 +72,6 @@ public sealed class ModelSection : IDisposable
             ImGui.Spacing();
 
             RenderCharacterRow();
-            RenderFolderRow();
             RenderResolutionRow();
         }
     }
@@ -167,57 +158,23 @@ public sealed class ModelSection : IDisposable
             return;
 
         _live2d = _live2d with { ModelName = name };
-        _modelNameBuffer = name;
         _configWriter.Write(_live2d);
         RecomputeMissingFlag();
-    }
-
-    // ── Models folder row ─────────────────────────────────────────────────────
-
-    private void RenderFolderRow()
-    {
-        ImGuiHelpers.SettingLabel("Models Folder", "Where to look for Live2D models on disk.");
-
-        if (ImGui.InputText("##ModelPath", ref _modelPathBuffer, ModelPathBufferSize))
-        {
-            _live2d = _live2d with { ModelPath = _modelPathBuffer };
-            _configWriter.Write(_live2d);
-            RefreshModels();
-        }
-
-        // Folder validation feedback — appears just below the text input.
-        if (string.IsNullOrWhiteSpace(_live2d.ModelPath) || !Directory.Exists(_live2d.ModelPath))
-        {
-            ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
-            ImGui.TextUnformatted("Folder not found");
-            ImGui.PopStyleColor();
-        }
-        else if (_modelChoices.Length == 0 || AllChoicesAreMissingOnly())
-        {
-            ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
-            ImGui.TextUnformatted("No models found in this folder");
-            ImGui.PopStyleColor();
-        }
-    }
-
-    private bool AllChoicesAreMissingOnly()
-    {
-        // Only the placeholder for the currently-saved-but-missing model is present,
-        // i.e. the scan returned zero real entries.
-        return _modelChoices.Length == 1
-            && _modelChoices[0].EndsWith(MissingSuffix, StringComparison.Ordinal);
     }
 
     // ── Resolution row ────────────────────────────────────────────────────────
 
     private void RenderResolutionRow()
     {
-        ImGuiHelpers.SettingLabel("Resolution", "Render resolution for the avatar.");
+        ImGuiHelpers.SettingLabel(
+            "Resolution",
+            "Canvas size for the avatar. Pick an orientation, then a preset that matches your scene in OBS."
+        );
 
         var width = _live2d.Width;
         var height = _live2d.Height;
 
-        if (ImGuiHelpers.ResolutionPicker("Live2DRes", ref width, ref height))
+        if (ImGuiHelpers.ResolutionChips("Live2DRes", ref width, ref height))
         {
             _live2d = _live2d with { Width = width, Height = height };
             _configWriter.Write(_live2d);

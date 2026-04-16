@@ -9,8 +9,9 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Avatar.Sections;
 /// <summary>
 ///     Lip-sync engine card. The Style chips pick between the VBridger (phoneme-based,
 ///     "Simple") and Audio2Face (ML-based, "Realistic") engines. When Audio2Face is
-///     active, two sub-settings appear: Use GPU (ToggleSwitch) and Quality (Accurate /
-///     Fast chips, mapping to BVLS / PGD solver types).
+///     active, two sub-settings appear below: Quality (Accurate / Fast chips, mapping
+///     to BVLS / PGD solver types) and Use GPU (ToggleSwitch). Quality comes first
+///     because it's the user-facing fidelity knob; Use GPU is the performance lever.
 ///     <para>
 ///         <see cref="Audio2FaceOptions.Identity" /> is intentionally not exposed —
 ///         see the Avatar panel redesign spec (Non-Goals).
@@ -73,9 +74,8 @@ public sealed class LipSyncSection : IDisposable
 
             if (string.Equals(_lipSync.Engine, EngineRealistic, StringComparison.OrdinalIgnoreCase))
             {
-                ImGui.Spacing();
-                RenderUseGpuRow(dt);
                 RenderQualityRow();
+                RenderUseGpuRow(dt);
             }
         }
     }
@@ -84,6 +84,8 @@ public sealed class LipSyncSection : IDisposable
 
     private void RenderStyleRow()
     {
+        var rowY = ImGui.GetCursorPosY();
+
         ImGuiHelpers.SettingLabel(
             "Style",
             "Simple is fast and works everywhere. Realistic uses a neural model for richer mouth shapes."
@@ -113,6 +115,8 @@ public sealed class LipSyncSection : IDisposable
             if (!isRealistic)
                 WriteEngine(EngineRealistic);
         }
+
+        ImGuiHelpers.SettingEndRow(rowY);
     }
 
     private void WriteEngine(string engine)
@@ -125,6 +129,8 @@ public sealed class LipSyncSection : IDisposable
 
     private void RenderUseGpuRow(float dt)
     {
+        var rowY = ImGui.GetCursorPosY();
+
         ImGuiHelpers.SettingLabel(
             "Use GPU",
             "Run lip sync on your graphics card. Faster, but needs a capable GPU."
@@ -136,12 +142,16 @@ public sealed class LipSyncSection : IDisposable
             _lipSync = _lipSync with { Audio2Face = _lipSync.Audio2Face with { UseGpu = useGpu } };
             _configWriter.Write(_lipSync);
         }
+
+        ImGuiHelpers.SettingEndRow(rowY);
     }
 
     // ── Quality chips (Accurate / Fast) ───────────────────────────────────────
 
     private void RenderQualityRow()
     {
+        var rowY = ImGui.GetCursorPosY();
+
         ImGuiHelpers.SettingLabel(
             "Quality",
             "Accurate gives the best-looking mouth shapes. Fast trades a bit of detail for lower latency."
@@ -164,6 +174,8 @@ public sealed class LipSyncSection : IDisposable
             if (!isFast)
                 WriteSolver(SolverFast);
         }
+
+        ImGuiHelpers.SettingEndRow(rowY);
     }
 
     private void WriteSolver(string solver)
