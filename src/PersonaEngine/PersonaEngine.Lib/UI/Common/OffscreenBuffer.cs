@@ -17,7 +17,8 @@ public sealed class OffscreenBuffer : IDisposable
     private uint _colorTexture;
     private bool _disposed;
 
-    private int _prevFbo;
+    private int _prevDrawFbo;
+    private int _prevReadFbo;
 
     // Four-element array {x, y, width, height} populated by GetInteger(Viewport).
     private readonly int[] _prevViewport = new int[4];
@@ -55,14 +56,11 @@ public sealed class OffscreenBuffer : IDisposable
     /// Saves the currently bound FBO and viewport, then binds this buffer and sets
     /// the viewport to cover its full dimensions. Call <see cref="Unbind"/> to restore.
     /// </summary>
-    public unsafe void Bind()
+    public void Bind()
     {
-        _gl.GetInteger(GetPName.DrawFramebufferBinding, out _prevFbo);
-
-        fixed (int* vp = _prevViewport)
-        {
-            _gl.GetInteger(GetPName.Viewport, vp);
-        }
+        _gl.GetInteger(GetPName.DrawFramebufferBinding, out _prevDrawFbo);
+        _gl.GetInteger(GetPName.ReadFramebufferBinding, out _prevReadFbo);
+        _gl.GetInteger(GetPName.Viewport, _prevViewport.AsSpan());
 
         _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _fbo);
         _gl.Viewport(0, 0, (uint)Width, (uint)Height);
@@ -73,7 +71,8 @@ public sealed class OffscreenBuffer : IDisposable
     /// </summary>
     public void Unbind()
     {
-        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, (uint)_prevFbo);
+        _gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, (uint)_prevDrawFbo);
+        _gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, (uint)_prevReadFbo);
         _gl.Viewport(
             _prevViewport[0],
             _prevViewport[1],
@@ -88,6 +87,8 @@ public sealed class OffscreenBuffer : IDisposable
     /// </summary>
     public void Resize(int width, int height)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         width = Math.Max(1, width);
         height = Math.Max(1, height);
 
