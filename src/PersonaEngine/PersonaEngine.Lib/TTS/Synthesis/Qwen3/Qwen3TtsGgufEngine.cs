@@ -129,7 +129,16 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
             null
         );
         var warmupCtx = model.RentContext();
-        warmupCtx.TalkerPrefill(warmupEmb, warmupLen);
+        try
+        {
+            warmupCtx.TalkerPrefill(warmupEmb, warmupLen);
+        }
+        catch
+        {
+            model.ReturnContext(warmupCtx, corrupted: true);
+            throw;
+        }
+
         model.ReturnContext(warmupCtx);
         logger?.LogInformation("Warmup complete in {Elapsed}ms total", sw.ElapsedMilliseconds);
 
@@ -177,7 +186,18 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
 
         var ctx = _model.RentContext();
         var contextCorrupted = false;
-        var (logits, hidden) = ctx.TalkerPrefill(prefillEmbedding, prefillLen);
+        (float[] Logits, float[] Hidden) prefillResult;
+        try
+        {
+            prefillResult = ctx.TalkerPrefill(prefillEmbedding, prefillLen);
+        }
+        catch
+        {
+            _model.ReturnContext(ctx, corrupted: true);
+            throw;
+        }
+
+        var (logits, hidden) = prefillResult;
 
         _logger?.LogInformation("Streaming: prefill done in {Elapsed}ms", sw.ElapsedMilliseconds);
 

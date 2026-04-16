@@ -269,6 +269,11 @@ internal sealed class LlamaTtsContext : IDisposable
         _disposed = true;
     }
 
+    /// <summary>
+    ///     Destroys and recreates the Talker CUDA context + batch.
+    ///     Recovers from CUDA graph capture failures that corrupt the GPU state
+    ///     after repeated prefill/decode cycles with varying sequence lengths.
+    /// </summary>
     private void RecreateTalkerContext()
     {
         _logger?.LogInformation("Recreating Talker CUDA context...");
@@ -310,13 +315,14 @@ internal sealed class LlamaTtsContext : IDisposable
             );
         }
 
+        // 4D RoPE positions: [temporal, height, width, channel]
         var pos = (int*)_talkerBatch.pos;
         for (var i = 0; i < numTokens; i++)
         {
-            pos[i] = startPos + i;
-            pos[numTokens + i] = startPos + i;
-            pos[2 * numTokens + i] = startPos + i;
-            pos[3 * numTokens + i] = 0;
+            pos[i] = startPos + i; // temporal
+            pos[numTokens + i] = startPos + i; // height
+            pos[2 * numTokens + i] = startPos + i; // width
+            pos[3 * numTokens + i] = 0; // channel (always 0)
         }
 
         for (var i = 0; i < numTokens; i++)
