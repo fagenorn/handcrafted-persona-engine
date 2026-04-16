@@ -470,6 +470,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<LipSyncSection>();
         services.AddSingleton<AvatarPanel>();
         // Subtitles panel sections
+        services.AddSingleton<SubtitlePreviewRenderer>();
         services.AddSingleton<PreviewSection>();
         services.AddSingleton<TextStyleSection>();
         services.AddSingleton<ColorsSection>();

@@ -1,6 +1,7 @@
 using Hexa.NET.ImGui;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Subtitles.Sections;
+using Silk.NET.OpenGL;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Subtitles;
 
@@ -17,6 +18,8 @@ public sealed class SubtitlesPanel(
     CanvasSection canvas
 )
 {
+    public void Initialize(GL gl) => preview.Initialize(gl);
+
     public void Render(float dt)
     {
         using (Ui.FillChild("##subtitles_panel", padding: 4f))

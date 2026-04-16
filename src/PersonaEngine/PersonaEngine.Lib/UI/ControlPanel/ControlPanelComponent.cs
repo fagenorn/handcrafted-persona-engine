@@ -39,6 +39,7 @@ public sealed class ControlPanelComponent : IRenderComponent
     private readonly TitleBar _titleBar;
     private readonly WindowFrameGlow _windowFrameGlow;
     private readonly IConfigWriter _configWriter;
+    private readonly SubtitlesPanel _subtitlesPanel;
     private readonly Navigation _navigation = new();
     private readonly Dictionary<NavSection, PanelRegistration> _panelRegistrations = new();
 
@@ -93,6 +94,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         _stateProvider = stateProvider;
         _ambientRenderer = ambientRenderer;
         _windowFrameGlow = windowFrameGlow;
+        _subtitlesPanel = subtitlesPanel;
 
         RegisterPanel(NavSection.Dashboard, dt => dashboard.Render(dt));
         RegisterPanel(NavSection.Voice, dt => voicePanel.Render(dt));
@@ -116,6 +118,7 @@ public sealed class ControlPanelComponent : IRenderComponent
     public void Initialize(GL gl, IView view, IInputContext input)
     {
         _ambientRenderer.Initialize(gl);
+        _subtitlesPanel.Initialize(gl);
     }
 
     public void Update(float deltaTime)
