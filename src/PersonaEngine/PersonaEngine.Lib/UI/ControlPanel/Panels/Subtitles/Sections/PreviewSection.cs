@@ -20,6 +20,11 @@ public sealed class PreviewSection : IDisposable
     private const float CanvasPaddingX = 8f;
     private const float CanvasPaddingY = 8f;
 
+    // Fixed canvas height: the preview renders at a constant font size (see
+    // SubtitlePreviewRenderer.PreviewFontSize) so we don't scale the canvas to the
+    // configured FontSize — that would only mislead about final OBS appearance.
+    private const float CanvasHeight = 180f;
+
     private readonly IDisposable? _changeSubscription;
     private readonly SubtitlePreviewRenderer _previewRenderer;
 
@@ -61,11 +66,7 @@ public sealed class PreviewSection : IDisposable
     private void DrawPreviewCanvas()
     {
         var avail = ImGui.GetContentRegionAvail();
-
-        // Canvas height scales with FontSize so very large configured sizes aren't clipped,
-        // clamped to stay sane inside the card.
-        var canvasHeight = Math.Clamp(_opts.FontSize * 2.6f, 160f, 280f);
-        var canvasSize = new Vector2(avail.X, canvasHeight);
+        var canvasSize = new Vector2(avail.X, CanvasHeight);
         var canvasPos = ImGui.GetCursorScreenPos();
 
         var drawList = ImGui.GetWindowDrawList();

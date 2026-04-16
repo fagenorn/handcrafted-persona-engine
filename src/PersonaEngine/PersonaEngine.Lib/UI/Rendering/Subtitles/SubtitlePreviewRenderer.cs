@@ -22,6 +22,11 @@ public sealed class SubtitlePreviewRenderer : IDisposable
     private const string Line2Highlight = "here";
     private const string Line2Suffix = " while streaming";
 
+    // Preview renders at a fixed size because the live OBS output is scaled/resized
+    // independently, so matching the configured FontSize in the preview gave no useful
+    // sense of final appearance. 55pt sits comfortably inside the panel card.
+    private const int PreviewFontSize = 55;
+
     private readonly FontProvider _fontProvider;
     private readonly ILogger<SubtitlePreviewRenderer> _logger;
 
@@ -94,7 +99,7 @@ public sealed class SubtitlePreviewRenderer : IDisposable
         height = Math.Max(1, height);
 
         // Re-resolve font if dirty or stale.
-        if (_dirty || _font is null || _font.FontSize != _opts.FontSize)
+        if (_dirty || _font is null || _font.FontSize != PreviewFontSize)
         {
             ResolveFont();
         }
@@ -161,7 +166,7 @@ public sealed class SubtitlePreviewRenderer : IDisposable
     {
         try
         {
-            _font = _fontProvider.GetFontSystem(_opts.Font).GetFont(_opts.FontSize);
+            _font = _fontProvider.GetFontSystem(_opts.Font).GetFont(PreviewFontSize);
             _fontResolveWarned = false;
         }
         catch (Exception ex)
@@ -185,7 +190,7 @@ public sealed class SubtitlePreviewRenderer : IDisposable
 
             try
             {
-                _font = _fontProvider.GetFontSystem(available[0]).GetFont(_opts.FontSize);
+                _font = _fontProvider.GetFontSystem(available[0]).GetFont(PreviewFontSize);
             }
             catch (Exception fallbackEx)
             {
