@@ -9,8 +9,8 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Avatar.Sections;
 /// <summary>
 ///     Lip-sync engine card. The Style chips pick between the VBridger (phoneme-based,
 ///     "Simple") and Audio2Face (ML-based, "Realistic") engines. When Audio2Face is
-///     active, two sub-settings appear below: Quality (Accurate / Fast chips, mapping
-///     to BVLS / PGD solver types) and Use GPU (ToggleSwitch). Quality comes first
+///     active, two sub-settings appear below: Quality (Fast / Accurate chips, mapping
+///     to PGD / BVLS solver types) and Use GPU (ToggleSwitch). Quality comes first
 ///     because it's the user-facing fidelity knob; Use GPU is the performance lever.
 ///     <para>
 ///         <see cref="Audio2FaceOptions.Identity" /> is intentionally not exposed —
@@ -154,25 +154,25 @@ public sealed class LipSyncSection : IDisposable
 
         ImGuiHelpers.SettingLabel(
             "Quality",
-            "Accurate gives the best-looking mouth shapes. Fast trades a bit of detail for lower latency."
+            "Fast trades a bit of detail for lower latency. Accurate gives the best-looking mouth shapes."
         );
 
         var solver = _lipSync.Audio2Face.SolverType;
         var isAccurate = string.Equals(solver, SolverAccurate, StringComparison.OrdinalIgnoreCase);
         var isFast = string.Equals(solver, SolverFast, StringComparison.OrdinalIgnoreCase);
 
-        if (ImGuiHelpers.Chip("Accurate", isAccurate))
-        {
-            if (!isAccurate)
-                WriteSolver(SolverAccurate);
-        }
-
-        ImGui.SameLine(0f, ChipGap);
-
         if (ImGuiHelpers.Chip("Fast", isFast))
         {
             if (!isFast)
                 WriteSolver(SolverFast);
+        }
+
+        ImGui.SameLine(0f, ChipGap);
+
+        if (ImGuiHelpers.Chip("Accurate", isAccurate))
+        {
+            if (!isAccurate)
+                WriteSolver(SolverAccurate);
         }
 
         ImGuiHelpers.SettingEndRow(rowY);
