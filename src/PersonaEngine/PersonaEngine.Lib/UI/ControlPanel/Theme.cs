@@ -141,4 +141,48 @@ public static class Theme
     /// <summary>Converts a 0xRRGGBB hex literal to a normalized <see cref="Vector4"/> (alpha = 1).</summary>
     private static Vector4 ColorFromHex(uint hex) =>
         new(((hex >> 16) & 0xFF) / 255f, ((hex >> 8) & 0xFF) / 255f, (hex & 0xFF) / 255f, 1f);
+
+    // ── Hex color conversions ──────────────────────────────────────────────
+    //
+    // Used by panels that edit string-backed color options (e.g. subtitles).
+    // Format is "#AARRGGBB" — alpha first, matching the project's appsettings
+    // convention. TryParseHex falls back to white (#FFFFFFFF) on malformed
+    // input so the UI never displays a black/transparent placeholder.
+
+    /// <summary>
+    ///     Parses a "#AARRGGBB" or "#RRGGBB" string into a normalized
+    ///     <see cref="Vector4"/> (RGBA in 0–1 space). Returns <see langword="true"/>
+    ///     on success; <paramref name="color"/> is set to opaque white on failure.
+    /// </summary>
+    public static bool TryParseHex(string? hex, out Vector4 color)
+    {
+        if (!string.IsNullOrWhiteSpace(hex))
+        {
+            try
+            {
+                var parsed = System.Drawing.ColorTranslator.FromHtml(hex);
+                color = new Vector4(
+                    parsed.R / 255f,
+                    parsed.G / 255f,
+                    parsed.B / 255f,
+                    parsed.A / 255f
+                );
+                return true;
+            }
+            catch
+            {
+                // Malformed input — fall through to the white default.
+            }
+        }
+
+        color = new Vector4(1f, 1f, 1f, 1f);
+        return false;
+    }
+
+    /// <summary>
+    ///     Formats an RGBA <see cref="Vector4"/> as a "#AARRGGBB" string —
+    ///     alpha first, matching the project's persisted hex convention.
+    /// </summary>
+    public static string ToHexString(Vector4 color) =>
+        $"#{(byte)(color.W * 255):X2}{(byte)(color.X * 255):X2}{(byte)(color.Y * 255):X2}{(byte)(color.Z * 255):X2}";
 }
