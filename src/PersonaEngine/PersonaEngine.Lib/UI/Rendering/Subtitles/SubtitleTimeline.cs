@@ -11,19 +11,19 @@ public class SubtitleTimeline
 {
     private readonly List<SubtitleSegment> _activeSegments = new();
 
-    private readonly float _bottomMargin;
+    private float _bottomMargin;
 
-    private readonly FSColor _highlightColor;
+    private FSColor _highlightColor;
 
-    private readonly float _interSegmentSpacing;
+    private float _interSegmentSpacing;
 
     private readonly float _lineSpacing;
 
     private readonly Lock _lock = new();
 
-    private readonly int _maxVisibleLines;
+    private int _maxVisibleLines;
 
-    private readonly FSColor _normalColor;
+    private FSColor _normalColor;
 
     private readonly IWordAnimator _wordAnimator;
 
@@ -100,6 +100,56 @@ public class SubtitleTimeline
         lock (_lock)
         {
             _activeSegments.Clear();
+        }
+    }
+
+    /// <summary>
+    ///     Updates the maximum number of visible caption lines. Takes effect on the
+    ///     next <see cref="GetVisibleLinesAndPosition"/> call; in-flight segments are
+    ///     unaffected.
+    /// </summary>
+    public void SetMaxVisibleLines(int value)
+    {
+        lock (_lock)
+        {
+            _maxVisibleLines = Math.Max(1, value);
+        }
+    }
+
+    /// <summary>
+    ///     Updates the distance from the bottom edge of the canvas, in pixels.
+    /// </summary>
+    public void SetBottomMargin(float value)
+    {
+        lock (_lock)
+        {
+            _bottomMargin = value;
+        }
+    }
+
+    /// <summary>
+    ///     Updates the vertical gap between stacked caption segments, in pixels.
+    /// </summary>
+    public void SetInterSegmentSpacing(float value)
+    {
+        lock (_lock)
+        {
+            _interSegmentSpacing = value;
+        }
+    }
+
+    /// <summary>
+    ///     Updates the normal and highlight colors used to tint word animations.
+    ///     Affects new segment updates from the next <see cref="Update"/> call;
+    ///     already-rendered words retain their last computed color until the next
+    ///     animation tick touches them.
+    /// </summary>
+    public void UpdateColors(FSColor normal, FSColor highlight)
+    {
+        lock (_lock)
+        {
+            _normalColor = normal;
+            _highlightColor = highlight;
         }
     }
 

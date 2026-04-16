@@ -9,9 +9,19 @@ namespace PersonaEngine.Lib.UI.Rendering.Subtitles;
 /// </summary>
 public class SubtitleProcessor(TextMeasurer textMeasurer, float defaultWordDuration = 0.3f)
 {
-    private readonly float _defaultWordDuration = Math.Max(0.01f, defaultWordDuration);
+    private float _defaultWordDuration = Math.Max(0.01f, defaultWordDuration);
 
     private readonly StringBuilder _textBuilder = new();
+
+    /// <summary>
+    ///     Updates the fallback per-word duration used when a token has no
+    ///     ground-truth timing. Takes effect on the next <see cref="ProcessSegment" />
+    ///     or <see cref="UpdateSegment" /> call.
+    /// </summary>
+    public void SetDefaultWordDuration(float value)
+    {
+        _defaultWordDuration = Math.Max(0.01f, value);
+    }
 
     public SubtitleSegment ProcessSegment(
         AudioSegment? audioSegment,

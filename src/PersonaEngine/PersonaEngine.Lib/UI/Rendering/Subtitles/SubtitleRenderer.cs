@@ -24,15 +24,23 @@ public class SubtitleRenderer : IRenderComponent
 {
     private readonly IAudioProgressNotifier _audioNotifier;
 
-    private readonly SubtitleOptions _config;
+    private readonly IOptionsMonitor<SubtitleOptions> _configMonitor;
+
+    private readonly IDisposable? _configSubscription;
+
+    private SubtitleOptions _config;
+
+    private SubtitleOptions _previousConfig;
+
+    private volatile bool _configDirty;
 
     private readonly FontProvider _fontProvider;
 
-    private readonly FSColor _highlightColor;
+    private FSColor _highlightColor;
 
     private readonly ILogger<SubtitleRenderer> _logger;
 
-    private readonly FSColor _normalColor;
+    private FSColor _normalColor;
 
     /// <summary>
     ///     Maps AudioSegment reference identity → SubtitleSegment.Id for correlating
@@ -91,28 +99,42 @@ public class SubtitleRenderer : IRenderComponent
     private IWordAnimator _wordAnimator = null!;
 
     public SubtitleRenderer(
-        IOptions<SubtitleOptions> configOptions,
+        IOptionsMonitor<SubtitleOptions> configMonitor,
         IAudioProgressNotifier audioNotifier,
         FontProvider fontProvider,
         ILogger<SubtitleRenderer> logger
     )
     {
-        _config = configOptions.Value;
+        _configMonitor = configMonitor;
+        _config = configMonitor.CurrentValue;
+        _previousConfig = _config;
         _audioNotifier = audioNotifier;
         _fontProvider = fontProvider;
         _logger = logger;
 
-        var normalColorSys = ColorTranslator.FromHtml(_config.Color);
-        _normalColor = new FSColor(
-            normalColorSys.R,
-            normalColorSys.G,
-            normalColorSys.B,
-            normalColorSys.A
-        );
-        var hColorSys = ColorTranslator.FromHtml(_config.HighlightColor);
-        _highlightColor = new FSColor(hColorSys.R, hColorSys.G, hColorSys.B, hColorSys.A);
+        (_normalColor, _highlightColor) = ParseColors(_config);
+
+        _configSubscription = configMonitor.OnChange(OnConfigChanged);
 
         SubscribeToAudioNotifier();
+    }
+
+    private static (FSColor normal, FSColor highlight) ParseColors(SubtitleOptions cfg)
+    {
+        var n = ColorTranslator.FromHtml(cfg.Color);
+        var h = ColorTranslator.FromHtml(cfg.HighlightColor);
+        return (new FSColor(n.R, n.G, n.B, n.A), new FSColor(h.R, h.G, h.B, h.A));
+    }
+
+    private void OnConfigChanged(SubtitleOptions updated, string? _)
+    {
+        if (_isDisposed)
+            return;
+
+        // Reference-swap snapshot + volatile flag. Actual rebuild happens on the
+        // GL thread at the top of Update(dt).
+        _config = updated;
+        _configDirty = true;
     }
 
     public bool UseSpout { get; } = true;
@@ -130,6 +152,7 @@ public class SubtitleRenderer : IRenderComponent
 
         _isDisposed = true;
 
+        _configSubscription?.Dispose();
         UnsubscribeFromAudioNotifier();
         _commandChannel.Writer.TryComplete();
         _processingCts?.Cancel();
@@ -172,11 +195,107 @@ public class SubtitleRenderer : IRenderComponent
         Resize();
     }
 
+    /// <summary>
+    ///     Called on the GL thread when <see cref="_configDirty" /> was set by an
+    ///     <see cref="IOptionsMonitor{T}.OnChange" /> callback. Diffs the new
+    ///     <see cref="_config" /> against <see cref="_previousConfig" /> and performs
+    ///     only the rebuild work the changed fields require.
+    ///     <para>
+    ///         Called only after <see cref="Initialize" /> has run — the dirty flag
+    ///         cannot become <c>true</c> before the subscription is wired, and the
+    ///         GL thread drains it in <see cref="Update" />.
+    ///     </para>
+    /// </summary>
+    private void ApplyConfig()
+    {
+        if (_gl == null)
+        {
+            // Initialize hasn't run yet — keep the new config, skip rebuilds.
+            _previousConfig = _config;
+            return;
+        }
+
+        var current = _config;
+        var prev = _previousConfig;
+
+        var fontChanged =
+            !string.Equals(current.Font, prev.Font, StringComparison.Ordinal)
+            || current.FontSize != prev.FontSize
+            || current.SideMargin != prev.SideMargin;
+
+        var colorsChanged =
+            !string.Equals(current.Color, prev.Color, StringComparison.Ordinal)
+            || !string.Equals(
+                current.HighlightColor,
+                prev.HighlightColor,
+                StringComparison.Ordinal
+            );
+
+        if (fontChanged)
+        {
+            // Font / size / side-margin change forces a measurer + processor rebuild.
+            // The timeline is kept (so in-flight animations for already-visible
+            // captions keep playing); new segments from this point on will use the
+            // new measurer.
+            var fontSystem = _fontProvider.GetFontSystem(current.Font);
+            var font = fontSystem.GetFont(current.FontSize);
+            _textMeasurer = new TextMeasurer(
+                font,
+                current.SideMargin,
+                _viewportWidth,
+                _viewportHeight
+            );
+            _subtitleProcessor = new SubtitleProcessor(_textMeasurer, current.AnimationDuration);
+        }
+        else if (current.AnimationDuration != prev.AnimationDuration)
+        {
+            _subtitleProcessor.SetDefaultWordDuration(current.AnimationDuration);
+        }
+
+        if (colorsChanged)
+        {
+            (_normalColor, _highlightColor) = ParseColors(current);
+            _subtitleTimeline.UpdateColors(_normalColor, _highlightColor);
+        }
+
+        if (current.MaxVisibleLines != prev.MaxVisibleLines)
+        {
+            _subtitleTimeline.SetMaxVisibleLines(current.MaxVisibleLines);
+        }
+
+        if (current.BottomMargin != prev.BottomMargin)
+        {
+            _subtitleTimeline.SetBottomMargin(current.BottomMargin);
+        }
+
+        // InterSegmentSpacing is float — compare with a tiny epsilon to avoid churn
+        // on bit-identical re-saves from the panel.
+        if (Math.Abs(current.InterSegmentSpacing - prev.InterSegmentSpacing) > 0.001f)
+        {
+            _subtitleTimeline.SetInterSegmentSpacing(current.InterSegmentSpacing);
+        }
+
+        if (current.Width != prev.Width || current.Height != prev.Height)
+        {
+            Resize();
+        }
+
+        // StrokeThickness is read per-frame in Render() — no action here.
+
+        _previousConfig = current;
+    }
+
     public void Update(float deltaTime)
     {
         if (_isDisposed)
         {
             return;
+        }
+
+        if (_configDirty)
+        {
+            _configDirty = false;
+            ApplyConfig();
         }
 
         var currentTime = GetCurrentAbsoluteTime();
