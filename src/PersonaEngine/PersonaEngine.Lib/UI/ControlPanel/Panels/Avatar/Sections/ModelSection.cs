@@ -277,8 +277,13 @@ public sealed class ModelSection : IDisposable
         );
         _currentModelMissing = !exists && !string.IsNullOrEmpty(_live2d.ModelName);
 
-        // If the flag flipped, refresh so the combo reflects it correctly.
-        if (_currentModelMissing && !_modelChoices.Any(e => e.EndsWith(MissingSuffix)))
+        // If the flag state no longer matches the choices array (either direction —
+        // newly missing with no placeholder, or newly found with a stale placeholder),
+        // refresh so the combo reflects it correctly.
+        var hasMissingEntry = _modelChoices.Any(
+            e => e.EndsWith(MissingSuffix, StringComparison.Ordinal)
+        );
+        if (_currentModelMissing != hasMissingEntry)
         {
             RefreshModels();
         }
