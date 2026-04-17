@@ -68,6 +68,10 @@ public class SemanticKernelChatEngine : IChatEngine
 
         try
         {
+            // Captured once per call (outside the retry loop). Kernel swaps only
+            // happen on Idle transitions via IKernelReloadCoordinator, and an
+            // in-flight turn cannot be Idle — so every Polly retry of this call
+            // is guaranteed to target the same kernel snapshot.
             var chatCompletionService =
                 _kernelProvider.Current.GetRequiredService<IChatCompletionService>("text");
             var history = context.GetSemanticKernelChatHistory();
