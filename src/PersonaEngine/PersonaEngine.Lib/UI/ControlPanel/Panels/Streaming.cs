@@ -5,8 +5,9 @@ using PersonaEngine.Lib.Configuration;
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels;
 
 /// <summary>
-///     Streaming panel: Spout output configuration for OBS integration and the
-///     floating in-app overlay that mirrors the avatar without any window chrome.
+///     Streaming panel: Spout output configuration for OBS integration. The
+///     floating in-app overlay has its own dedicated panel
+///     (<see cref="OverlayPanel" />).
 /// </summary>
 public sealed class Streaming(
     IOptionsMonitor<AvatarAppConfig> appOptions,
@@ -20,7 +21,6 @@ public sealed class Streaming(
         var cfg = appOptions.CurrentValue;
 
         RenderSpoutOutputs(cfg);
-        RenderOverlaySection(cfg);
     }
 
     // ── Spout Outputs ────────────────────────────────────────────────────────────
@@ -87,84 +87,6 @@ public sealed class Streaming(
             var newConfigs = ReplaceAt(spoutConfigs, index, updated);
             configWriter.Write(cfg with { SpoutConfigs = newConfigs });
         }
-    }
-
-    // ── Floating Overlay ─────────────────────────────────────────────────────────
-
-    private void RenderOverlaySection(AvatarAppConfig cfg)
-    {
-        ImGui.Dummy(new System.Numerics.Vector2(0f, 8f));
-        ImGuiHelpers.SectionHeader("Floating Overlay");
-
-        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
-        ImGui.PushTextWrapPos(0f);
-        ImGui.TextUnformatted(
-            "An always-on-top transparent window that mirrors the avatar and subtitles "
-                + "directly on your desktop — no OBS or window chrome. Hover it to reveal a "
-                + "thin border with grab handles for moving and resizing."
-        );
-        ImGui.PopTextWrapPos();
-        ImGui.PopStyleColor();
-
-        var overlay = cfg.Overlay;
-
-        var enabled = overlay.Enabled;
-        ImGuiHelpers.SettingLabel(
-            "Enabled",
-            "Show the floating overlay. If the overlay is force-closed during a session, "
-                + "it will not reappear until the next app launch."
-        );
-        if (ImGui.Checkbox("##OverlayEnabled", ref enabled))
-        {
-            var updated = overlay with { Enabled = enabled };
-            configWriter.Write(cfg with { Overlay = updated });
-        }
-
-        // Source picker — lists available Spout targets.
-        ImGuiHelpers.SettingLabel(
-            "Source",
-            "Which rendered target to mirror. Must match one of the Spout outputs above."
-        );
-        var sources = cfg.SpoutConfigs;
-        if (sources.Length > 0)
-        {
-            var currentIdx = Array.FindIndex(sources, s => s.OutputName == overlay.Source);
-            if (currentIdx < 0)
-            {
-                currentIdx = 0;
-            }
-
-            if (ImGui.BeginCombo("##OverlaySource", sources[currentIdx].OutputName))
-            {
-                for (var i = 0; i < sources.Length; i++)
-                {
-                    var isSelected = i == currentIdx;
-                    if (ImGui.Selectable(sources[i].OutputName, isSelected))
-                    {
-                        var updated = overlay with { Source = sources[i].OutputName };
-                        configWriter.Write(cfg with { Overlay = updated });
-                    }
-
-                    if (isSelected)
-                    {
-                        ImGui.SetItemDefaultFocus();
-                    }
-                }
-
-                ImGui.EndCombo();
-            }
-        }
-        else
-        {
-            ImGui.TextUnformatted("(no Spout outputs configured)");
-        }
-
-        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
-        ImGui.TextUnformatted(
-            $"Position: {overlay.X}, {overlay.Y}    Size: {overlay.Width} x {overlay.Height}"
-        );
-        ImGui.TextUnformatted("(drag the overlay's border to reposition or resize)");
-        ImGui.PopStyleColor();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────
