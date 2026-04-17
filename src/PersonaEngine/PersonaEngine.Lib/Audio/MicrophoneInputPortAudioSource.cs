@@ -163,6 +163,10 @@ public sealed class MicrophoneInputPortAudioSource : AwaitableWaveFileSource, IM
         throw new NotImplementedException();
     }
 
+    public string? CurrentDeviceName => null;
+
+    public IReadOnlyList<string> AvailableDevices => Array.Empty<string>();
+
     private void InitializeAudioStream()
     {
         var deviceInfo = PortAudio.GetDeviceInfo(_deviceNumber);

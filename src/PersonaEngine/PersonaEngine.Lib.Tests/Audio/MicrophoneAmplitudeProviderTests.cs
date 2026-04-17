@@ -126,6 +126,10 @@ public class MicrophoneAmplitudeProviderTests
 
         public IEnumerable<string> GetAvailableDevices() => throw new NotSupportedException();
 
+        public string? CurrentDeviceName => null;
+
+        public IReadOnlyList<string> AvailableDevices => Array.Empty<string>();
+
         // IAwaitableAudioSource
         public bool IsFlushed => throw new NotSupportedException();
 

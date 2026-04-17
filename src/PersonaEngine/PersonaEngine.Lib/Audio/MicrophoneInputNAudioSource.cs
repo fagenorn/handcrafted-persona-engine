@@ -101,6 +101,10 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
         return GetAvailableDevicesInternal(_logger);
     }
 
+    public string? CurrentDeviceName => _currentOptions.DeviceName;
+
+    public IReadOnlyList<string> AvailableDevices => GetAvailableDevicesInternal(_logger).ToList();
+
     public new void Dispose()
     {
         Dispose(true);

@@ -23,6 +23,12 @@ public interface IMicrophone : IAwaitableAudioSource
     /// <summary>Gets a list of available audio input device names.</summary>
     IEnumerable<string> GetAvailableDevices();
 
+    /// <summary>Name of the currently open input device, or <see langword="null" /> if no device is open.</summary>
+    string? CurrentDeviceName { get; }
+
+    /// <summary>Snapshot of audio input device names currently enumerated by the backend. Empty if none.</summary>
+    IReadOnlyList<string> AvailableDevices { get; }
+
     /// <summary>
     ///     Raised each time a buffer of mic samples arrives from the underlying capture
     ///     backend. Listeners see the samples in the same call chain as the capture event
