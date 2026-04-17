@@ -27,6 +27,7 @@ using PersonaEngine.Lib.Live2D.Behaviour;
 using PersonaEngine.Lib.Live2D.Behaviour.Emotion;
 using PersonaEngine.Lib.Live2D.Behaviour.LipSync;
 using PersonaEngine.Lib.LLM;
+using PersonaEngine.Lib.LLM.Connection;
 using PersonaEngine.Lib.Logging;
 using PersonaEngine.Lib.TTS.Audio;
 using PersonaEngine.Lib.TTS.Profanity;
@@ -237,31 +238,18 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<LlmOptions>(configuration.GetSection("Config:Llm"));
 
-        services.AddSingleton(sp =>
+        services.AddSingleton<HttpClient>(_ => new HttpClient
         {
-            var llmOptions = sp.GetRequiredService<IOptions<LlmOptions>>().Value;
-            var kernelBuilder = Kernel.CreateBuilder();
-
-            kernelBuilder.AddOpenAIChatCompletion(
-                llmOptions.TextModel,
-                new Uri(llmOptions.TextEndpoint),
-                llmOptions.TextApiKey,
-                serviceId: "text"
-            );
-            if (!string.IsNullOrWhiteSpace(llmOptions.VisionEndpoint))
-            {
-                kernelBuilder.AddOpenAIChatCompletion(
-                    llmOptions.VisionModel,
-                    new Uri(llmOptions.VisionEndpoint),
-                    llmOptions.VisionApiKey,
-                    serviceId: "vision"
-                );
-            }
-
-            configureKernel?.Invoke(kernelBuilder);
-
-            return kernelBuilder.Build();
+            Timeout = TimeSpan.FromSeconds(5),
         });
+        services.AddSingleton<ILlmConnectionProbe, LlmConnectionProbe>();
+        services.AddSingleton<IKernelReloadCoordinator, KernelReloadCoordinator>();
+        services.AddSingleton<ILlmKernelProvider>(sp => new LlmKernelProvider(
+            sp.GetRequiredService<IOptionsMonitor<LlmOptions>>(),
+            sp.GetRequiredService<IKernelReloadCoordinator>(),
+            configureKernel,
+            sp.GetRequiredService<ILogger<LlmKernelProvider>>()
+        ));
 
         services.AddSingleton<ITextFilter, NameTextFilter>();
 

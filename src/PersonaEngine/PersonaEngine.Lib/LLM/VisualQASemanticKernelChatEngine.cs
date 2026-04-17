@@ -2,24 +2,25 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
+using PersonaEngine.Lib.LLM.Connection;
 
 namespace PersonaEngine.Lib.LLM;
 
 public class VisualQASemanticKernelChatEngine : IVisualChatEngine
 {
-    private readonly IChatCompletionService _chatCompletionService;
+    private readonly ILlmKernelProvider _kernelProvider;
 
     private readonly ILogger<VisualQASemanticKernelChatEngine> _logger;
 
     private readonly SemaphoreSlim _semaphore = new(1, 1);
 
     public VisualQASemanticKernelChatEngine(
-        Kernel kernel,
+        ILlmKernelProvider kernelProvider,
         ILogger<VisualQASemanticKernelChatEngine> logger
     )
     {
+        _kernelProvider = kernelProvider ?? throw new ArgumentNullException(nameof(kernelProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _chatCompletionService = kernel.GetRequiredService<IChatCompletionService>("vision");
     }
 
     public void Dispose()
@@ -46,6 +47,8 @@ public class VisualQASemanticKernelChatEngine : IVisualChatEngine
 
         try
         {
+            var chatCompletionService =
+                _kernelProvider.Current.GetRequiredService<IChatCompletionService>("vision");
             var chatHistory = new ChatHistory("You are a helpful assistant.");
             chatHistory.AddUserMessage(
                 [
@@ -56,7 +59,7 @@ public class VisualQASemanticKernelChatEngine : IVisualChatEngine
 
             var chunkCount = 0;
 
-            var streamingResponse = _chatCompletionService.GetStreamingChatMessageContentsAsync(
+            var streamingResponse = chatCompletionService.GetStreamingChatMessageContentsAsync(
                 chatHistory,
                 executionSettings,
                 null,
