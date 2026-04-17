@@ -1,38 +1,54 @@
 using Hexa.NET.ImGui;
 using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Configuration;
+using PersonaEngine.Lib.UI.ControlPanel.Layout;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels;
 
 /// <summary>
-///     Screen Awareness panel: toggle, target window, and capture interval for the vision subsystem.
+///     Screen Awareness panel: target window and capture interval for the vision
+///     subsystem. The on/off flag lives on <see cref="LlmOptions.VisionEnabled" />
+///     and is set from the LLM Connection panel; when vision is disabled this
+///     panel shows a hint + navigation button instead of disabled inputs.
 /// </summary>
-public sealed class ScreenAwareness(
-    IOptionsMonitor<VisionConfig> visionOptions,
-    IOptionsMonitor<LlmOptions> llmOptions,
-    IConfigWriter configWriter
-)
+public sealed class ScreenAwareness : IDisposable
 {
-    private VisionConfig _vision;
+    private readonly IConfigWriter _configWriter;
+
+    private readonly IDisposable? _llmSub;
+
+    private readonly INavRequestBus _navBus;
+
+    private readonly IDisposable? _visionSub;
+
     private LlmOptions _llm;
-    private bool _initialized;
 
-    private AnimatedFloat _enabledKnob;
+    private VisionConfig _vision;
 
-    private void EnsureInitialized()
+    public ScreenAwareness(
+        IOptionsMonitor<VisionConfig> visionOptions,
+        IOptionsMonitor<LlmOptions> llmOptions,
+        IConfigWriter configWriter,
+        INavRequestBus navBus
+    )
     {
-        if (_initialized)
-            return;
-
+        _configWriter = configWriter;
+        _navBus = navBus;
         _vision = visionOptions.CurrentValue;
         _llm = llmOptions.CurrentValue;
-        _enabledKnob = new AnimatedFloat(_llm.VisionEnabled ? 1f : 0f);
-        _initialized = true;
+
+        _visionSub = visionOptions.OnChange(OnVisionChanged);
+        _llmSub = llmOptions.OnChange(OnLlmChanged);
+    }
+
+    public void Dispose()
+    {
+        _visionSub?.Dispose();
+        _llmSub?.Dispose();
     }
 
     public void Render(float deltaTime)
     {
-        EnsureInitialized();
         RenderInfo();
         RenderSettings(deltaTime);
     }
@@ -58,24 +74,25 @@ public sealed class ScreenAwareness(
 
     private void RenderSettings(float dt)
     {
-        // Enable toggle
-        {
-            var enabled = _llm.VisionEnabled;
-
-            ImGuiHelpers.SettingLabel(
-                "Enable",
-                "Turn screen awareness on or off. Requires a vision-capable LLM endpoint."
-            );
-
-            if (ImGuiHelpers.ToggleSwitch("##VisionEnabled", ref enabled, ref _enabledKnob, dt))
-            {
-                _llm = _llm with { VisionEnabled = enabled };
-                configWriter.Write(_llm);
-            }
-        }
-
         if (!_llm.VisionEnabled)
-            ImGui.BeginDisabled();
+        {
+            ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
+            ImGui.PushTextWrapPos(0f);
+            ImGui.TextUnformatted(
+                "Enable Vision LLM in the LLM Connection panel to activate screen awareness."
+            );
+            ImGui.PopTextWrapPos();
+            ImGui.PopStyleColor();
+
+            ImGui.Spacing();
+
+            if (ImGuiHelpers.SubtleButton("Open LLM Connection##ScreenAwareOpenLlm"))
+            {
+                _navBus.Request(NavSection.LlmConnection);
+            }
+
+            return;
+        }
 
         // Window Title
         {
@@ -89,7 +106,7 @@ public sealed class ScreenAwareness(
             if (ImGui.InputText("##VisionWindowTitle", ref title, 256))
             {
                 _vision = _vision with { WindowTitle = title };
-                configWriter.Write(_vision);
+                _configWriter.Write(_vision);
             }
         }
 
@@ -105,13 +122,20 @@ public sealed class ScreenAwareness(
             if (ImGui.SliderInt("##VisionInterval", ref intervalSeconds, 5, 300, "%d s"))
             {
                 _vision = _vision with { CaptureInterval = TimeSpan.FromSeconds(intervalSeconds) };
-                configWriter.Write(_vision);
+                _configWriter.Write(_vision);
             }
 
             ImGuiHelpers.SliderGlow();
         }
+    }
 
-        if (!_llm.VisionEnabled)
-            ImGui.EndDisabled();
+    private void OnVisionChanged(VisionConfig updated, string? _)
+    {
+        _vision = updated;
+    }
+
+    private void OnLlmChanged(LlmOptions updated, string? _)
+    {
+        _llm = updated;
     }
 }
