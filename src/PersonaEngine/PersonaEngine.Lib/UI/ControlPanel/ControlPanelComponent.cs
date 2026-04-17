@@ -80,6 +80,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         ListeningPanel listeningPanel,
         AvatarPanel avatarPanel,
         SubtitlesPanel subtitlesPanel,
+        OverlayPanel overlayPanel,
         RouletteWheelPanel rouletteWheelPanel,
         ScreenAwareness screenAwareness,
         Streaming streaming,
@@ -97,15 +98,16 @@ public sealed class ControlPanelComponent : IRenderComponent
         _subtitlesPanel = subtitlesPanel;
 
         RegisterPanel(NavSection.Dashboard, dt => dashboard.Render(dt));
-        RegisterPanel(NavSection.Voice, dt => voicePanel.Render(dt));
+        RegisterPanel(NavSection.LlmConnection, dt => llmConnection.Render(dt));
         RegisterPanel(NavSection.Personality, dt => personalityPanel.Render(dt));
         RegisterPanel(NavSection.Listening, dt => listeningPanel.Render(dt), listeningPanel);
+        RegisterPanel(NavSection.Voice, dt => voicePanel.Render(dt));
         RegisterPanel(NavSection.Avatar, dt => avatarPanel.Render(dt));
         RegisterPanel(NavSection.Subtitles, dt => subtitlesPanel.Render(dt));
+        RegisterPanel(NavSection.Overlay, dt => overlayPanel.Render(dt));
+        RegisterPanel(NavSection.Streaming, dt => streaming.Render(dt));
         RegisterPanel(NavSection.RouletteWheel, dt => rouletteWheelPanel.Render(dt));
         RegisterPanel(NavSection.ScreenAwareness, dt => screenAwareness.Render(dt));
-        RegisterPanel(NavSection.Streaming, dt => streaming.Render(dt));
-        RegisterPanel(NavSection.LlmConnection, dt => llmConnection.Render(dt));
         RegisterPanel(NavSection.Application, dt => application.Render(dt));
     }
 

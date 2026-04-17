@@ -477,6 +477,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<PlacementSection>();
         services.AddSingleton<CanvasSection>();
         services.AddSingleton<SubtitlesPanel>();
+        services.AddSingleton<OverlayPanel>();
         services.AddSingleton<RouletteWheelPanel>();
         services.AddSingleton<ScreenAwareness>();
         services.AddSingleton<Streaming>();
