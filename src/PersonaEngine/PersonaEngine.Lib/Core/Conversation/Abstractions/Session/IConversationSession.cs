@@ -32,8 +32,8 @@ public interface IConversationSession : IAsyncDisposable
 
     /// <summary>
     ///     Raised when the session's FSM transitions to a new state. Invocations are
-    ///     dispatched on the thread pool — subscribers may perform non-trivial work without
-    ///     blocking the FSM callback, but must be thread-safe.
+    ///     serialised onto the thread pool in FSM emission order — subscribers may perform
+    ///     non-trivial work without blocking the FSM callback, but must still be thread-safe.
     /// </summary>
     event Action<ConversationState>? StateChanged;
 }

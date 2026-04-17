@@ -9,6 +9,8 @@ namespace PersonaEngine.Lib.Core.Conversation.Implementations.Session;
 public partial class ConversationSession
 {
     private readonly StateMachine<ConversationState, ConversationTrigger> _stateMachine;
+    private Task _stateChangedDispatchTail = Task.CompletedTask;
+    private readonly object _stateChangedDispatchLock = new();
 
     private StateMachine<
         ConversationState,
@@ -252,22 +254,31 @@ public partial class ConversationSession
                 var handlers = StateChanged;
                 if (handlers is not null)
                 {
-                    _ = Task.Run(() =>
+                    var destination = transition.Destination;
+                    lock (_stateChangedDispatchLock)
                     {
-                        try
-                        {
-                            handlers(transition.Destination);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(
-                                ex,
-                                "{SessionId} | StateChanged subscriber threw for destination {State}",
-                                SessionId,
-                                transition.Destination
-                            );
-                        }
-                    });
+                        _stateChangedDispatchTail = _stateChangedDispatchTail.ContinueWith(
+                            _ =>
+                            {
+                                try
+                                {
+                                    handlers(destination);
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogError(
+                                        ex,
+                                        "{SessionId} | StateChanged subscriber threw for destination {State}",
+                                        SessionId,
+                                        destination
+                                    );
+                                }
+                            },
+                            CancellationToken.None,
+                            TaskContinuationOptions.None,
+                            TaskScheduler.Default
+                        );
+                    }
                 }
             }
 
