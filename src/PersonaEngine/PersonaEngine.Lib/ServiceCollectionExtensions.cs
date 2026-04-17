@@ -254,6 +254,14 @@ public static class ServiceCollectionExtensions
             configureKernel,
             sp.GetRequiredService<ILogger<LlmKernelProvider>>()
         ));
+        // Chat engines take a Lazy<ILlmKernelProvider> to break the singleton
+        // resolution cycle: LlmKernelProvider → IKernelReloadCoordinator →
+        // IConversationOrchestrator → IConversationSessionFactory → IChatEngine
+        // → ILlmKernelProvider. The Lazy defers resolution to first use, which
+        // happens after the DI graph is fully constructed.
+        services.AddSingleton<Lazy<ILlmKernelProvider>>(sp => new Lazy<ILlmKernelProvider>(
+            sp.GetRequiredService<ILlmKernelProvider>
+        ));
 
         services.AddSingleton<ITextFilter, NameTextFilter>();
 

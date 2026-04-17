@@ -8,14 +8,14 @@ namespace PersonaEngine.Lib.LLM;
 
 public class VisualQASemanticKernelChatEngine : IVisualChatEngine
 {
-    private readonly ILlmKernelProvider _kernelProvider;
+    private readonly Lazy<ILlmKernelProvider> _kernelProvider;
 
     private readonly ILogger<VisualQASemanticKernelChatEngine> _logger;
 
     private readonly SemaphoreSlim _semaphore = new(1, 1);
 
     public VisualQASemanticKernelChatEngine(
-        ILlmKernelProvider kernelProvider,
+        Lazy<ILlmKernelProvider> kernelProvider,
         ILogger<VisualQASemanticKernelChatEngine> logger
     )
     {
@@ -48,7 +48,7 @@ public class VisualQASemanticKernelChatEngine : IVisualChatEngine
         try
         {
             var chatCompletionService =
-                _kernelProvider.Current.GetRequiredService<IChatCompletionService>("vision");
+                _kernelProvider.Value.Current.GetRequiredService<IChatCompletionService>("vision");
             var chatHistory = new ChatHistory("You are a helpful assistant.");
             chatHistory.AddUserMessage(
                 [

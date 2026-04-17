@@ -16,7 +16,7 @@ namespace PersonaEngine.Lib.LLM;
 
 public class SemanticKernelChatEngine : IChatEngine
 {
-    private readonly ILlmKernelProvider _kernelProvider;
+    private readonly Lazy<ILlmKernelProvider> _kernelProvider;
 
     private readonly ILogger<SemanticKernelChatEngine> _logger;
 
@@ -25,7 +25,7 @@ public class SemanticKernelChatEngine : IChatEngine
     private readonly SemaphoreSlim _semaphore = new(1, 1);
 
     public SemanticKernelChatEngine(
-        ILlmKernelProvider kernelProvider,
+        Lazy<ILlmKernelProvider> kernelProvider,
         ILogger<SemanticKernelChatEngine> logger,
         ResiliencePipelineProvider<string> resiliencePipelineProvider
     )
@@ -73,7 +73,7 @@ public class SemanticKernelChatEngine : IChatEngine
             // in-flight turn cannot be Idle — so every Polly retry of this call
             // is guaranteed to target the same kernel snapshot.
             var chatCompletionService =
-                _kernelProvider.Current.GetRequiredService<IChatCompletionService>("text");
+                _kernelProvider.Value.Current.GetRequiredService<IChatCompletionService>("text");
             var history = context.GetSemanticKernelChatHistory();
 
             var rc = ResilienceContextPool.Shared.Get(cancellationToken);
