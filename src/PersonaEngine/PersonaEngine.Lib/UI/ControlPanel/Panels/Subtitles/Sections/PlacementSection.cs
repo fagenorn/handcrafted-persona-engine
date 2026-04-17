@@ -12,6 +12,8 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Subtitles.Sections;
 /// </summary>
 public sealed class PlacementSection : IDisposable
 {
+    private static readonly SubtitleOptions Defaults = new();
+
     private readonly IConfigWriter _configWriter;
     private readonly IDisposable? _changeSubscription;
 
@@ -30,16 +32,18 @@ public sealed class PlacementSection : IDisposable
     {
         using (Ui.Card("##placement", padding: 12f))
         {
-            ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextTertiary);
-            ImGui.TextUnformatted("Placement & Motion");
-            ImGui.PopStyleColor();
-
-            ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
-            ImGui.TextUnformatted(
-                "Where subtitles sit on the canvas, and how snappy the reveal feels."
-            );
-            ImGui.PopStyleColor();
-            ImGui.Spacing();
+            if (RenderHeader())
+            {
+                _opts = _opts with
+                {
+                    MaxVisibleLines = Defaults.MaxVisibleLines,
+                    BottomMargin = Defaults.BottomMargin,
+                    SideMargin = Defaults.SideMargin,
+                    InterSegmentSpacing = Defaults.InterSegmentSpacing,
+                    AnimationDuration = Defaults.AnimationDuration,
+                };
+                _configWriter.Write(_opts);
+            }
 
             RenderMaxLinesRow(dt);
             RenderBottomMarginRow(dt);
@@ -47,6 +51,37 @@ public sealed class PlacementSection : IDisposable
             RenderInterSegmentRow(dt);
             RenderAnimationRow(dt);
         }
+    }
+
+    // Tolerances match the step granularity of each slider: integer fields use exact
+    // equality, floats use the slider's smallest displayable increment.
+    private bool IsModified =>
+        _opts.MaxVisibleLines != Defaults.MaxVisibleLines
+        || _opts.BottomMargin != Defaults.BottomMargin
+        || _opts.SideMargin != Defaults.SideMargin
+        || MathF.Abs(_opts.InterSegmentSpacing - Defaults.InterSegmentSpacing) > 0.5f
+        || MathF.Abs(_opts.AnimationDuration - Defaults.AnimationDuration) > 1e-3f;
+
+    private bool RenderHeader()
+    {
+        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextTertiary);
+        ImGui.TextUnformatted("Placement & Motion");
+        ImGui.PopStyleColor();
+
+        // Right-aligned reset button on the title line, matching the SpeechDetection
+        // header pattern. Enabled only when values differ from defaults.
+        var modified = IsModified;
+        ImGui.SameLine(ImGui.GetContentRegionAvail().X - 110f);
+        var reset = ImGuiHelpers.SubtleButton("Reset defaults", enabled: modified);
+
+        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
+        ImGui.TextUnformatted(
+            "Where subtitles sit on the canvas, and how snappy the reveal feels."
+        );
+        ImGui.PopStyleColor();
+
+        ImGui.Spacing();
+        return reset;
     }
 
     private void RenderMaxLinesRow(float dt)
