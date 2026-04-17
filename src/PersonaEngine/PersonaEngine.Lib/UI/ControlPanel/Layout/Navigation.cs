@@ -7,15 +7,16 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Layout;
 public enum NavSection
 {
     Dashboard,
-    Voice,
+    LlmConnection,
     Personality,
     Listening,
+    Voice,
     Avatar,
     Subtitles,
+    Overlay,
+    Streaming,
     RouletteWheel,
     ScreenAwareness,
-    Streaming,
-    LlmConnection,
     Application,
 }
 
@@ -27,15 +28,16 @@ public sealed class Navigation
     private static readonly (NavSection Section, string Label)[] _sections =
     [
         (NavSection.Dashboard, "Dashboard"),
-        (NavSection.Voice, "Voice"),
+        (NavSection.LlmConnection, "LLM Connection"),
         (NavSection.Personality, "Personality"),
         (NavSection.Listening, "Listening"),
+        (NavSection.Voice, "Voice"),
         (NavSection.Avatar, "Avatar"),
         (NavSection.Subtitles, "Subtitles"),
+        (NavSection.Overlay, "Overlay"),
+        (NavSection.Streaming, "Streaming"),
         (NavSection.RouletteWheel, "Roulette Wheel"),
         (NavSection.ScreenAwareness, "Screen Aware"),
-        (NavSection.Streaming, "Streaming"),
-        (NavSection.LlmConnection, "LLM Connection"),
         (NavSection.Application, "Application"),
     ];
 
