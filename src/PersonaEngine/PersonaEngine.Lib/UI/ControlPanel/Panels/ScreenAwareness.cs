@@ -9,10 +9,12 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels;
 /// </summary>
 public sealed class ScreenAwareness(
     IOptionsMonitor<VisionConfig> visionOptions,
+    IOptionsMonitor<LlmOptions> llmOptions,
     IConfigWriter configWriter
 )
 {
     private VisionConfig _vision;
+    private LlmOptions _llm;
     private bool _initialized;
 
     private AnimatedFloat _enabledKnob;
@@ -23,7 +25,8 @@ public sealed class ScreenAwareness(
             return;
 
         _vision = visionOptions.CurrentValue;
-        _enabledKnob = new AnimatedFloat(_vision.Enabled ? 1f : 0f);
+        _llm = llmOptions.CurrentValue;
+        _enabledKnob = new AnimatedFloat(_llm.VisionEnabled ? 1f : 0f);
         _initialized = true;
     }
 
@@ -57,7 +60,7 @@ public sealed class ScreenAwareness(
     {
         // Enable toggle
         {
-            var enabled = _vision.Enabled;
+            var enabled = _llm.VisionEnabled;
 
             ImGuiHelpers.SettingLabel(
                 "Enable",
@@ -66,12 +69,12 @@ public sealed class ScreenAwareness(
 
             if (ImGuiHelpers.ToggleSwitch("##VisionEnabled", ref enabled, ref _enabledKnob, dt))
             {
-                _vision = _vision with { Enabled = enabled };
-                configWriter.Write(_vision);
+                _llm = _llm with { VisionEnabled = enabled };
+                configWriter.Write(_llm);
             }
         }
 
-        if (!_vision.Enabled)
+        if (!_llm.VisionEnabled)
             ImGui.BeginDisabled();
 
         // Window Title
@@ -108,7 +111,7 @@ public sealed class ScreenAwareness(
             ImGuiHelpers.SliderGlow();
         }
 
-        if (!_vision.Enabled)
+        if (!_llm.VisionEnabled)
             ImGui.EndDisabled();
     }
 }

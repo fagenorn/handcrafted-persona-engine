@@ -4,8 +4,6 @@ public record VisionConfig
 {
     public string WindowTitle { get; init; } = "Paint";
 
-    public bool Enabled { get; init; } = false;
-
     public TimeSpan CaptureInterval { get; init; } = TimeSpan.FromSeconds(45);
 
     public int CaptureMinPixels { get; init; } = 224 * 224;

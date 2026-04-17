@@ -13,7 +13,9 @@ public class VisualQAService : IVisualQAService
 
     private readonly IVisualChatEngine _chatEngine;
 
-    private readonly VisionConfig _config;
+    private readonly LlmOptions _llmOptions;
+
+    private readonly VisionConfig _visionConfig;
 
     private readonly SemaphoreSlim _fileChangeSemaphore = new(1, 1);
 
@@ -30,7 +32,8 @@ public class VisualQAService : IVisualQAService
         ILogger<VisualQAService> logger
     )
     {
-        _config = config.Value.Vision;
+        _llmOptions = config.Value.Llm;
+        _visionConfig = config.Value.Vision;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         _captureService = captureService;
@@ -43,7 +46,7 @@ public class VisualQAService : IVisualQAService
 
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
-        if (!_config.Enabled)
+        if (!_llmOptions.VisionEnabled)
         {
             return Task.CompletedTask;
         }
