@@ -174,6 +174,14 @@ public sealed class OverlayWindow : IDisposable
     /// </summary>
     public void MoveTo(int x, int y) => _nativeWindow.PostMove(x, y);
 
+    /// <summary>
+    ///     Resizes the overlay to the given client dimensions. Safe to call from
+    ///     any thread — posts a custom message that runs SetWindowPos on the
+    ///     overlay's creating thread. The swap-chain / DComp visual resize is
+    ///     driven from WM_SIZE through the normal path.
+    /// </summary>
+    public void ResizeTo(int width, int height) => _nativeWindow.PostResize(width, height);
+
     public void Dispose()
     {
         TeardownPipelines();

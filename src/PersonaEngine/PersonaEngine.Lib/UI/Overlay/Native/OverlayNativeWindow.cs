@@ -173,9 +173,11 @@ public sealed class OverlayNativeWindow : IDisposable
         }
     }
 
-    // User-defined message for cross-thread "move to (x, y)" requests. Posted by
-    // <see cref="PostMove" /> and handled in the WndProc via SetWindowPos.
+    // User-defined messages for cross-thread geometry requests. Both handlers
+    // call SetWindowPos with NOZORDER|NOACTIVATE so the window's topmost /
+    // focus state is preserved; move skips size, resize skips move.
     private const uint WM_APP_MOVE = Win32.WM_APP + 1;
+    private const uint WM_APP_RESIZE = Win32.WM_APP + 2;
 
     /// <summary>
     ///     Moves the window to the given virtual-screen coordinates. Safe to
@@ -190,6 +192,22 @@ public sealed class OverlayNativeWindow : IDisposable
         }
 
         Win32.PostMessage(_hwnd, WM_APP_MOVE, nint.Zero, PackXY(x, y));
+    }
+
+    /// <summary>
+    ///     Resizes the window to the given pixel dimensions. Safe to call from
+    ///     any thread — posts a custom message so SetWindowPos runs on the
+    ///     creating thread. Clamped to at least 1×1 by the pack; the overlay's
+    ///     min-size policy is enforced by <see cref="OverlayWindow" />.
+    /// </summary>
+    public void PostResize(int width, int height)
+    {
+        if (_hwnd == nint.Zero || _destroyed)
+        {
+            return;
+        }
+
+        Win32.PostMessage(_hwnd, WM_APP_RESIZE, nint.Zero, PackXY(width, height));
     }
 
     public void Dispose()
@@ -354,6 +372,25 @@ public sealed class OverlayNativeWindow : IDisposable
                     0,
                     0,
                     Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE
+                );
+                return nint.Zero;
+            }
+
+            case WM_APP_RESIZE:
+            {
+                // Cross-thread resize request from PostResize. lParam packs the
+                // new client dimensions; position / z-order / activation are
+                // preserved. WM_SIZE will fire from SetWindowPos and drive the
+                // swap-chain / DComp visual resize through the normal path.
+                var (rw, rh) = UnpackXY(lParam);
+                Win32.SetWindowPos(
+                    hwnd,
+                    nint.Zero,
+                    0,
+                    0,
+                    Math.Max(1, rw),
+                    Math.Max(1, rh),
+                    Win32.SWP_NOMOVE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE
                 );
                 return nint.Zero;
             }

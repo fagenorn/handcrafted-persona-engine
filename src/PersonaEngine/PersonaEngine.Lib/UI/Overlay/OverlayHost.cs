@@ -228,6 +228,34 @@ public sealed class OverlayHost : IDisposable
         live?.MoveTo(x, y);
     }
 
+    /// <summary>
+    ///     Resets the overlay size to the <see cref="OverlayConfiguration" />
+    ///     record defaults. Persists to config; if the overlay is currently
+    ///     running, also resizes the live window. Position is preserved.
+    /// </summary>
+    public void ResetSize()
+    {
+        var current = _options.CurrentValue;
+        var defaults = new OverlayConfiguration();
+        var width = defaults.Width;
+        var height = defaults.Height;
+
+        _configWriter.Write(
+            current with
+            {
+                Overlay = current.Overlay with { Width = width, Height = height },
+            }
+        );
+
+        OverlayWindow? live;
+        lock (_lifecycleLock)
+        {
+            live = _runningOverlay;
+        }
+
+        live?.ResizeTo(width, height);
+    }
+
     // Caller holds _lifecycleLock.
     private void RaiseStatusChanged()
     {
