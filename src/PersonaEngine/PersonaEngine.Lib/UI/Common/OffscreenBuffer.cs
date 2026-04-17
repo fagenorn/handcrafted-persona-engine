@@ -1,4 +1,3 @@
-using Silk.NET.GLFW;
 using Silk.NET.OpenGL;
 
 namespace PersonaEngine.Lib.UI.Common;
@@ -116,15 +115,11 @@ public sealed class OffscreenBuffer : IDisposable
 
         _disposed = true;
 
-        try
-        {
-            _gl.DeleteTexture(_colorTexture);
-            _gl.DeleteFramebuffer(_fbo);
-        }
-        catch (GlfwException)
-        {
-            // Context may already be destroyed during app shutdown — safe to ignore.
-        }
+        // glDeleteTextures / glDeleteFramebuffers are spec'd to silently ignore
+        // unknown or zero handles. If the context has already been destroyed the
+        // calls are no-ops at the driver level; either way, disposal must not throw.
+        _gl.DeleteTexture(_colorTexture);
+        _gl.DeleteFramebuffer(_fbo);
     }
 
     private static unsafe (uint fbo, uint tex) Allocate(GL gl, int width, int height)

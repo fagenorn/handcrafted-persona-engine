@@ -28,8 +28,11 @@ public class VertexArrayObject : IDisposable
 
     public void Dispose()
     {
+        // No CheckError: glDeleteVertexArrays is spec'd to be a safe no-op on unknown
+        // or zero handles, and any GL error pending here would just be from teardown
+        // (e.g. disposal running after the window's context was already destroyed).
+        // Throwing from Dispose would abort the rest of the DI disposal chain.
         _gl.DeleteVertexArray(_handle);
-        _gl.CheckError();
     }
 
     public void Bind()

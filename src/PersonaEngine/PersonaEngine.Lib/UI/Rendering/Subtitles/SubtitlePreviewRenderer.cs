@@ -4,8 +4,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.UI.Common;
+using PersonaEngine.Lib.UI.Host;
 using PersonaEngine.Lib.UI.Rendering.Text;
-using Silk.NET.GLFW;
 using Silk.NET.OpenGL;
 
 namespace PersonaEngine.Lib.UI.Rendering.Subtitles;
@@ -29,6 +29,7 @@ public sealed class SubtitlePreviewRenderer : IDisposable
 
     private readonly FontProvider _fontProvider;
     private readonly ILogger<SubtitlePreviewRenderer> _logger;
+    private readonly WindowManager _windowManager;
 
     private GL? _gl;
     private OffscreenBuffer? _fb;
@@ -38,16 +39,19 @@ public sealed class SubtitlePreviewRenderer : IDisposable
     private volatile bool _dirty = true;
     private IDisposable? _changeSub;
     private bool _disposed;
+    private int _glDisposedFlag;
     private bool _fontResolveWarned;
 
     public SubtitlePreviewRenderer(
         FontProvider fontProvider,
         IOptionsMonitor<SubtitleOptions> monitor,
-        ILogger<SubtitlePreviewRenderer> logger
+        ILogger<SubtitlePreviewRenderer> logger,
+        WindowManager windowManager
     )
     {
         _fontProvider = fontProvider;
         _logger = logger;
+        _windowManager = windowManager;
         _opts = monitor.CurrentValue;
         _changeSub = monitor.OnChange(
             (updated, _) =>
@@ -56,6 +60,13 @@ public sealed class SubtitlePreviewRenderer : IDisposable
                 _dirty = true;
             }
         );
+
+        // The DI container disposes this singleton AFTER WindowManager.Run returns —
+        // i.e. after MainWindow.Reset has torn down the GL context. Silk.NET's GL
+        // wrapper resolves entrypoints lazily via glfwGetProcAddress, which throws
+        // GlfwException(NoContext) once the context is gone. Hooking Close lets us
+        // release GL resources on the main thread while the context is still current.
+        _windowManager.Close += OnWindowClose;
     }
 
     public uint TextureId =>
@@ -147,17 +158,27 @@ public sealed class SubtitlePreviewRenderer : IDisposable
 
         _disposed = true;
 
+        _windowManager.Close -= OnWindowClose;
         _changeSub?.Dispose();
 
-        try
+        // Normally GL resources have already been released by the Close hook (while
+        // the context was still current). This is a best-effort fallback for edge
+        // cases where Dispose is reached without Close having fired (e.g. an early
+        // startup failure that bypasses the window's main loop).
+        ReleaseGlResources();
+    }
+
+    private void OnWindowClose() => ReleaseGlResources();
+
+    private void ReleaseGlResources()
+    {
+        if (Interlocked.Exchange(ref _glDisposedFlag, 1) != 0)
         {
-            _textRenderer?.Dispose();
-            _fb?.Dispose();
+            return;
         }
-        catch (GlfwException)
-        {
-            // GL context may already be destroyed during app shutdown — safe to ignore.
-        }
+
+        _textRenderer?.Dispose();
+        _fb?.Dispose();
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────
