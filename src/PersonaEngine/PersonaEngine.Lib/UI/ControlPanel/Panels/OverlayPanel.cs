@@ -75,5 +75,13 @@ public sealed class OverlayPanel(OverlayHost host, IOptionsMonitor<AvatarAppConf
             host.ResetPosition();
         }
         ImGuiHelpers.HandCursorOnHover();
+
+        ImGui.SameLine(0f, 6f);
+
+        if (ImGui.Button("Reset size"))
+        {
+            host.ResetSize();
+        }
+        ImGuiHelpers.HandCursorOnHover();
     }
 }
