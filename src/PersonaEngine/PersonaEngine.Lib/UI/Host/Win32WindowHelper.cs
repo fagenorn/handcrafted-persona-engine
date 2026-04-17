@@ -255,4 +255,20 @@ public sealed class Win32WindowHelper : IDisposable
     {
         Win32.SetWindowLongPtr(_hwnd, Win32.GWLP_WNDPROC, _originalWndProc);
     }
+
+    /// <summary>
+    ///     Primary monitor's work-area size (screen minus taskbar) in pixels.
+    ///     Falls back to a reasonable 1080p-minus-taskbar estimate if the
+    ///     Win32 call fails — the caller is always better off centering on
+    ///     a guess than crashing.
+    /// </summary>
+    public static (int Width, int Height) GetPrimaryWorkArea()
+    {
+        if (Win32.SystemParametersInfo(Win32.SPI_GETWORKAREA, 0, out var r, 0))
+        {
+            return (r.Right - r.Left, r.Bottom - r.Top);
+        }
+
+        return (1920, 1040);
+    }
 }

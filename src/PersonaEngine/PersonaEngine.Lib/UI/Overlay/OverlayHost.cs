@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.UI.ControlPanel;
+using PersonaEngine.Lib.UI.Host;
 using PersonaEngine.Lib.UI.Rendering.Spout;
 
 namespace PersonaEngine.Lib.UI.Overlay;
@@ -199,6 +200,32 @@ public sealed class OverlayHost : IDisposable
         }
 
         SchedulePersistEnabled(enabled);
+    }
+
+    /// <summary>
+    ///     Resets the overlay position to a centered default on the primary
+    ///     monitor (based on the current overlay size). Persists to config; if
+    ///     the overlay is currently running, also moves the live window.
+    /// </summary>
+    public void ResetPosition()
+    {
+        var current = _options.CurrentValue;
+        var width = current.Overlay.Width;
+        var height = current.Overlay.Height;
+
+        var (screenW, screenH) = Win32WindowHelper.GetPrimaryWorkArea();
+        var x = Math.Max(0, (screenW - width) / 2);
+        var y = Math.Max(0, (screenH - height) / 2);
+
+        _configWriter.Write(current with { Overlay = current.Overlay with { X = x, Y = y } });
+
+        OverlayWindow? live;
+        lock (_lifecycleLock)
+        {
+            live = _runningOverlay;
+        }
+
+        live?.MoveTo(x, y);
     }
 
     // Caller holds _lifecycleLock.

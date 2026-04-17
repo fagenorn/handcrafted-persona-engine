@@ -173,6 +173,25 @@ public sealed class OverlayNativeWindow : IDisposable
         }
     }
 
+    // User-defined message for cross-thread "move to (x, y)" requests. Posted by
+    // <see cref="PostMove" /> and handled in the WndProc via SetWindowPos.
+    private const uint WM_APP_MOVE = Win32.WM_APP + 1;
+
+    /// <summary>
+    ///     Moves the window to the given virtual-screen coordinates. Safe to
+    ///     call from any thread — posts a custom message so SetWindowPos runs
+    ///     on the creating thread.
+    /// </summary>
+    public void PostMove(int x, int y)
+    {
+        if (_hwnd == nint.Zero || _destroyed)
+        {
+            return;
+        }
+
+        Win32.PostMessage(_hwnd, WM_APP_MOVE, nint.Zero, PackXY(x, y));
+    }
+
     public void Dispose()
     {
         if (_hwnd != nint.Zero && !_destroyed)
@@ -321,10 +340,33 @@ public sealed class OverlayNativeWindow : IDisposable
             case Win32.WM_DESTROY:
                 _destroyed = true;
                 return nint.Zero;
+
+            case WM_APP_MOVE:
+            {
+                // Cross-thread move request from PostMove. lParam packs the
+                // new position; size / z-order / activation are preserved.
+                var (mx, my) = UnpackXY(lParam);
+                Win32.SetWindowPos(
+                    hwnd,
+                    nint.Zero,
+                    mx,
+                    my,
+                    0,
+                    0,
+                    Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE
+                );
+                return nint.Zero;
+            }
         }
 
         return Win32.DefWindowProc(hwnd, msg, wParam, lParam);
     }
+
+    private static nint PackXY(int x, int y) =>
+        // LOWORD = x, HIWORD = y. Mask to 16 bits so negative values don't
+        // stomp the high word (coordinates outside the primary monitor may be
+        // negative on multi-monitor setups).
+        (nint)(((y & 0xFFFF) << 16) | (x & 0xFFFF));
 
     private static (int X, int Y) UnpackXY(nint lParam)
     {

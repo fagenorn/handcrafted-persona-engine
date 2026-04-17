@@ -118,6 +118,7 @@ internal static class Win32
     internal const uint WM_LBUTTONDOWN = 0x0201;
     internal const uint WM_LBUTTONUP = 0x0202;
     internal const uint WM_SIZING = 0x0214;
+    internal const uint WM_APP = 0x8000;
 
     // ── Constants: WM_SIZING edge flags (wParam) ──────────────────────────────
 
@@ -169,6 +170,14 @@ internal static class Win32
     internal const uint SWP_NOZORDER = 0x0004;
     internal const uint SWP_NOACTIVATE = 0x0010;
     internal const uint SWP_NOSENDCHANGING = 0x0400;
+
+    // ── Constants: SetWindowPos hWndInsertAfter sentinels ─────────────────────
+
+    internal static readonly nint HWND_TOPMOST = -1;
+
+    // ── Constants: SystemParametersInfo actions ──────────────────────────────
+
+    internal const uint SPI_GETWORKAREA = 0x0030;
 
     // ── P/Invoke: kernel32 ────────────────────────────────────────────────────
 
@@ -316,6 +325,15 @@ internal static class Win32
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool GetMonitorInfo(nint hMonitor, ref MONITORINFO lpmi);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SystemParametersInfo(
+        uint uiAction,
+        uint uiParam,
+        out RECT pvParam,
+        uint fWinIni
+    );
 
     // ── P/Invoke: dwmapi ─────────────────────────────────────────────────────
 

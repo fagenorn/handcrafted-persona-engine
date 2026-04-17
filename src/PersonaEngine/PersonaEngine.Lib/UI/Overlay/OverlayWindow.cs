@@ -167,6 +167,13 @@ public sealed class OverlayWindow : IDisposable
         _nativeWindow.Close();
     }
 
+    /// <summary>
+    ///     Moves the overlay to the given virtual-screen coordinates. Safe to
+    ///     call from any thread — posts a custom message that runs SetWindowPos
+    ///     on the overlay's creating thread.
+    /// </summary>
+    public void MoveTo(int x, int y) => _nativeWindow.PostMove(x, y);
+
     public void Dispose()
     {
         TeardownPipelines();
