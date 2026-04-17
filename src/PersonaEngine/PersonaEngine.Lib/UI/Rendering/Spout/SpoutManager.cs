@@ -50,6 +50,20 @@ public class SpoutManager : IDisposable
     public string OutputName => _outputName;
 
     /// <summary>
+    ///     Whether this manager currently owns a live Spout sender. Flipped by
+    ///     <see cref="SetSenderEnabled" /> on successful create/release and read
+    ///     by <see cref="SpoutRegistry" /> to report aggregate health.
+    /// </summary>
+    public bool IsSenderActive => _senderCreated;
+
+    /// <summary>
+    ///     Raised only when <see cref="IsSenderActive" /> transitions. A failed
+    ///     <c>CreateSender</c> call (which leaves <c>_senderCreated</c> false)
+    ///     does not fire this event.
+    /// </summary>
+    public event Action? SenderActiveChanged;
+
+    /// <summary>
     ///     Turn the Spout sender on or off without touching the FBO. The in-process
     ///     frame source keeps working either way.
     /// </summary>
@@ -69,11 +83,13 @@ public class SpoutManager : IDisposable
             }
 
             _senderCreated = true;
+            SenderActiveChanged?.Invoke();
         }
         else
         {
             _spoutSender.ReleaseSender();
             _senderCreated = false;
+            SenderActiveChanged?.Invoke();
         }
     }
 

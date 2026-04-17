@@ -3,7 +3,7 @@ using Silk.NET.OpenGL;
 
 namespace PersonaEngine.Lib.UI.Rendering.Spout;
 
-public class SpoutRegistry : IDisposable
+public class SpoutRegistry : ISpoutRegistry, IDisposable
 {
     private readonly SpoutConfiguration[] _configs;
 
@@ -20,17 +20,34 @@ public class SpoutRegistry : IDisposable
         {
             GetOrCreateManager(config);
         }
+
+        foreach (var manager in _spoutManagers.Values)
+        {
+            manager.SenderActiveChanged += OnSenderActiveChanged;
+        }
     }
+
+    /// <inheritdoc />
+    public int ConfiguredSenderCount => _spoutManagers.Count;
+
+    /// <inheritdoc />
+    public int ActiveSenderCount => _spoutManagers.Values.Count(m => m.IsSenderActive);
+
+    /// <inheritdoc />
+    public event Action? SendersChanged;
 
     public void Dispose()
     {
         foreach (var manager in _spoutManagers.Values)
         {
+            manager.SenderActiveChanged -= OnSenderActiveChanged;
             manager.Dispose();
         }
 
         _spoutManagers.Clear();
     }
+
+    private void OnSenderActiveChanged() => SendersChanged?.Invoke();
 
     public SpoutManager GetOrCreateManager(SpoutConfiguration config)
     {
