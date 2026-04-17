@@ -85,6 +85,10 @@ public static class StatusPill
     ///     position. No live pulse, no transitions — matches the original Overlay
     ///     panel look.
     /// </summary>
+    /// <param name="overrideLabel">
+    ///     Optional domain-specific label; see the full overload for details.
+    ///     <c>null</c> keeps the default label from <see cref="OverlayStatus"/>.
+    /// </param>
     public static void Render(
         OverlayStatus status,
         float elapsed,
@@ -228,10 +232,10 @@ public static class StatusPill
         };
 
     /// <summary>
-    ///     Returns the label to display for the given status, using
-    ///     <paramref name="overrideLabel" /> when non-null, otherwise falling back
-    ///     to the default text from <see cref="StatusVisuals" />.
-    ///     Exposed internally so it can be unit-tested without ImGui.
+    ///     Resolves the label to display on the pill. A non-null <paramref name="overrideLabel"/>
+    ///     is returned as-is; otherwise the default label for the <paramref name="status"/> is used.
+    ///     An empty string is a legitimate override (it produces a "dot only" pill) and is
+    ///     returned unchanged — callers should not short-circuit via <c>string.IsNullOrEmpty</c>.
     /// </summary>
     internal static string ResolveLabel(OverlayStatus status, string? overrideLabel)
     {
