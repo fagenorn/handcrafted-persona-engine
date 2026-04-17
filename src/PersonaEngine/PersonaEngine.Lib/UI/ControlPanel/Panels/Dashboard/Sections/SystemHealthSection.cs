@@ -79,22 +79,28 @@ public sealed class SystemHealthSection : IDisposable
         var origin = ImGui.GetCursorScreenPos();
         var avail = ImGui.GetContentRegionAvail();
 
-        ImGui.InvisibleButton($"##nav_{probe.Name}", avail);
-        ImGuiHelpers.HandCursorOnHover();
-
-        if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
+        // Skip the hit region on frames where the column has zero width/height
+        // (e.g. first frame before layout settles) — InvisibleButton asserts on
+        // zero-size.
+        if (avail.X > 0f && avail.Y > 0f)
         {
-            _nav.Request(probe.TargetPanel);
-        }
+            ImGui.InvisibleButton($"##nav_{probe.Name}", avail);
+            ImGuiHelpers.HandCursorOnHover();
 
-        if (!string.IsNullOrEmpty(status.Detail) && ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip(status.Detail);
-        }
+            if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
+            {
+                _nav.Request(probe.TargetPanel);
+            }
 
-        // Reset cursor to the origin so the visual content draws on top of
-        // the invisible hit region.
-        ImGui.SetCursorScreenPos(origin);
+            if (!string.IsNullOrEmpty(status.Detail) && ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(status.Detail);
+            }
+
+            // Reset cursor to the origin so the visual content draws on top of
+            // the invisible hit region.
+            ImGui.SetCursorScreenPos(origin);
+        }
 
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
         ImGui.TextUnformatted(probe.Name);
