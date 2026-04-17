@@ -21,6 +21,8 @@ using PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Input;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Output;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Metrics;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Session;
+using PersonaEngine.Lib.Health;
+using PersonaEngine.Lib.Health.Probes;
 using PersonaEngine.Lib.IO;
 using PersonaEngine.Lib.Live2D;
 using PersonaEngine.Lib.Live2D.Behaviour;
@@ -432,6 +434,22 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IOneShotPlayer>(sp => sp.GetRequiredService<OneShotAudioPlayer>());
         services.AddSingleton<IRvcAuditionProcessor, RvcAuditionProcessor>();
         services.AddSingleton<IVoiceAuditionService, VoiceAuditionService>();
+
+        // Nav request bus — lets dashboard health cards + cross-panel hint
+        // links drive the active sidebar section.
+        services.AddSingleton<NavRequestBus>();
+        services.AddSingleton<INavRequestBus>(sp => sp.GetRequiredService<NavRequestBus>());
+
+        // Subsystem health probes — registration order defines dashboard card order.
+        services.AddSingleton<MicrophoneHealthProbe>();
+        services.AddSingleton<ISubsystemHealthProbe>(sp =>
+            sp.GetRequiredService<MicrophoneHealthProbe>()
+        );
+        services.AddSingleton<LlmHealthProbe>();
+        services.AddSingleton<ISubsystemHealthProbe>(sp => sp.GetRequiredService<LlmHealthProbe>());
+        services.AddSingleton<TtsHealthProbe>();
+        services.AddSingleton<ISubsystemHealthProbe>(sp => sp.GetRequiredService<TtsHealthProbe>());
+        // TODO(Task 14/later): register SpoutHealthProbe once SpoutRegistry moves to DI.
 
         // Dashboard panel sections + services
         services.AddSingleton<SessionStatsCollector>();

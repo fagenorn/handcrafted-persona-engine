@@ -40,6 +40,7 @@ public sealed class ControlPanelComponent : IRenderComponent
     private readonly WindowFrameGlow _windowFrameGlow;
     private readonly IConfigWriter _configWriter;
     private readonly SubtitlesPanel _subtitlesPanel;
+    private readonly INavRequestBus _navBus;
     private readonly Navigation _navigation = new();
     private readonly Dictionary<NavSection, PanelRegistration> _panelRegistrations = new();
 
@@ -85,7 +86,8 @@ public sealed class ControlPanelComponent : IRenderComponent
         ScreenAwareness screenAwareness,
         Streaming streaming,
         LlmConnection llmConnection,
-        Application application
+        Application application,
+        INavRequestBus navBus
     )
     {
         _statusBar = statusBar;
@@ -96,6 +98,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         _ambientRenderer = ambientRenderer;
         _windowFrameGlow = windowFrameGlow;
         _subtitlesPanel = subtitlesPanel;
+        _navBus = navBus;
 
         RegisterPanel(NavSection.Dashboard, dt => dashboard.Render(dt));
         RegisterPanel(NavSection.LlmConnection, dt => llmConnection.Render(dt));
@@ -109,7 +112,11 @@ public sealed class ControlPanelComponent : IRenderComponent
         RegisterPanel(NavSection.RouletteWheel, dt => rouletteWheelPanel.Render(dt));
         RegisterPanel(NavSection.ScreenAwareness, dt => screenAwareness.Render(dt));
         RegisterPanel(NavSection.Application, dt => application.Render(dt));
+
+        _navBus.Requested += OnNavRequested;
     }
+
+    private void OnNavRequested(NavSection section) => _navigation.SetActiveSection(section);
 
     public bool UseSpout => false;
 
@@ -133,6 +140,8 @@ public sealed class ControlPanelComponent : IRenderComponent
 
     public void Dispose()
     {
+        _navBus.Requested -= OnNavRequested;
+
         if (
             _lastSection is { } active
             && _panelRegistrations.TryGetValue(active, out var reg)

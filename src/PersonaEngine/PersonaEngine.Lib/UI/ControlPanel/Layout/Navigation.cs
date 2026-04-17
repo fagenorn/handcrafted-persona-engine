@@ -67,6 +67,13 @@ public sealed class Navigation
 
     public NavSection ActiveSection { get; private set; } = NavSection.Dashboard;
 
+    /// <summary>
+    ///     Programmatically switches the active sidebar section. Used by
+    ///     <see cref="INavRequestBus" /> subscribers (dashboard health cards,
+    ///     cross-panel hint links) to mirror a user tab click.
+    /// </summary>
+    public void SetActiveSection(NavSection section) => ActiveSection = section;
+
     public void Render(float deltaTime, PersonaStateProvider stateProvider)
     {
         _elapsed += deltaTime;
