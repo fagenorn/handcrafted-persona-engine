@@ -6,8 +6,12 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels;
 
 /// <summary>
 ///     LLM Connection panel: text and vision LLM endpoint, model, and API key configuration.
+///     Temporarily renamed to free the <c>LlmConnection</c> identifier for use as the
+///     <c>Panels.LlmConnection</c> namespace (hosting <see cref="Sections" /> section
+///     components). This class is scheduled for deletion in Task 14 once the
+///     <c>LlmConnectionPanel</c> orchestrator lands.
 /// </summary>
-public sealed class LlmConnection(
+public sealed class LlmConnectionLegacy(
     IOptionsMonitor<LlmOptions> llmOptions,
     IConfigWriter configWriter
 )

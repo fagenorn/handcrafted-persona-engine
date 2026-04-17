@@ -85,7 +85,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         RouletteWheelPanel rouletteWheelPanel,
         ScreenAwareness screenAwareness,
         Streaming streaming,
-        LlmConnection llmConnection,
+        LlmConnectionLegacy llmConnection,
         Application application,
         INavRequestBus navBus
     )

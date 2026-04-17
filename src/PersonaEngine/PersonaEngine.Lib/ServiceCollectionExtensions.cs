@@ -488,7 +488,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<RouletteWheelPanel>();
         services.AddSingleton<ScreenAwareness>();
         services.AddSingleton<Streaming>();
-        services.AddSingleton<LlmConnection>();
+        services.AddSingleton<LlmConnectionLegacy>();
         services.AddSingleton<Application>();
 
         // Shell — registered as IRenderComponent
