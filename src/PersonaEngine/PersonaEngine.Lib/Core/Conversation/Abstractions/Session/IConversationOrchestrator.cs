@@ -27,4 +27,10 @@ public interface IConversationOrchestrator : IAsyncDisposable
     ValueTask ResumeAllSessionsAsync(CancellationToken cancellationToken = default);
 
     event EventHandler? SessionsUpdated;
+
+    /// <summary>
+    ///     Aggregated state-change feed. Forwards transitions from every active session.
+    ///     Consumers that care about a specific session should subscribe to it directly.
+    /// </summary>
+    event Action<ConversationState>? StateChanged;
 }

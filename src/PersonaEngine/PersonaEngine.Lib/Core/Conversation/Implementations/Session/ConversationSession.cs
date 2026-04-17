@@ -98,6 +98,9 @@ public partial class ConversationSession : IConversationSession
 
     public Guid SessionId { get; }
 
+    /// <inheritdoc />
+    public event Action<ConversationState>? StateChanged;
+
     public async ValueTask DisposeAsync()
     {
         if (_isDisposed)

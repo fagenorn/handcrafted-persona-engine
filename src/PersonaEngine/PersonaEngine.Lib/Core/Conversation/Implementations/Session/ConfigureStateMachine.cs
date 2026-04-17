@@ -247,6 +247,22 @@ public partial class ConversationSession
                 transition.Destination
             );
 
+            if (transition.Source != transition.Destination)
+            {
+                try
+                {
+                    StateChanged?.Invoke(transition.Destination);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(
+                        ex,
+                        "{SessionId} | A StateChanged subscriber threw — subscriber ignored.",
+                        SessionId
+                    );
+                }
+            }
+
             await ValueTask.CompletedTask;
         });
 

@@ -104,6 +104,8 @@ public class ConversationOrchestrator : IConversationOrchestrator
                 var sessionJob = HandleSessionCompletionAsync(session, runTask);
                 _activeSessions[session.SessionId] = (session, sessionJob);
 
+                session.StateChanged += OnAnySessionStateChanged;
+
                 OnSessionsUpdated();
 
                 return session.SessionId;
@@ -241,6 +243,11 @@ public class ConversationOrchestrator : IConversationOrchestrator
 
     public event EventHandler? SessionsUpdated;
 
+    /// <inheritdoc />
+    public event Action<ConversationState>? StateChanged;
+
+    private void OnAnySessionStateChanged(ConversationState s) => StateChanged?.Invoke(s);
+
     private async ValueTask HandleSessionCompletionAsync(
         IConversationSession session,
         ValueTask runTask
@@ -282,6 +289,8 @@ public class ConversationOrchestrator : IConversationOrchestrator
                     session.SessionId
                 );
             }
+
+            session.StateChanged -= OnAnySessionStateChanged;
 
             try
             {

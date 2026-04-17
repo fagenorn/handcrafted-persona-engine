@@ -29,4 +29,10 @@ public interface IConversationSession : IAsyncDisposable
     ///     No-op if not paused.
     /// </summary>
     ValueTask ResumeAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Raised whenever the session's FSM transitions to a new state.
+    ///     Subscribers must be resilient to re-entrancy and thread-pool callbacks.
+    /// </summary>
+    event Action<ConversationState>? StateChanged;
 }
