@@ -249,17 +249,25 @@ public partial class ConversationSession
 
             if (transition.Source != transition.Destination)
             {
-                try
+                var handlers = StateChanged;
+                if (handlers is not null)
                 {
-                    StateChanged?.Invoke(transition.Destination);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(
-                        ex,
-                        "{SessionId} | A StateChanged subscriber threw — subscriber ignored.",
-                        SessionId
-                    );
+                    _ = Task.Run(() =>
+                    {
+                        try
+                        {
+                            handlers(transition.Destination);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(
+                                ex,
+                                "{SessionId} | StateChanged subscriber threw for destination {State}",
+                                SessionId,
+                                transition.Destination
+                            );
+                        }
+                    });
                 }
             }
 

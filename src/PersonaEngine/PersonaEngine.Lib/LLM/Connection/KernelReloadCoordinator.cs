@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
 
 namespace PersonaEngine.Lib.LLM.Connection;
@@ -17,6 +18,8 @@ namespace PersonaEngine.Lib.LLM.Connection;
 /// </summary>
 public sealed class KernelReloadCoordinator : IKernelReloadCoordinator, IDisposable
 {
+    private readonly object _gate = new();
+    private readonly ILogger<KernelReloadCoordinator> _log;
     private readonly IConversationOrchestrator _orchestrator;
     private ConversationState _state = ConversationState.Initial;
 
@@ -25,14 +28,28 @@ public sealed class KernelReloadCoordinator : IKernelReloadCoordinator, IDisposa
     ///     <see cref="IConversationOrchestrator.StateChanged" /> event.
     /// </summary>
     /// <param name="orchestrator">The orchestrator whose sessions are watched.</param>
-    public KernelReloadCoordinator(IConversationOrchestrator orchestrator)
+    /// <param name="log">Logger for reload-window transitions.</param>
+    public KernelReloadCoordinator(
+        IConversationOrchestrator orchestrator,
+        ILogger<KernelReloadCoordinator> log
+    )
     {
         _orchestrator = orchestrator;
+        _log = log;
         _orchestrator.StateChanged += OnStateChanged;
     }
 
     /// <inheritdoc />
-    public bool IsSafeToReloadNow => _state == ConversationState.Idle;
+    public bool IsSafeToReloadNow
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _state == ConversationState.Idle;
+            }
+        }
+    }
 
     /// <inheritdoc />
     public event Action? SafeToReload;
@@ -42,10 +59,16 @@ public sealed class KernelReloadCoordinator : IKernelReloadCoordinator, IDisposa
 
     private void OnStateChanged(ConversationState next)
     {
-        var entering = _state != ConversationState.Idle && next == ConversationState.Idle;
-        _state = next;
+        bool entering;
+        lock (_gate)
+        {
+            entering = _state != ConversationState.Idle && next == ConversationState.Idle;
+            _state = next;
+        }
+
         if (entering)
         {
+            _log.LogDebug("Session entered Idle — firing SafeToReload.");
             SafeToReload?.Invoke();
         }
     }

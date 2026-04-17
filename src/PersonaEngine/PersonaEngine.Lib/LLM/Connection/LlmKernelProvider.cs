@@ -27,10 +27,10 @@ public sealed class LlmKernelProvider : ILlmKernelProvider, IDisposable
     private readonly Action<IKernelBuilder>? _configure;
     private readonly IKernelReloadCoordinator _coordinator;
     private readonly ILogger<LlmKernelProvider> _log;
-    private readonly IOptionsMonitor<LlmOptions> _monitor;
     private readonly IDisposable? _onChangeSub;
     private readonly object _pendingLock = new();
 
+    private int _building;
     private Kernel _current;
     private LlmOptions? _pending;
 
@@ -54,7 +54,6 @@ public sealed class LlmKernelProvider : ILlmKernelProvider, IDisposable
         ILogger<LlmKernelProvider> log
     )
     {
-        _monitor = monitor;
         _coordinator = coordinator;
         _configure = configure;
         _log = log;
@@ -94,31 +93,46 @@ public sealed class LlmKernelProvider : ILlmKernelProvider, IDisposable
 
     private void ApplyPending()
     {
-        LlmOptions? pending;
-        lock (_pendingLock)
-        {
-            pending = _pending;
-            _pending = null;
-        }
-
-        if (pending is null)
+        if (Interlocked.CompareExchange(ref _building, 1, 0) != 0)
         {
             return;
         }
 
         try
         {
-            var next = Build(pending, _configure);
-            Volatile.Write(ref _current, next);
-            RebuildsCounter.Add(1);
-            KernelRebuilt?.Invoke();
+            while (true)
+            {
+                LlmOptions? pending;
+                lock (_pendingLock)
+                {
+                    pending = _pending;
+                    _pending = null;
+                }
+
+                if (pending is null)
+                {
+                    return;
+                }
+
+                try
+                {
+                    var next = Build(pending, _configure);
+                    Volatile.Write(ref _current, next);
+                    RebuildsCounter.Add(1);
+                    KernelRebuilt?.Invoke();
+                }
+                catch (Exception ex)
+                {
+                    _log.LogError(
+                        ex,
+                        "Failed to rebuild Kernel from updated LlmOptions — keeping previous instance."
+                    );
+                }
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            _log.LogError(
-                ex,
-                "Failed to rebuild Kernel from updated LlmOptions — keeping previous instance."
-            );
+            Interlocked.Exchange(ref _building, 0);
         }
     }
 

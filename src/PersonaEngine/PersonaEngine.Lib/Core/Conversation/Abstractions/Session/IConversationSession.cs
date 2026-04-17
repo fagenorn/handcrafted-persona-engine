@@ -31,8 +31,9 @@ public interface IConversationSession : IAsyncDisposable
     ValueTask ResumeAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Raised whenever the session's FSM transitions to a new state.
-    ///     Subscribers must be resilient to re-entrancy and thread-pool callbacks.
+    ///     Raised when the session's FSM transitions to a new state. Invocations are
+    ///     dispatched on the thread pool — subscribers may perform non-trivial work without
+    ///     blocking the FSM callback, but must be thread-safe.
     /// </summary>
     event Action<ConversationState>? StateChanged;
 }
