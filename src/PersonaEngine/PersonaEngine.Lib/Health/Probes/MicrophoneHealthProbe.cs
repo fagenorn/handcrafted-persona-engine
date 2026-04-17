@@ -90,6 +90,12 @@ public sealed class MicrophoneHealthProbe : ISubsystemHealthProbe, IDisposable
 
     private SubsystemStatus Compute()
     {
+        var available = _mic.AvailableDevices;
+        if (available.Count == 0)
+        {
+            return new SubsystemStatus(SubsystemHealth.Failed, "No input devices available", null);
+        }
+
         var configured = _monitor.CurrentValue.DeviceName;
 
         // No device configured — treat as healthy (defaults to system default).
@@ -98,7 +104,6 @@ public sealed class MicrophoneHealthProbe : ISubsystemHealthProbe, IDisposable
             return new SubsystemStatus(SubsystemHealth.Healthy, "Default device", null);
         }
 
-        var available = _mic.AvailableDevices;
         var exists = available.Any(d =>
             configured.Trim().Equals(d?.Trim(), StringComparison.OrdinalIgnoreCase)
         );
@@ -106,24 +111,12 @@ public sealed class MicrophoneHealthProbe : ISubsystemHealthProbe, IDisposable
         if (!exists)
         {
             return new SubsystemStatus(
-                SubsystemHealth.Failed,
-                "Device not found",
-                $"'{configured}' is not among the {available.Count} enumerated input device(s)."
+                SubsystemHealth.Degraded,
+                "Fell back to default",
+                $"Configured device '{configured}' not found among {available.Count} enumerated input device(s)."
             );
         }
 
-        // Device exists in the list — check the mic has it open.
-        var current = _mic.CurrentDeviceName;
-        var opened =
-            !string.IsNullOrWhiteSpace(current)
-            && configured.Trim().Equals(current.Trim(), StringComparison.OrdinalIgnoreCase);
-
-        return opened
-            ? new SubsystemStatus(SubsystemHealth.Healthy, "Ready", null)
-            : new SubsystemStatus(
-                SubsystemHealth.Degraded,
-                "Device not open",
-                $"'{configured}' was found but is not the currently open device."
-            );
+        return new SubsystemStatus(SubsystemHealth.Healthy, $"Device: {configured}", null);
     }
 }
