@@ -15,8 +15,6 @@ public class VisualQAService : IVisualQAService
 
     private readonly LlmOptions _llmOptions;
 
-    private readonly VisionConfig _visionConfig;
-
     private readonly SemaphoreSlim _fileChangeSemaphore = new(1, 1);
 
     private readonly CancellationTokenSource _internalCts = new();
@@ -33,7 +31,6 @@ public class VisualQAService : IVisualQAService
     )
     {
         _llmOptions = config.Value.Llm;
-        _visionConfig = config.Value.Vision;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         _captureService = captureService;
