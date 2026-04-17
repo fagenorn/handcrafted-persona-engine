@@ -6,12 +6,19 @@ using PersonaEngine.Lib.Configuration;
 
 namespace PersonaEngine.Lib.LLM.Connection;
 
+/// <summary>
+///     Default <see cref="ILlmConnectionProbe" /> implementation. Uses a shared
+///     <see cref="HttpClient" /> to hit <c>/models</c> on each configured endpoint,
+///     and auto-reprobes when <see cref="IOptionsMonitor{T}.OnChange" /> fires for
+///     the relevant <see cref="LlmOptions" /> fields.
+/// </summary>
 public sealed class LlmConnectionProbe : ILlmConnectionProbe, IDisposable
 {
     private readonly HttpClient _http;
     private readonly ILogger<LlmConnectionProbe> _log;
     private readonly IOptionsMonitor<LlmOptions> _monitor;
     private readonly IDisposable? _onChangeSub;
+    private readonly object _syncRoot = new();
     private readonly SemaphoreSlim _textGate = new(1, 1);
     private readonly SemaphoreSlim _visionGate = new(1, 1);
 
@@ -32,9 +39,27 @@ public sealed class LlmConnectionProbe : ILlmConnectionProbe, IDisposable
         _onChangeSub = monitor.OnChange(OnOptionsChanged);
     }
 
-    public LlmProbeResult TextStatus => _text;
+    public LlmProbeResult TextStatus
+    {
+        get
+        {
+            lock (_syncRoot)
+            {
+                return _text;
+            }
+        }
+    }
 
-    public LlmProbeResult VisionStatus => _vision;
+    public LlmProbeResult VisionStatus
+    {
+        get
+        {
+            lock (_syncRoot)
+            {
+                return _vision;
+            }
+        }
+    }
 
     public event Action<LlmChannel>? StatusChanged;
 
@@ -75,6 +100,12 @@ public sealed class LlmConnectionProbe : ILlmConnectionProbe, IDisposable
                 .ConfigureAwait(false);
             Store(channel, result);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Caller-cancelled mid-probe: don't leave the channel stuck in Probing.
+            Store(channel, LlmProbeResult.Unknown);
+            throw;
+        }
         finally
         {
             gate.Release();
@@ -98,10 +129,18 @@ public sealed class LlmConnectionProbe : ILlmConnectionProbe, IDisposable
 
     private void Store(LlmChannel channel, LlmProbeResult result)
     {
-        if (channel == LlmChannel.Text)
-            _text = result;
-        else
-            _vision = result;
+        lock (_syncRoot)
+        {
+            if (channel == LlmChannel.Text)
+            {
+                _text = result;
+            }
+            else
+            {
+                _vision = result;
+            }
+        }
+
         StatusChanged?.Invoke(channel);
     }
 
@@ -226,13 +265,7 @@ public sealed class LlmConnectionProbe : ILlmConnectionProbe, IDisposable
         }
     }
 
-    private void FireAndForget(LlmChannel channel)
-    {
-        var task = ProbeAsync(channel).AsTask();
-        _ = task;
-    }
-
-    private void OnOptionsChanged(LlmOptions updated, string? _)
+    private void OnOptionsChanged(LlmOptions updated, string? name)
     {
         var prev = _lastSnapshot;
         _lastSnapshot = updated;
@@ -248,7 +281,7 @@ public sealed class LlmConnectionProbe : ILlmConnectionProbe, IDisposable
             )
         )
         {
-            FireAndForget(LlmChannel.Text);
+            FireBackgroundProbe(LlmChannel.Text);
         }
 
         var prevVisionOn = prev.VisionEnabled;
@@ -268,8 +301,30 @@ public sealed class LlmConnectionProbe : ILlmConnectionProbe, IDisposable
             )
         )
         {
-            FireAndForget(LlmChannel.Vision);
+            FireBackgroundProbe(LlmChannel.Vision);
         }
+    }
+
+    /// <summary>
+    ///     Fire-and-forget a re-probe on an <see cref="IOptionsMonitor{T}.OnChange" /> callback.
+    ///     Unhandled exceptions (e.g. <see cref="ObjectDisposedException" /> from a disposal race)
+    ///     are logged rather than left unobserved.
+    /// </summary>
+    private void FireBackgroundProbe(LlmChannel channel)
+    {
+        _ = ProbeAsync(channel)
+            .AsTask()
+            .ContinueWith(
+                t =>
+                    _log.LogError(
+                        t.Exception,
+                        "Unhandled exception in background probe for {Channel}",
+                        channel
+                    ),
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted,
+                TaskScheduler.Default
+            );
     }
 
     private static bool SameTuple(
