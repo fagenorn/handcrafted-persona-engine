@@ -85,14 +85,20 @@ public static class StatusPill
     ///     position. No live pulse, no transitions — matches the original Overlay
     ///     panel look.
     /// </summary>
-    public static void Render(OverlayStatus status, float elapsed, string? lastError) =>
+    public static void Render(
+        OverlayStatus status,
+        float elapsed,
+        string? lastError,
+        string? overrideLabel = null
+    ) =>
         Render(
             status,
             elapsed,
             PillTransition.None,
             secondsSinceTransition: 0f,
             lastError,
-            style: default
+            style: default,
+            overrideLabel: overrideLabel
         );
 
     /// <summary>
@@ -113,16 +119,23 @@ public static class StatusPill
     /// </param>
     /// <param name="lastError">Shown as a tooltip when status is Failed.</param>
     /// <param name="style">Broadcast knobs; <c>default</c> is the minimal pill.</param>
+    /// <param name="overrideLabel">
+    ///     When non-null, replaces the default status label with domain-specific text
+    ///     (e.g. "Ready", "Model not found", "Auth failed"). The colour, pulse, and
+    ///     ring are still driven by <paramref name="status" />.
+    /// </param>
     public static void Render(
         OverlayStatus status,
         float elapsed,
         PillTransition transition,
         float secondsSinceTransition,
         string? lastError,
-        StatusPillStyle style
+        StatusPillStyle style,
+        string? overrideLabel = null
     )
     {
-        var (color, label, transitionalPulse) = StatusVisuals(status);
+        var (color, _, transitionalPulse) = StatusVisuals(status);
+        var label = ResolveLabel(status, overrideLabel);
 
         ImGui.BeginGroup();
 
@@ -213,6 +226,22 @@ public static class StatusPill
             PillTransition.Alert => AlertDurationSeconds,
             _ => 0f,
         };
+
+    /// <summary>
+    ///     Returns the label to display for the given status, using
+    ///     <paramref name="overrideLabel" /> when non-null, otherwise falling back
+    ///     to the default text from <see cref="StatusVisuals" />.
+    ///     Exposed internally so it can be unit-tested without ImGui.
+    /// </summary>
+    internal static string ResolveLabel(OverlayStatus status, string? overrideLabel)
+    {
+        if (overrideLabel is not null)
+        {
+            return overrideLabel;
+        }
+
+        return StatusVisuals(status).Label;
+    }
 
     private static (Vector4 Color, string Label, bool TransitionalPulse) StatusVisuals(
         OverlayStatus status
