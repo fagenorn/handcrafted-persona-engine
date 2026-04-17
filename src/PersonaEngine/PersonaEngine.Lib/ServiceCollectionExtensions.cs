@@ -54,6 +54,8 @@ using PersonaEngine.Lib.UI.ControlPanel.Panels.Avatar.Sections;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard.Sections;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Listening;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Listening.Sections;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.LlmConnection;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.LlmConnection.Sections;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Personality;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Personality.Sections;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Subtitles;
@@ -488,7 +490,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<RouletteWheelPanel>();
         services.AddSingleton<ScreenAwareness>();
         services.AddSingleton<Streaming>();
-        services.AddSingleton<LlmConnectionLegacy>();
+        services.AddSingleton<TextLlmSection>();
+        services.AddSingleton<VisionLlmSection>();
+        services.AddSingleton<LlmConnectionPanel>();
         services.AddSingleton<Application>();
 
         // Shell — registered as IRenderComponent

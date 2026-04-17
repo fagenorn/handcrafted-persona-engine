@@ -4,6 +4,7 @@ using PersonaEngine.Lib.UI.ControlPanel.Layout;
 using PersonaEngine.Lib.UI.ControlPanel.Panels;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Avatar;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Listening;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.LlmConnection;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Personality;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Subtitles;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice;
@@ -85,7 +86,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         RouletteWheelPanel rouletteWheelPanel,
         ScreenAwareness screenAwareness,
         Streaming streaming,
-        LlmConnectionLegacy llmConnection,
+        LlmConnectionPanel llmConnectionPanel,
         Application application,
         INavRequestBus navBus
     )
@@ -101,7 +102,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         _navBus = navBus;
 
         RegisterPanel(NavSection.Dashboard, dt => dashboard.Render(dt));
-        RegisterPanel(NavSection.LlmConnection, dt => llmConnection.Render(dt));
+        RegisterPanel(NavSection.LlmConnection, dt => llmConnectionPanel.Render(dt));
         RegisterPanel(NavSection.Personality, dt => personalityPanel.Render(dt));
         RegisterPanel(NavSection.Listening, dt => listeningPanel.Render(dt), listeningPanel);
         RegisterPanel(NavSection.Voice, dt => voicePanel.Render(dt));
