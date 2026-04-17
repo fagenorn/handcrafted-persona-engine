@@ -123,8 +123,8 @@ public class AvatarApp : IDisposable
             _gl,
             _window,
             _inputContext,
-            Path.Combine(@"Resources\Fonts", @"Montserrat-Medium.ttf"),
-            Path.Combine(@"Resources\Fonts", @"seguiemj.ttf")
+            Path.Combine(@"Resources\Fonts", @"Montserrat.ttf"),
+            Path.Combine(@"Resources\Fonts", @"Seguiemj.ttf")
         );
 
         InitializeComponents(_regularComponents);
