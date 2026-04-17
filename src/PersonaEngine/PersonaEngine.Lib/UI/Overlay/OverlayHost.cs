@@ -44,6 +44,55 @@ public sealed class OverlayHost : IDisposable
     private OverlayWindow? _runningOverlay;
     private volatile bool _stopRequested;
 
+    // ── New live-control state (all reads/writes under _lifecycleLock) ─────
+    private bool _desiredEnabled;
+    private string? _lastError;
+
+    // The Stateless lifecycle machine. Constructed in Start() so callbacks
+    // can read instance state (_desiredEnabled).
+    private OverlayStateMachine? _machine;
+
+    // Coalesces rapid-fire config writes when the user spams the toggle.
+    // The thread lifecycle is NOT debounced — that reacts instantly.
+    private CancellationTokenSource? _pendingPersistCts;
+    private const int PersistDebounceMs = 200;
+
+    /// <summary>
+    ///     The user's intent, updated instantly by <see cref="SetEnabled" />. The
+    ///     UI binds to this; <see cref="Status" /> is the actual thread state.
+    /// </summary>
+    public bool DesiredEnabled
+    {
+        get
+        {
+            lock (_lifecycleLock)
+                return _desiredEnabled;
+        }
+    }
+
+    /// <summary>Real-world lifecycle state of the overlay thread.</summary>
+    public OverlayStatus Status
+    {
+        get
+        {
+            lock (_lifecycleLock)
+                return _machine?.State ?? OverlayStatus.Off;
+        }
+    }
+
+    /// <summary>Populated when <see cref="Status" /> is <see cref="OverlayStatus.Failed" />.</summary>
+    public string? LastError
+    {
+        get
+        {
+            lock (_lifecycleLock)
+                return _lastError;
+        }
+    }
+
+    /// <summary>Fires on any status or desired-enabled change. Optional for pollers.</summary>
+    public event Action? StatusChanged;
+
     public OverlayHost(
         IOptionsMonitor<AvatarAppConfig> options,
         IConfigWriter configWriter,
@@ -73,6 +122,25 @@ public sealed class OverlayHost : IDisposable
 
             _started = true;
             _spoutRegistry = spoutRegistry;
+            _desiredEnabled = _options.CurrentValue.Overlay.Enabled;
+
+            _machine = new OverlayStateMachine(
+                onStartThread: () =>
+                {
+                    // Entry action for Starting. _lifecycleLock is held because
+                    // Fire() is always called under the lock.
+                    _lastError = null;
+                    StartThread(_options.CurrentValue.Overlay);
+                    RaiseStatusChanged();
+                },
+                onPostClose: () =>
+                {
+                    _stopRequested = true;
+                    _runningOverlay?.Close();
+                    RaiseStatusChanged();
+                },
+                getDesiredEnabled: () => _desiredEnabled
+            );
 
             _optionsSubscription = _options.OnChange(
                 (cfg, _) =>
@@ -84,12 +152,22 @@ public sealed class OverlayHost : IDisposable
                 }
             );
 
-            ApplyConfig(_options.CurrentValue);
+            // Apply Spout sender toggles and drive the initial Enabled intent
+            // through the machine (entry action starts the thread if desired).
+            ApplySpoutSenderToggles(_options.CurrentValue);
+            if (_desiredEnabled)
+            {
+                _machine.Fire(OverlayTrigger.TurnOn);
+            }
         }
     }
 
     public void Dispose()
     {
+        var oldCts = Interlocked.Exchange(ref _pendingPersistCts, null);
+        oldCts?.Cancel();
+        oldCts?.Dispose();
+
         lock (_lifecycleLock)
         {
             _optionsSubscription?.Dispose();
@@ -99,6 +177,89 @@ public sealed class OverlayHost : IDisposable
         StopThreadIfRunning();
     }
 
+    /// <summary>
+    ///     Flips the user's intent. Drives the overlay thread lifecycle
+    ///     immediately (no file-watcher round-trip) and persists the new value
+    ///     to config in the background. Safe to call rapidly; the state
+    ///     machine reconciles reverse-intent sequences.
+    /// </summary>
+    public void SetEnabled(bool enabled)
+    {
+        lock (_lifecycleLock)
+        {
+            if (_machine is null)
+            {
+                _logger.LogWarning("SetEnabled called before OverlayHost.Start — ignoring.");
+                return;
+            }
+
+            SetDesired(enabled);
+            _machine.Fire(enabled ? OverlayTrigger.TurnOn : OverlayTrigger.TurnOff);
+            ApplySpoutSenderToggles(_options.CurrentValue);
+        }
+
+        SchedulePersistEnabled(enabled);
+    }
+
+    // Caller holds _lifecycleLock.
+    private void RaiseStatusChanged()
+    {
+        var handler = StatusChanged;
+        if (handler is not null)
+        {
+            Task.Run(handler);
+        }
+    }
+
+    // Caller holds _lifecycleLock.
+    private void SetDesired(bool desired)
+    {
+        if (_desiredEnabled == desired)
+        {
+            return;
+        }
+
+        _desiredEnabled = desired;
+        RaiseStatusChanged();
+    }
+
+    private void SchedulePersistEnabled(bool enabled)
+    {
+        var fresh = new CancellationTokenSource();
+        var oldCts = Interlocked.Exchange(ref _pendingPersistCts, fresh);
+        oldCts?.Cancel();
+        oldCts?.Dispose();
+
+        var token = fresh.Token;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(PersistDebounceMs, token).ConfigureAwait(false);
+                var current = _options.CurrentValue;
+                if (current.Overlay.Enabled == enabled)
+                {
+                    return;
+                }
+
+                _configWriter.Write(
+                    current with
+                    {
+                        Overlay = current.Overlay with { Enabled = enabled },
+                    }
+                );
+            }
+            catch (OperationCanceledException)
+            {
+                // Superseded by a later SetEnabled call.
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to persist overlay Enabled={Enabled}.", enabled);
+            }
+        });
+    }
+
     // ── Config reaction ─────────────────────────────────────────────────────────
 
     // Caller holds _lifecycleLock.
@@ -106,21 +267,20 @@ public sealed class OverlayHost : IDisposable
     {
         ApplySpoutSenderToggles(cfg);
 
-        var wantOverlay = cfg.Overlay.Enabled;
-        var threadAlive = _thread is { IsAlive: true };
-
-        if (wantOverlay && !threadAlive && _spoutRegistry is not null)
+        if (_machine is null)
         {
-            StartThread(cfg.Overlay);
+            return;
         }
-        else if (!wantOverlay && threadAlive)
+
+        // Sync intent with config on external edits (e.g. appsettings.json
+        // modified while the app is running). The live UI path uses SetEnabled
+        // directly, which persists via SchedulePersistEnabled — when that write
+        // lands, this callback fires but the desired-matches-config check
+        // makes it a no-op.
+        if (_desiredEnabled != cfg.Overlay.Enabled)
         {
-            // Mark as a deliberate host-side stop (so the thread's finally-block
-            // doesn't flip Enabled=false again) and post WM_CLOSE to unblock
-            // the overlay thread's message pump. Don't Join here — we're on a
-            // hot config-reload callback and a 3 s block would freeze the UI.
-            _stopRequested = true;
-            _runningOverlay?.Close();
+            SetDesired(cfg.Overlay.Enabled);
+            _machine.Fire(cfg.Overlay.Enabled ? OverlayTrigger.TurnOn : OverlayTrigger.TurnOff);
         }
     }
 
@@ -168,8 +328,6 @@ public sealed class OverlayHost : IDisposable
 
     private void RunOverlayThread(OverlayConfiguration cfg)
     {
-        var externalClose = true;
-
         try
         {
             using var overlay = OverlayWindow.Create(cfg, _loggerFactory);
@@ -181,24 +339,35 @@ public sealed class OverlayHost : IDisposable
             overlay.PositionCommitted += OnPositionCommitted;
             overlay.SizeCommitted += OnSizeCommitted;
 
+            // Thread is past init: HWND + D3D11 device + DComp tree constructed
+            // and the window is visible. Transition Starting → Active so the UI
+            // pill goes green.
+            lock (_lifecycleLock)
+            {
+                _machine?.Fire(OverlayTrigger.Ready);
+                RaiseStatusChanged();
+            }
+
             // Run pumps messages + renders on this thread. Host shutdown sends
             // WM_CLOSE cross-thread via overlay.Close() → PostMessage; the
             // overlay thread picks it up on its next pump and the loop exits.
             overlay.Run();
-
-            // If we exited Run() without _stopRequested being set by the host,
-            // the window was closed by the user / OS — that's an external close.
-            externalClose = !_stopRequested;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Overlay thread failed.");
-            // Treat as external close so the user sees the overlay toggle flip off
-            // rather than being stuck on with no window.
-            externalClose = true;
+            lock (_lifecycleLock)
+            {
+                _lastError = ex.Message;
+                // Clear intent so Off.OnEntry reconcile doesn't respawn on ThreadExited.
+                SetDesired(false);
+                _machine?.Fire(OverlayTrigger.Failed);
+                RaiseStatusChanged();
+            }
         }
         finally
         {
+            bool wasExternal;
             lock (_lifecycleLock)
             {
                 _runningOverlay = null;
@@ -206,10 +375,28 @@ public sealed class OverlayHost : IDisposable
                 {
                     _thread = null;
                 }
+
+                // External close = user closed via Alt+F4 / task manager. Not
+                // host-requested (via Stopping.OnEntry → _stopRequested) and
+                // not a Failed exit.
+                wasExternal = !_stopRequested && _machine?.State != OverlayStatus.Failed;
+
+                // Fire ThreadExited — machine transitions to Off and Off.OnEntry
+                // reconciles if desired flipped back on during Stopping.
+                _machine?.Fire(OverlayTrigger.ThreadExited);
+                _stopRequested = false;
+                RaiseStatusChanged();
             }
 
-            if (externalClose)
+            if (wasExternal)
             {
+                // Flip desired off so the UI honestly reflects reality and
+                // persist to config for the next app launch.
+                lock (_lifecycleLock)
+                {
+                    SetDesired(false);
+                }
+
                 PersistEnabled(false);
                 _logger.LogInformation(
                     "Overlay window closed externally — overlay disabled in config."
