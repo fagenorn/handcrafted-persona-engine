@@ -371,7 +371,7 @@ public sealed class OverlayHost : IDisposable
         };
         _thread = thread;
         thread.Start();
-        _logger.LogInformation(
+        _logger.LogDebug(
             "Overlay thread started at {X},{Y} {W}x{H} mirroring '{Source}'.",
             cfg.X,
             cfg.Y,
@@ -391,8 +391,7 @@ public sealed class OverlayHost : IDisposable
                 _runningOverlay = overlay;
             }
 
-            overlay.PositionCommitted += OnPositionCommitted;
-            overlay.SizeCommitted += OnSizeCommitted;
+            overlay.BoundsCommitted += OnBoundsCommitted;
 
             // Thread is past init: HWND + D3D11 device + DComp tree constructed
             // and the window is visible. Transition Starting → Active so the UI
@@ -480,22 +479,22 @@ public sealed class OverlayHost : IDisposable
 
     // ── Persistence ─────────────────────────────────────────────────────────────
 
-    private void OnPositionCommitted((int X, int Y) position)
+    private void OnBoundsCommitted((int X, int Y, int W, int H) bounds)
     {
+        // Single write covering position + size. Splitting this into two
+        // writes caused the second one to clobber the first in the debounced
+        // ConfigWriter queue — both keyed by the same AvatarAppConfig type —
+        // so the panel display kept showing pre-resize Width/Height.
         var current = _options.CurrentValue;
         var updated = current with
         {
-            Overlay = current.Overlay with { X = position.X, Y = position.Y },
-        };
-        _configWriter.Write(updated);
-    }
-
-    private void OnSizeCommitted((int X, int Y) size)
-    {
-        var current = _options.CurrentValue;
-        var updated = current with
-        {
-            Overlay = current.Overlay with { Width = size.X, Height = size.Y },
+            Overlay = current.Overlay with
+            {
+                X = bounds.X,
+                Y = bounds.Y,
+                Width = bounds.W,
+                Height = bounds.H,
+            },
         };
         _configWriter.Write(updated);
     }

@@ -1,16 +1,16 @@
-using System.Numerics;
 using Hexa.NET.ImGui;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
-using PersonaEngine.Lib.UI.Overlay;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard.Sections;
 
 /// <summary>
 ///     Dashboard health-strip: four cosmetic cards (Microphone / LLM / TTS /
-///     Spout) followed by a live Overlay quick-toggle. Cosmetic cards are
-///     placeholders — the status bar provides real conversation state.
+///     Spout) summarising subsystem status at a glance. Currently hard-coded
+///     placeholders — live wiring will happen as each subsystem gains a health
+///     probe. The Overlay presence control lives in its own
+///     <see cref="PresenceStripSection" /> above this row.
 /// </summary>
-public sealed class SystemHealthSection(OverlayHost overlayHost)
+public sealed class SystemHealthSection
 {
     private const float CardHeight = 88f;
 
@@ -22,17 +22,11 @@ public sealed class SystemHealthSection(OverlayHost overlayHost)
         ("Spout", "OK"),
     ];
 
-    // Monotonically increasing — drives the StatusPill pulse animation.
-    private float _elapsed;
-
     public void Render(float dt)
     {
-        _elapsed += dt;
-
         ImGuiHelpers.SectionHeader("System Health");
 
-        // One extra column for the live Overlay card.
-        using var cols = Ui.EqualCols(HealthCards.Length + 1, CardHeight, gap: 12f);
+        using var cols = Ui.EqualCols(HealthCards.Length, CardHeight, gap: 12f);
 
         for (var i = 0; i < HealthCards.Length; i++)
         {
@@ -42,14 +36,6 @@ public sealed class SystemHealthSection(OverlayHost overlayHost)
             using (Ui.Card(id: $"##health_{HealthCards[i].Name}", padding: 15f))
             {
                 RenderHealthCard(HealthCards[i].Name, HealthCards[i].StatusText);
-            }
-        }
-
-        if (cols.NextCol())
-        {
-            using (Ui.Card(id: "##health_Overlay", padding: 15f))
-            {
-                RenderOverlayCard();
             }
         }
     }
@@ -64,22 +50,5 @@ public sealed class SystemHealthSection(OverlayHost overlayHost)
         ImGuiHelpers.StatusDot(Theme.Success);
 
         ImGui.TextUnformatted(statusText);
-    }
-
-    private void RenderOverlayCard()
-    {
-        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
-        ImGui.TextUnformatted("Overlay");
-        ImGui.PopStyleColor();
-
-        ImGui.SameLine(0f, 8f);
-        var desired = overlayHost.DesiredEnabled;
-        if (ImGui.Checkbox("##DashOverlayEnabled", ref desired))
-        {
-            overlayHost.SetEnabled(desired);
-        }
-        ImGuiHelpers.HandCursorOnHover();
-
-        StatusPill.Render(overlayHost.Status, _elapsed, overlayHost.LastError);
     }
 }

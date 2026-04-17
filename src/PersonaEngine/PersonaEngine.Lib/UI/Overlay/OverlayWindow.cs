@@ -106,11 +106,12 @@ public sealed class OverlayWindow : IDisposable
 
     public bool IsVisible { get; private set; }
 
-    /// <summary>Fires when the user finishes moving the overlay.</summary>
-    public event Action<(int X, int Y)>? PositionCommitted;
-
-    /// <summary>Fires when the user finishes resizing the overlay.</summary>
-    public event Action<(int X, int Y)>? SizeCommitted;
+    /// <summary>
+    ///     Fires once when the user finishes dragging or resizing the overlay,
+    ///     carrying the final bounds. Single event — see
+    ///     <see cref="OverlayInteractionController.BoundsCommitted" />.
+    /// </summary>
+    public event Action<(int X, int Y, int W, int H)>? BoundsCommitted;
 
     /// <summary>
     ///     Fires when the window is closed externally (Alt+F4 / task manager).
@@ -190,7 +191,7 @@ public sealed class OverlayWindow : IDisposable
 
     private void Initialize()
     {
-        _logger.LogInformation(
+        _logger.LogDebug(
             "Overlay init: HWND=0x{Hwnd:X} size={Width}x{Height} source='{Source}'",
             _nativeWindow.Handle,
             _nativeWindow.Width,
@@ -203,11 +204,11 @@ public sealed class OverlayWindow : IDisposable
             _nativeWindow.Width,
             _nativeWindow.Height
         );
-        _logger.LogInformation("Overlay init: D3D11 + DirectComposition ready.");
+        _logger.LogDebug("Overlay init: D3D11 + DirectComposition ready.");
 
         _quad = new QuadPipeline(_d3d.Device, _d3d.Context);
         _chrome = new ChromeRenderer(_d3d.Device, _d3d.Context);
-        _logger.LogInformation("Overlay init: HLSL pipelines compiled.");
+        _logger.LogDebug("Overlay init: HLSL pipelines compiled.");
 
         _source = new SpoutD3D11Source(_d3d.Device, _initialConfig.Source);
 
@@ -222,10 +223,9 @@ public sealed class OverlayWindow : IDisposable
             aspect
         );
 
-        _interaction.PositionCommitted += pos => PositionCommitted?.Invoke(pos);
-        _interaction.SizeCommitted += size => SizeCommitted?.Invoke(size);
+        _interaction.BoundsCommitted += bounds => BoundsCommitted?.Invoke(bounds);
 
-        _logger.LogInformation("Overlay init complete — entering render loop.");
+        _logger.LogDebug("Overlay init complete — entering render loop.");
     }
 
     private void Render()
@@ -280,7 +280,7 @@ public sealed class OverlayWindow : IDisposable
             _firstFramePresented = true;
             _nativeWindow.Show();
             IsVisible = true;
-            _logger.LogInformation(
+            _logger.LogDebug(
                 "Overlay first frame presented — window shown. Spout source connected: {Connected}",
                 acquired
             );
@@ -326,7 +326,7 @@ public sealed class OverlayWindow : IDisposable
         }
 
         var fps = _framesSinceLastFpsLog / _fpsStopwatch.Elapsed.TotalSeconds;
-        _logger.LogInformation("Overlay FPS: {Fps:F1}", fps);
+        _logger.LogDebug("Overlay FPS: {Fps:F1}", fps);
 
         _framesSinceLastFpsLog = 0;
         _fpsStopwatch.Restart();

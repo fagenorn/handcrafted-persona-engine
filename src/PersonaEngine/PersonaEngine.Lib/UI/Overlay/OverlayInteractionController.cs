@@ -68,11 +68,14 @@ public sealed class OverlayInteractionController : IDisposable
 
     public OverlayHandle ActiveHandle => _activeHandle;
 
-    /// <summary>Fires when the user finishes moving the overlay.</summary>
-    public event Action<(int X, int Y)>? PositionCommitted;
-
-    /// <summary>Fires when the user finishes resizing the overlay.</summary>
-    public event Action<(int X, int Y)>? SizeCommitted;
+    /// <summary>
+    ///     Fires once when the user finishes dragging or resizing the overlay
+    ///     with the final bounds read directly from Win32. A single event
+    ///     (rather than separate Position + Size events) guarantees callers
+    ///     persist both halves in one write — two separate writes got
+    ///     clobbered by the config writer's debounce on resize gestures.
+    /// </summary>
+    public event Action<(int X, int Y, int W, int H)>? BoundsCommitted;
 
     public void Update(float deltaTime)
     {
@@ -283,20 +286,16 @@ public sealed class OverlayInteractionController : IDisposable
         // Read final bounds straight from Win32 — direct SetWindowPos calls
         // during the gesture bypassed any cached size fields.
         _win32.GetBounds(out var x, out var y, out var w, out var h);
-        var pos = (x, y);
-        var size = (w, h);
 
-        if (_isDragging)
-        {
-            _isDragging = false;
-            PositionCommitted?.Invoke(pos);
-        }
-        else
-        {
-            _isResizing = false;
-            SizeCommitted?.Invoke(size);
-            PositionCommitted?.Invoke(pos);
-        }
+        _isDragging = false;
+        _isResizing = false;
+
+        // Single event covering position + size. Previously the resize branch
+        // fired Size + Position back-to-back; the host read the debounced
+        // IOptionsMonitor.CurrentValue twice and the second write clobbered
+        // the first — resize committed at Win32 level, but config retained
+        // the pre-resize Width/Height and the panel kept showing them.
+        BoundsCommitted?.Invoke((x, y, w, h));
 
         _window.ReleaseMouse();
     }

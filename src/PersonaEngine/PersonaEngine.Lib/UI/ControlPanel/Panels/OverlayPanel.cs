@@ -13,12 +13,8 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels;
 /// </summary>
 public sealed class OverlayPanel(OverlayHost host, IOptionsMonitor<AvatarAppConfig> options)
 {
-    private float _elapsed;
-
     public void Render(float deltaTime)
     {
-        _elapsed += deltaTime;
-
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
         ImGui.PushTextWrapPos(0f);
         ImGui.TextUnformatted(
@@ -43,18 +39,16 @@ public sealed class OverlayPanel(OverlayHost host, IOptionsMonitor<AvatarAppConf
         );
 
         var desired = host.DesiredEnabled;
-        var status = host.Status;
 
         // Failed-state click-to-retry: clicking the checkbox from Failed is
-        // equivalent to SetEnabled(true) — the state machine permits
-        // TurnOn from Failed, which restarts the thread.
+        // equivalent to SetEnabled(true) — the state machine permits TurnOn
+        // from Failed, which restarts the thread. Live status and the
+        // retry affordance are surfaced in the Dashboard's presence strip;
+        // this row only owns the on/off write.
         if (ImGui.Checkbox("##OverlayEnabled", ref desired))
         {
             host.SetEnabled(desired);
         }
-
-        ImGui.SameLine(0f, 12f);
-        StatusPill.Render(status, _elapsed, host.LastError);
     }
 
     private void RenderGeometryRow()

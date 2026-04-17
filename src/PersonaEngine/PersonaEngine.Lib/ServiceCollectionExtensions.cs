@@ -447,6 +447,7 @@ public static class ServiceCollectionExtensions
 
         // Dashboard panel sections + services
         services.AddSingleton<SessionStatsCollector>();
+        services.AddSingleton<PresenceStripSection>();
         services.AddSingleton<SystemHealthSection>();
         services.AddSingleton<TranscriptSection>();
         services.AddSingleton<SessionStatsSection>();
