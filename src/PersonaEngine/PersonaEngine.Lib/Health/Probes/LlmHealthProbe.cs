@@ -12,7 +12,9 @@ namespace PersonaEngine.Lib.Health.Probes;
 public sealed class LlmHealthProbe : ISubsystemHealthProbe, IDisposable
 {
     private readonly ILlmConnectionProbe _inner;
+    private readonly object _gate = new();
     private SubsystemStatus _current;
+    private bool _disposed;
 
     public LlmHealthProbe(ILlmConnectionProbe inner)
     {
@@ -25,22 +27,58 @@ public sealed class LlmHealthProbe : ISubsystemHealthProbe, IDisposable
 
     public NavSection TargetPanel => NavSection.LlmConnection;
 
-    public SubsystemStatus Current => _current;
+    public SubsystemStatus Current
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _current;
+            }
+        }
+    }
 
     public event Action<SubsystemStatus>? StatusChanged;
 
-    public void Dispose() => _inner.StatusChanged -= OnChanged;
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+        }
+
+        _inner.StatusChanged -= OnChanged;
+    }
 
     private void OnChanged(LlmChannel _)
     {
-        var next = Compute();
-        if (next.Equals(_current))
+        SubsystemStatus? toFire = null;
+        lock (_gate)
         {
-            return;
+            if (_disposed)
+            {
+                return;
+            }
+
+            var next = Compute();
+            if (next.Equals(_current))
+            {
+                return;
+            }
+
+            _current = next;
+            toFire = next;
         }
 
-        _current = next;
-        StatusChanged?.Invoke(next);
+        if (toFire is { } status)
+        {
+            StatusChanged?.Invoke(status);
+        }
     }
 
     private SubsystemStatus Compute()
@@ -53,6 +91,9 @@ public sealed class LlmHealthProbe : ISubsystemHealthProbe, IDisposable
             return new SubsystemStatus(SubsystemHealth.Unknown, "Not tested", null);
         }
 
+        // Text is the load-bearing channel — anything not in the Healthy/Degraded/Unknown
+        // buckets (including a surprise Disabled, which LlmConnectionProbe never emits for
+        // text today) short-circuits to Failed.
         var textHealth = text.Status switch
         {
             LlmProbeStatus.Reachable => SubsystemHealth.Healthy,
@@ -76,6 +117,7 @@ public sealed class LlmHealthProbe : ISubsystemHealthProbe, IDisposable
             LlmProbeStatus.Reachable => SubsystemHealth.Healthy,
             LlmProbeStatus.Disabled => SubsystemHealth.Healthy,
             LlmProbeStatus.ModelMissing => SubsystemHealth.Degraded,
+            LlmProbeStatus.InvalidUrl => SubsystemHealth.Degraded,
             LlmProbeStatus.Probing => SubsystemHealth.Unknown,
             LlmProbeStatus.Unknown => SubsystemHealth.Unknown,
             _ => SubsystemHealth.Degraded,

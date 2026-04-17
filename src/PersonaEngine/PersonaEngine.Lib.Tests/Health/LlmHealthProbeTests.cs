@@ -30,6 +30,16 @@ public class LlmHealthProbeTests
     [InlineData(LlmProbeStatus.Unauthorized, LlmProbeStatus.Reachable, SubsystemHealth.Failed)]
     [InlineData(LlmProbeStatus.InvalidUrl, LlmProbeStatus.Reachable, SubsystemHealth.Failed)]
     [InlineData(LlmProbeStatus.Unknown, LlmProbeStatus.Unknown, SubsystemHealth.Unknown)]
+    // Probing handling
+    [InlineData(LlmProbeStatus.Probing, LlmProbeStatus.Probing, SubsystemHealth.Unknown)]
+    [InlineData(LlmProbeStatus.Probing, LlmProbeStatus.Reachable, SubsystemHealth.Unknown)]
+    [InlineData(LlmProbeStatus.Reachable, LlmProbeStatus.Probing, SubsystemHealth.Unknown)]
+    // Vision ModelMissing + InvalidUrl while text is Reachable
+    [InlineData(LlmProbeStatus.Reachable, LlmProbeStatus.ModelMissing, SubsystemHealth.Degraded)]
+    [InlineData(LlmProbeStatus.Reachable, LlmProbeStatus.InvalidUrl, SubsystemHealth.Degraded)]
+    // Text Disabled is an unreachable config in practice (only Vision can be Disabled via
+    // LlmConnectionProbe) but pin the defensive outcome in case the invariant breaks.
+    [InlineData(LlmProbeStatus.Disabled, LlmProbeStatus.Reachable, SubsystemHealth.Failed)]
     public void Current_MapsTextAndVision(
         LlmProbeStatus text,
         LlmProbeStatus vision,
