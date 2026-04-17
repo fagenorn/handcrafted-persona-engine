@@ -72,24 +72,14 @@ public sealed class SystemHealthSection : IDisposable
         var status = probe.Current;
         var (dotColor, labelColor) = Palette(status.Health);
 
-        // Capture the card's content rect for the click-through overlay.
-        var cardMin = ImGui.GetItemRectMin();
-        var cardMax = ImGui.GetItemRectMax();
+        // Claim the hit region first so the entire card is clickable. We're
+        // inside the Ui.Card child scope here; GetItemRectMin/Max would
+        // return the last item from the OUTER scope, so we use the current
+        // cursor / available content region instead.
+        var origin = ImGui.GetCursorScreenPos();
+        var avail = ImGui.GetContentRegionAvail();
 
-        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
-        ImGui.TextUnformatted(probe.Name);
-        ImGui.PopStyleColor();
-
-        ImGui.SameLine(0f, 8f);
-        ImGuiHelpers.StatusDot(dotColor);
-
-        ImGui.PushStyleColor(ImGuiCol.Text, labelColor);
-        ImGui.TextUnformatted(status.Label);
-        ImGui.PopStyleColor();
-
-        var size = cardMax - cardMin;
-        ImGui.SetCursorScreenPos(cardMin);
-        ImGui.InvisibleButton($"##nav_{probe.Name}", size);
+        ImGui.InvisibleButton($"##nav_{probe.Name}", avail);
         ImGuiHelpers.HandCursorOnHover();
 
         if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
@@ -101,6 +91,21 @@ public sealed class SystemHealthSection : IDisposable
         {
             ImGui.SetTooltip(status.Detail);
         }
+
+        // Reset cursor to the origin so the visual content draws on top of
+        // the invisible hit region.
+        ImGui.SetCursorScreenPos(origin);
+
+        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
+        ImGui.TextUnformatted(probe.Name);
+        ImGui.PopStyleColor();
+
+        ImGui.SameLine(0f, 8f);
+        ImGuiHelpers.StatusDot(dotColor);
+
+        ImGui.PushStyleColor(ImGuiCol.Text, labelColor);
+        ImGui.TextUnformatted(status.Label);
+        ImGui.PopStyleColor();
     }
 
     private static (Vector4 Dot, Vector4 Label) Palette(SubsystemHealth h) =>
