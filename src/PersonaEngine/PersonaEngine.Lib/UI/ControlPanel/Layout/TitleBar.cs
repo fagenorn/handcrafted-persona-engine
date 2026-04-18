@@ -21,6 +21,13 @@ public sealed class TitleBar
     private readonly string _title;
     private Win32WindowHelper? _windowHelper;
 
+    // Pre-allocated click callbacks. Built once after _windowHelper resolves
+    // so the 60-120 Hz Render loop doesn't synthesise three closures per
+    // frame (each capturing 'this' → heap allocation).
+    private Action? _minimizeClick;
+    private Action? _toggleMaximizeClick;
+    private Action? _closeClick;
+
     public TitleBar(WindowManager windowManager, IOptions<AvatarAppConfig> config)
     {
         _windowManager = windowManager;
@@ -29,9 +36,18 @@ public sealed class TitleBar
 
     public void Render(float deltaTime)
     {
-        _windowHelper ??= _windowManager.Win32Helper;
         if (_windowHelper is null)
-            return;
+        {
+            _windowHelper = _windowManager.Win32Helper;
+            if (_windowHelper is null)
+                return;
+
+            // _windowHelper is stable once assigned; bind the callbacks once.
+            var helper = _windowHelper;
+            _minimizeClick = helper.Minimize;
+            _toggleMaximizeClick = helper.ToggleMaximize;
+            _closeClick = helper.Close;
+        }
 
         var drawList = ImGui.GetWindowDrawList();
         var winPos = ImGui.GetWindowPos();
@@ -61,7 +77,7 @@ public sealed class TitleBar
             Theme.SurfaceHover,
             Theme.TextTertiary,
             Theme.TextPrimary,
-            () => _windowHelper.Minimize()
+            _minimizeClick!
         );
 
         RenderWindowButton(
@@ -74,7 +90,7 @@ public sealed class TitleBar
             Theme.SurfaceHover,
             Theme.TextTertiary,
             Theme.TextPrimary,
-            () => _windowHelper.ToggleMaximize()
+            _toggleMaximizeClick!
         );
 
         RenderWindowButton(
@@ -87,7 +103,7 @@ public sealed class TitleBar
             Theme.Error,
             Theme.TextTertiary,
             Theme.TextPrimary,
-            () => _windowHelper.Close()
+            _closeClick!
         );
 
         // App title — horizontally centered in the drag area, vertically centered
