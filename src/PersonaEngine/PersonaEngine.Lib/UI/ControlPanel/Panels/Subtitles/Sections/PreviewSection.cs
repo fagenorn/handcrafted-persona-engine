@@ -30,6 +30,12 @@ public sealed class PreviewSection : IDisposable
 
     private SubtitleOptions _opts;
 
+    // Caches the "Font: name · 24 pt" caption so a frame with unchanged font
+    // + size skips the per-frame interpolation + filename-stem allocation.
+    private string? _cachedFont;
+    private int _cachedFontSize = int.MinValue;
+    private string _cachedCaption = string.Empty;
+
     public PreviewSection(
         IOptionsMonitor<SubtitleOptions> monitor,
         SubtitlePreviewRenderer previewRenderer
@@ -101,14 +107,29 @@ public sealed class PreviewSection : IDisposable
         }
 
         // Small caption in the corner so the user can confirm the active font + size.
-        var caption = $"Font: {StripExt(_opts.Font)} · {_opts.FontSize} pt";
         drawList.AddText(
             canvasPos + new Vector2(CanvasPaddingX, CanvasPaddingY * 0.5f),
             ImGui.ColorConvertFloat4ToU32(Theme.TextSecondary),
-            caption
+            GetCaption()
         );
 
         ImGui.Dummy(canvasSize);
+    }
+
+    private string GetCaption()
+    {
+        if (
+            _cachedFontSize == _opts.FontSize
+            && string.Equals(_cachedFont, _opts.Font, StringComparison.Ordinal)
+        )
+        {
+            return _cachedCaption;
+        }
+
+        _cachedFont = _opts.Font;
+        _cachedFontSize = _opts.FontSize;
+        _cachedCaption = $"Font: {StripExt(_opts.Font)} \u00b7 {_opts.FontSize} pt";
+        return _cachedCaption;
     }
 
     private static string StripExt(string? fullName)

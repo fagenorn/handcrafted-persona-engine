@@ -13,6 +13,16 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels;
 /// </summary>
 public sealed class OverlayPanel(OverlayHost host, IOptionsMonitor<AvatarAppConfig> options)
 {
+    // Cache for the "Position: X, Y    Size: W × H" line. Rebuilds only when
+    // any of the four ints change (i.e., when the user drags or resizes the
+    // overlay), skipping the per-frame string interpolation the rest of the
+    // time.
+    private int _cachedX = int.MinValue;
+    private int _cachedY;
+    private int _cachedW;
+    private int _cachedH;
+    private string _cachedGeometryText = string.Empty;
+
     public void Render(float deltaTime)
     {
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
@@ -56,9 +66,7 @@ public sealed class OverlayPanel(OverlayHost host, IOptionsMonitor<AvatarAppConf
         var overlay = options.CurrentValue.Overlay;
 
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
-        ImGui.TextUnformatted(
-            $"Position: {overlay.X}, {overlay.Y}    Size: {overlay.Width} × {overlay.Height}"
-        );
+        ImGui.TextUnformatted(GetGeometryText(overlay.X, overlay.Y, overlay.Width, overlay.Height));
         ImGui.TextUnformatted("(drag the overlay's border to reposition or resize)");
         ImGui.PopStyleColor();
 
@@ -77,5 +85,20 @@ public sealed class OverlayPanel(OverlayHost host, IOptionsMonitor<AvatarAppConf
             host.ResetSize();
         }
         ImGuiHelpers.HandCursorOnHover();
+    }
+
+    private string GetGeometryText(int x, int y, int w, int h)
+    {
+        if (x == _cachedX && y == _cachedY && w == _cachedW && h == _cachedH)
+        {
+            return _cachedGeometryText;
+        }
+
+        _cachedX = x;
+        _cachedY = y;
+        _cachedW = w;
+        _cachedH = h;
+        _cachedGeometryText = $"Position: {x}, {y}    Size: {w} \u00d7 {h}";
+        return _cachedGeometryText;
     }
 }
