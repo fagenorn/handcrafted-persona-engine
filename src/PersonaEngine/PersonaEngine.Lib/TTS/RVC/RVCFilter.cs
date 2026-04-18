@@ -40,7 +40,23 @@ public class RVCFilter : IBufferedAudioFilter, IDisposable
 
     private readonly IRVCVoiceProvider _rvcVoiceProvider;
 
-    private RVCFilterOptions _currentOptions;
+    // volatile: _currentOptions is also read lock-free from MinimumSampleCount while the
+    // write lock path below publishes a new reference. Reference assignment is atomic on
+    // .NET; volatile gives us the release/acquire ordering needed for the writer-reader
+    // handoff without taking the ReaderWriterLockSlim on every meter-style read.
+    private volatile RVCFilterOptions _currentOptions;
+
+    // Bounded LRU cache of per-voice (predictor, model) pairs used by the audition
+    // override path. ONNX session construction is multi-second and GPU-pinned, so we
+    // keep the last few auditioned voices alive to make A/B previewing snappy.
+    // Access to the cache is serialized by _auditionCacheLock since eviction needs a
+    // coherent view of (entries, lru order).
+    private readonly Dictionary<string, AuditionCacheEntry> _auditionCache =
+        new(StringComparer.Ordinal);
+
+    private readonly LinkedList<string> _auditionCacheLru = new();
+    private readonly Lock _auditionCacheLock = new();
+    private const int AuditionCacheCapacity = 2;
 
     private bool _disposed;
 
@@ -200,41 +216,101 @@ public class RVCFilter : IBufferedAudioFilter, IDisposable
             return;
         }
 
-        // Different voice: load a throwaway instance for this call only.
-        var rmvpePath = _modelProvider.GetModelPath(IO.ModelType.Rvc.Rmvpe);
-        var hubertPath = _modelProvider.GetModelPath(IO.ModelType.Rvc.Hubert);
-        var voiceInfo = _rvcVoiceProvider.GetVoice(voice);
-
-        using var throwawayPredictor = new RmvpeOnnx(rmvpePath);
-        using var throwawayModel = new OnnxRVC(
-            voiceInfo.ModelPath,
-            effectiveOptions.HopSize,
-            hubertPath
-        );
+        // Different voice: use the per-voice audition cache so rapid A/B previewing
+        // doesn't pay the multi-second ONNX session construction on every call.
+        var entry = GetOrLoadAuditionEntry(voice, effectiveOptions.HopSize);
 
         if (audioSegment.AudioData.Length <= maxSamplesPerChunk)
             ProcessSingleChunk(
                 audioSegment,
                 effectiveOptions,
-                throwawayModel,
-                throwawayPredictor,
-                voiceInfo.OutputSampleRate
+                entry.Model,
+                entry.Predictor,
+                entry.OutputSampleRate
             );
         else
             ProcessInChunks(
                 audioSegment,
                 effectiveOptions,
                 maxSamplesPerChunk,
-                throwawayModel,
-                throwawayPredictor,
-                voiceInfo.OutputSampleRate
+                entry.Model,
+                entry.Predictor,
+                entry.OutputSampleRate
             );
     }
 
+    private AuditionCacheEntry GetOrLoadAuditionEntry(string voice, int hopSize)
+    {
+        lock (_auditionCacheLock)
+        {
+            if (
+                _auditionCache.TryGetValue(voice, out var existing)
+                && existing.HopSize == hopSize
+            )
+            {
+                // Promote to most-recently-used.
+                _auditionCacheLru.Remove(existing.LruNode);
+                _auditionCacheLru.AddFirst(existing.LruNode);
+                return existing;
+            }
+
+            // Stale entry for this voice (different hop size) — dispose and rebuild.
+            if (existing is not null)
+            {
+                _auditionCacheLru.Remove(existing.LruNode);
+                _auditionCache.Remove(voice);
+                existing.Predictor.Dispose();
+                existing.Model.Dispose();
+            }
+
+            var rmvpePath = _modelProvider.GetModelPath(IO.ModelType.Rvc.Rmvpe);
+            var hubertPath = _modelProvider.GetModelPath(IO.ModelType.Rvc.Hubert);
+            var voiceInfo = _rvcVoiceProvider.GetVoice(voice);
+
+            var predictor = new RmvpeOnnx(rmvpePath);
+            var model = new OnnxRVC(voiceInfo.ModelPath, hopSize, hubertPath);
+
+            var node = new LinkedListNode<string>(voice);
+            var entry = new AuditionCacheEntry(
+                predictor,
+                model,
+                voiceInfo.OutputSampleRate,
+                hopSize,
+                node
+            );
+
+            _auditionCache[voice] = entry;
+            _auditionCacheLru.AddFirst(node);
+
+            // Evict beyond capacity.
+            while (_auditionCacheLru.Count > AuditionCacheCapacity)
+            {
+                var victim = _auditionCacheLru.Last!;
+                _auditionCacheLru.RemoveLast();
+                if (_auditionCache.Remove(victim.Value, out var evicted))
+                {
+                    evicted.Predictor.Dispose();
+                    evicted.Model.Dispose();
+                }
+            }
+
+            return entry;
+        }
+    }
+
+    private sealed record AuditionCacheEntry(
+        RmvpeOnnx Predictor,
+        OnnxRVC Model,
+        int OutputSampleRate,
+        int HopSize,
+        LinkedListNode<string> LruNode
+    );
+
     public int Priority => 100;
 
-    // _currentOptions holds an immutable record; reference assignment is atomic on .NET,
-    // so this read does not require the lock.
+    // _currentOptions is volatile; the reference swap in OnOptionsChanged is released
+    // atomically so readers here see a consistent options snapshot without taking the
+    // ReaderWriterLockSlim. MinimumSampleCount does not depend on any other field.
     public int MinimumSampleCount => _currentOptions.Enabled ? MinWindowSamples : 0;
 
     public void Dispose()
@@ -253,16 +329,24 @@ public class RVCFilter : IBufferedAudioFilter, IDisposable
     {
         var stopwatch = Stopwatch.StartNew();
         var originalSampleRate = (uint)audioSegment.SampleRate;
-        var processedBuffer = ProcessChunk(
-            audioSegment.AudioData,
+        var input = audioSegment.AudioData;
+
+        // Upper-bound output size for a single chunk.
+        var outputUpperBound = ComputeChunkOutputUpperBound(input.Length, options.HopSize);
+        var destination = new float[outputUpperBound];
+
+        var sampleCount = ProcessChunk(
+            input,
             originalSampleRate,
             options,
             model,
             predictor,
-            voiceOutputRate
+            voiceOutputRate,
+            destination.AsMemory()
         );
 
-        audioSegment.AudioData = processedBuffer;
+        // Slice the backing array to the exact length the filter produced.
+        audioSegment.AudioData = destination.AsMemory(0, sampleCount);
         stopwatch.Stop();
         LogProcessingTime(
             audioSegment.AudioData.Length,
@@ -284,25 +368,41 @@ public class RVCFilter : IBufferedAudioFilter, IDisposable
         var originalSampleRate = (uint)audioSegment.SampleRate;
         var inputData = audioSegment.AudioData;
 
-        var chunks = new List<Memory<float>>();
+        // Upper-bound total output length: each chunk's worst case summed in one pass.
+        // This is conservative — actual length is accumulated from per-chunk sample counts
+        // below — but it lets us allocate the final buffer exactly once.
+        var outputUpperBound = 0;
+        for (var i = 0; i < inputData.Length; i += maxSamplesPerChunk)
+        {
+            var remaining = inputData.Length - i;
+            var currentChunkSize = Math.Min(maxSamplesPerChunk, remaining);
+            outputUpperBound += ComputeChunkOutputUpperBound(currentChunkSize, options.HopSize);
+        }
+
+        var destination = new float[outputUpperBound];
+        var writePosition = 0;
 
         for (var i = 0; i < inputData.Length; i += maxSamplesPerChunk)
         {
-            var remainingSamples = inputData.Length - i;
-            var currentChunkSize = Math.Min(maxSamplesPerChunk, remainingSamples);
+            var remaining = inputData.Length - i;
+            var currentChunkSize = Math.Min(maxSamplesPerChunk, remaining);
             var chunk = inputData.Slice(i, currentChunkSize);
-            var processedChunk = ProcessChunk(
+
+            var written = ProcessChunk(
                 chunk,
                 originalSampleRate,
                 options,
                 model,
                 predictor,
-                voiceOutputRate
+                voiceOutputRate,
+                destination.AsMemory(writePosition)
             );
-            chunks.Add(processedChunk);
+
+            writePosition += written;
         }
 
-        audioSegment.AudioData = CombineChunks(chunks);
+        // Slice the backing array to the exact total produced.
+        audioSegment.AudioData = destination.AsMemory(0, writePosition);
         stopwatch.Stop();
         LogProcessingTime(
             audioSegment.AudioData.Length,
@@ -311,13 +411,18 @@ public class RVCFilter : IBufferedAudioFilter, IDisposable
         );
     }
 
-    private Memory<float> ProcessChunk(
+    /// <summary>
+    ///     Writes the processed chunk into <paramref name="destination" /> and returns
+    ///     the number of samples written. Caller owns <paramref name="destination" />.
+    /// </summary>
+    private int ProcessChunk(
         Memory<float> inputChunk,
         uint originalSampleRate,
         RVCFilterOptions options,
         OnnxRVC model,
         IF0Predictor predictor,
-        int voiceOutputRate
+        int voiceOutputRate,
+        Memory<float> destination
     )
     {
         var resampleRatioToProcessing = (double)ProcessingSampleRate / originalSampleRate;
@@ -344,43 +449,29 @@ public class RVCFilter : IBufferedAudioFilter, IDisposable
             options.F0UpKey
         );
 
-        var resampleRatioToFinal = (double)originalSampleRate / voiceOutputRate;
-        var finalOutputSize = (int)Math.Ceiling(processedSampleCount * resampleRatioToFinal);
-
-        using var resampledOutput = PooledArray<float>.Rent(finalOutputSize);
         var finalSampleCount = AudioConverter.ResampleFloat(
             processingBuffer.Array.AsMemory(0, processedSampleCount),
-            resampledOutput.Array,
+            destination,
             1,
             (uint)voiceOutputRate,
             originalSampleRate
         );
 
-        var finalBuffer = new float[finalSampleCount];
-        Array.Copy(resampledOutput.Array, finalBuffer, finalSampleCount);
-        return finalBuffer.AsMemory();
+        return finalSampleCount;
     }
 
-    private Memory<float> CombineChunks(List<Memory<float>> chunks)
+    /// <summary>
+    ///     Upper bound on the final output sample count for a chunk of the given input
+    ///     length. The pipeline is: resample input(originalRate) → 16 kHz, reflection-pad
+    ///     (trimmed back out by the model), run synthesis at the voice's output rate,
+    ///     resample back to originalRate. End-to-end the output length equals the input
+    ///     length up to per-stage rounding (each Math.Ceiling can add one sample) and a
+    ///     sub-frame residual from the model's pad-trim Math.Round. Adding hopSize plus a
+    ///     small constant covers both with margin.
+    /// </summary>
+    private static int ComputeChunkOutputUpperBound(int inputChunkLength, int hopSize)
     {
-        if (chunks.Count == 0)
-            return Memory<float>.Empty;
-
-        if (chunks.Count == 1)
-            return chunks[0];
-
-        var totalSize = chunks.Sum(c => c.Length);
-
-        var combined = new float[totalSize];
-        var currentPosition = 0;
-
-        foreach (var chunk in chunks)
-        {
-            chunk.CopyTo(combined.AsMemory(currentPosition, chunk.Length));
-            currentPosition += chunk.Length;
-        }
-
-        return combined.AsMemory();
+        return inputChunkLength + hopSize + 32;
     }
 
     private void LogProcessingTime(
@@ -431,6 +522,19 @@ public class RVCFilter : IBufferedAudioFilter, IDisposable
         {
             _modelLock.ExitWriteLock();
         }
+
+        // Drain the audition cache.
+        lock (_auditionCacheLock)
+        {
+            foreach (var entry in _auditionCache.Values)
+            {
+                entry.Predictor.Dispose();
+                entry.Model.Dispose();
+            }
+
+            _auditionCache.Clear();
+            _auditionCacheLru.Clear();
+        }
     }
 
     private void OnOptionsChanged(RVCFilterOptions newOptions)
@@ -453,20 +557,40 @@ public class RVCFilter : IBufferedAudioFilter, IDisposable
 
                 OnnxRVC? oldModel;
                 IF0Predictor? oldPredictor;
+                bool disposedDuringLoad;
 
                 _modelLock.EnterWriteLock();
                 try
                 {
-                    oldModel = _rvcModel;
-                    oldPredictor = _f0Predictor;
-                    _rvcModel = newModel;
-                    _f0Predictor = newPredictor;
-                    _voiceOutputSampleRate = newRate;
-                    _currentOptions = newOptions;
+                    // Dispose may have run while we were loading ONNX sessions above.
+                    // If so, don't publish the freshly built instances — dispose them
+                    // and leave the field nulls set by DisposeResourcesInternal alone.
+                    disposedDuringLoad = _disposed;
+                    if (disposedDuringLoad)
+                    {
+                        oldModel = null;
+                        oldPredictor = null;
+                    }
+                    else
+                    {
+                        oldModel = _rvcModel;
+                        oldPredictor = _f0Predictor;
+                        _rvcModel = newModel;
+                        _f0Predictor = newPredictor;
+                        _voiceOutputSampleRate = newRate;
+                        _currentOptions = newOptions;
+                    }
                 }
                 finally
                 {
                     _modelLock.ExitWriteLock();
+                }
+
+                if (disposedDuringLoad)
+                {
+                    newPredictor.Dispose();
+                    newModel.Dispose();
+                    return;
                 }
 
                 // Safe to dispose old instances: no reader can still be holding them.
