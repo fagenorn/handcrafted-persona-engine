@@ -31,6 +31,12 @@ public sealed class LiveMeterWidget
     private const float AttackTime = 0.005f;
     private const float ReleaseTime = 0.250f;
 
+    // Power-of-two ring capacity lets us use bitmask wrap (& CapacityMask) instead
+    // of modulo. 512 ≫ any plausible per-frame sampling rate across TimeWindow; old
+    // entries past the window are filtered at draw time, not evicted.
+    private const int SampleCapacity = 512;
+    private const int CapacityMask = SampleCapacity - 1;
+
     private readonly IMicrophoneAmplitudeProvider _micAmp;
     private readonly IVadProbabilityProvider _vadProb;
 
@@ -38,7 +44,12 @@ public sealed class LiveMeterWidget
     private float _envelope;
     private float _elapsed;
     private bool _isDraggingThreshold;
-    private readonly List<TraceSample> _samples = new(256);
+
+    // Fixed-capacity ring: _samples[(_head - _count + i) & CapacityMask] yields
+    // entries oldest→newest for i in [0, _count). Writes land at _head, then advance.
+    private readonly TraceSample[] _samples = new TraceSample[SampleCapacity];
+    private int _head;
+    private int _count;
 
     public LiveMeterWidget(IMicrophoneAmplitudeProvider micAmp, IVadProbabilityProvider vadProb)
     {
@@ -105,15 +116,27 @@ public sealed class LiveMeterWidget
                 : 1f - MathF.Exp(-dt / ReleaseTime);
         _envelope += (rawProb - _envelope) * coeff;
 
-        _samples.Add(new TraceSample(_elapsed, _envelope));
+        // Ring-buffer write: overwrite at head, advance with wrap. When full, the
+        // oldest sample is silently overwritten — it's outside TimeWindow anyway,
+        // and the draw path skips entries older than the cutoff.
+        _samples[_head] = new TraceSample(_elapsed, _envelope);
+        _head = (_head + 1) & CapacityMask;
+        if (_count < SampleCapacity)
+            _count++;
+    }
 
-        // Evict samples older than the visible time window.
+    /// <summary>Sample at chronological index <paramref name="i" /> (0 = oldest, <see cref="_count" /> - 1 = newest).</summary>
+    private TraceSample GetSample(int i) =>
+        _samples[(_head - _count + i) & CapacityMask];
+
+    /// <summary>First chronological index whose timestamp is within the visible window.</summary>
+    private int FirstVisibleIndex()
+    {
         var cutoff = _elapsed - TimeWindow;
-        var removeCount = 0;
-        while (removeCount < _samples.Count && _samples[removeCount].Time < cutoff)
-            removeCount++;
-        if (removeCount > 0)
-            _samples.RemoveRange(0, removeCount);
+        var start = 0;
+        while (start < _count && GetSample(start).Time < cutoff)
+            start++;
+        return start;
     }
 
     // ── Banner ──────────────────────────────────────────────────────────────
@@ -173,7 +196,7 @@ public sealed class LiveMeterWidget
             var yMax = centerY + pipHeight * 0.5f;
 
             var litAmount = Math.Clamp(active - i, 0f, 1f);
-            var col = LerpColor(Theme.Surface3, Theme.AccentPrimary, litAmount);
+            var col = Vector4.Lerp(Theme.Surface3, Theme.AccentPrimary, litAmount);
             ImGui.AddRectFilled(
                 drawList,
                 new Vector2(x, yMin),
@@ -284,27 +307,33 @@ public sealed class LiveMeterWidget
         float threshold
     )
     {
-        if (_samples.Count < 2)
+        if (_count < 2)
             return;
 
         var aboveCol = ImGui.ColorConvertFloat4ToU32(Theme.AccentPrimary);
         var belowCol = ImGui.ColorConvertFloat4ToU32(Theme.TextSecondary);
 
+        var start = FirstVisibleIndex();
+        if (_count - start < 2)
+            return;
+
         Vector2 previous = default;
-        for (var i = 0; i < _samples.Count; i++)
+        TraceSample prevSample = default;
+        for (var i = start; i < _count; i++)
         {
-            var s = _samples[i];
+            var s = GetSample(i);
             var x = TimeToX(s.Time, plotMin.X, plotWidth);
             var y = plotMax.Y - plotHeight * Math.Clamp(s.Value, 0f, 1f);
             var point = new Vector2(x, y);
 
-            if (i > 0)
+            if (i > start)
             {
-                var speaking = _samples[i - 1].Value > threshold || s.Value > threshold;
+                var speaking = prevSample.Value > threshold || s.Value > threshold;
                 ImGui.AddLine(drawList, previous, point, speaking ? aboveCol : belowCol, 1.75f);
             }
 
             previous = point;
+            prevSample = s;
         }
     }
 
@@ -318,21 +347,22 @@ public sealed class LiveMeterWidget
         float thresholdY
     )
     {
-        if (_samples.Count < 2)
+        if (_count < 2)
             return;
 
         var fillCol = ImGui.ColorConvertFloat4ToU32(Theme.AccentPrimary with { W = 0.18f });
 
-        for (var i = 0; i < _samples.Count; i++)
+        var start = FirstVisibleIndex();
+        for (var i = start; i < _count; i++)
         {
-            var s = _samples[i];
+            var s = GetSample(i);
             if (s.Value <= threshold)
                 continue;
 
             var x0 = TimeToX(s.Time, plotMin.X, plotWidth);
             var x1 =
-                i + 1 < _samples.Count
-                    ? TimeToX(_samples[i + 1].Time, plotMin.X, plotWidth)
+                i + 1 < _count
+                    ? TimeToX(GetSample(i + 1).Time, plotMin.X, plotWidth)
                     : plotMin.X + plotWidth;
 
             var y = plotMax.Y - plotHeight * Math.Clamp(s.Value, 0f, 1f);
@@ -391,17 +421,6 @@ public sealed class LiveMeterWidget
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
-
-    private static Vector4 LerpColor(Vector4 a, Vector4 b, float t)
-    {
-        t = Math.Clamp(t, 0f, 1f);
-        return new Vector4(
-            a.X + (b.X - a.X) * t,
-            a.Y + (b.Y - a.Y) * t,
-            a.Z + (b.Z - a.Z) * t,
-            a.W + (b.W - a.W) * t
-        );
-    }
 
     private readonly record struct TraceSample(float Time, float Value);
 }
