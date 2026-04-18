@@ -10,6 +10,7 @@ public enum SubsystemHealth
     Healthy,
     Degraded,
     Failed,
+    Muted,
     Disabled,
 }
 
