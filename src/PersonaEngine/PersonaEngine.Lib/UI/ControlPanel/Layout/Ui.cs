@@ -31,14 +31,35 @@ public static class Ui
     /// <summary>
     ///     Pre-resolves a sequence of row sizes so Fill rows correctly account for all
     ///     sibling Fixed rows. Call <see cref="RowGroupScope.Next"/> for each row in order.
+    ///     Does not support <see cref="Sz.Auto"/>; use the <c>id</c>-carrying overloads
+    ///     for mixed Fixed/Auto/Fill groups.
     /// </summary>
-    public static RowGroupScope Rows(params Sz[] sizes) => new(sizes, 0f);
+    public static RowGroupScope Rows(params Sz[] sizes) => new(string.Empty, sizes, 0f);
 
     /// <summary>
     ///     Pre-resolves a sequence of row sizes with a gap between each row.
     ///     Call <see cref="RowGroupScope.Next"/> for each row in order.
+    ///     Does not support <see cref="Sz.Auto"/>; use the <c>id</c>-carrying overloads
+    ///     for mixed Fixed/Auto/Fill groups.
     /// </summary>
-    public static RowGroupScope Rows(float gap, params Sz[] sizes) => new(sizes, gap);
+    public static RowGroupScope Rows(float gap, params Sz[] sizes) => new(string.Empty, sizes, gap);
+
+    /// <summary>
+    ///     Identity-keyed row group that supports <see cref="Sz.Auto"/> alongside
+    ///     <see cref="Sz.Fixed"/> and <see cref="Sz.Fill"/>. Auto-row heights are
+    ///     measured each frame and cached per <paramref name="id"/> so Fill rows can
+    ///     compute their share correctly without a second pass. Use distinct ids for
+    ///     distinct call sites (sharing an id collapses their caches, which is only
+    ///     safe if the two sites always render identically-shaped groups).
+    /// </summary>
+    public static RowGroupScope Rows(string id, params Sz[] sizes) => new(id, sizes, 0f);
+
+    /// <summary>
+    ///     Identity-keyed row group (see <see cref="Rows(string, Sz[])"/>) with a gap
+    ///     between rows.
+    /// </summary>
+    public static RowGroupScope Rows(string id, float gap, params Sz[] sizes) =>
+        new(id, sizes, gap);
 
     /// <summary>
     ///     Creates N equal-width columns side by side. Call <see cref="EqualColsScope.NextCol"/>
