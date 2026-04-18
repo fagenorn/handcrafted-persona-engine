@@ -179,62 +179,47 @@ public sealed class VisionLlmSection : IDisposable
 
     private void RenderEndpointRow()
     {
-        var rowY = ImGui.GetCursorPosY();
-        ImGuiHelpers.SettingLabel("Endpoint", "Vision-capable OpenAI-compatible URL.");
-
-        EndpointPickerRow.Render(
-            "VisionEndpoint",
-            EndpointPickerRow.DefaultPresets,
-            _endpointBuf,
+        LlmChannelSection.EndpointRow(
+            "Vision",
+            "Vision-capable OpenAI-compatible URL.",
+            ref _endpointBuf,
             out var next
         );
-
         if (next is not null)
         {
-            _endpointBuf = next;
             WriteSnapshot(_snapshot with { VisionEndpoint = _endpointBuf });
         }
-
-        ImGuiHelpers.SettingEndRow(rowY);
     }
 
     private void RenderModelRow()
     {
-        var rowY = ImGui.GetCursorPosY();
-        ImGuiHelpers.SettingLabel("Model", "Vision-capable model on the endpoint above.");
-
-        ScannedModelPicker.Render(
+        LlmChannelSection.ModelRow(
+            "Vision-capable model on the endpoint above.",
             _probe.VisionStatus.Status,
             _probe.VisionStatus.AvailableModels,
-            _modelBuf,
-            out var next,
-            onRequestReprobe: _onTestClicked
+            ref _modelBuf,
+            _onTestClicked,
+            out var next
         );
-
         if (next is not null)
         {
-            _modelBuf = next;
             WriteSnapshot(_snapshot with { VisionModel = _modelBuf });
         }
-
-        ImGuiHelpers.SettingEndRow(rowY);
     }
 
     private void RenderApiKeyRow()
     {
-        var rowY = ImGui.GetCursorPosY();
-        ImGuiHelpers.SettingLabel(
-            "API Key",
-            "Authentication token. Leave blank for local endpoints."
+        LlmChannelSection.ApiKeyRow(
+            "Vision",
+            ref _apiKeyBuf,
+            ref _showKey,
+            _endpointBuf,
+            out var next
         );
-
-        ApiKeyRow.Render("VisionKey", ref _apiKeyBuf, ref _showKey, _endpointBuf, out var next);
         if (next is not null)
         {
             WriteSnapshot(_snapshot with { VisionApiKey = _apiKeyBuf });
         }
-
-        ImGuiHelpers.SettingEndRow(rowY);
     }
 
     private void RenderFooterRow(float dt)

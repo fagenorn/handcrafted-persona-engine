@@ -118,62 +118,47 @@ public sealed class TextLlmSection : IDisposable
 
     private void RenderEndpointRow()
     {
-        var rowY = ImGui.GetCursorPosY();
-        ImGuiHelpers.SettingLabel("Endpoint", "Base URL of the OpenAI-compatible API.");
-
-        EndpointPickerRow.Render(
-            "TextEndpoint",
-            EndpointPickerRow.DefaultPresets,
-            _endpointBuf,
+        LlmChannelSection.EndpointRow(
+            "Text",
+            "Base URL of the OpenAI-compatible API.",
+            ref _endpointBuf,
             out var next
         );
-
         if (next is not null)
         {
-            _endpointBuf = next;
             WriteSnapshot(_snapshot with { TextEndpoint = _endpointBuf });
         }
-
-        ImGuiHelpers.SettingEndRow(rowY);
     }
 
     private void RenderModelRow()
     {
-        var rowY = ImGui.GetCursorPosY();
-        ImGuiHelpers.SettingLabel("Model", "Which model to use for chat responses.");
-
-        ScannedModelPicker.Render(
+        LlmChannelSection.ModelRow(
+            "Which model to use for chat responses.",
             _probe.TextStatus.Status,
             _probe.TextStatus.AvailableModels,
-            _modelBuf,
-            out var next,
-            onRequestReprobe: _onTestClicked
+            ref _modelBuf,
+            _onTestClicked,
+            out var next
         );
-
         if (next is not null)
         {
-            _modelBuf = next;
             WriteSnapshot(_snapshot with { TextModel = _modelBuf });
         }
-
-        ImGuiHelpers.SettingEndRow(rowY);
     }
 
     private void RenderApiKeyRow()
     {
-        var rowY = ImGui.GetCursorPosY();
-        ImGuiHelpers.SettingLabel(
-            "API Key",
-            "Authentication token. Leave blank for local endpoints."
+        LlmChannelSection.ApiKeyRow(
+            "Text",
+            ref _apiKeyBuf,
+            ref _showKey,
+            _endpointBuf,
+            out var next
         );
-
-        ApiKeyRow.Render("TextKey", ref _apiKeyBuf, ref _showKey, _endpointBuf, out var next);
         if (next is not null)
         {
             WriteSnapshot(_snapshot with { TextApiKey = _apiKeyBuf });
         }
-
-        ImGuiHelpers.SettingEndRow(rowY);
     }
 
     private void RenderFooterRow(float dt)
