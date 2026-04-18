@@ -7,35 +7,28 @@ using PersonaEngine.Lib.Core.Conversation.Implementations.Context;
 
 namespace PersonaEngine.Lib.Core.Conversation.Implementations.Session;
 
-public class ConversationOrchestrator : IConversationOrchestrator
+public class ConversationOrchestrator(
+    ILogger<ConversationOrchestrator> logger,
+    IConversationSessionFactory sessionFactory,
+    IOptions<ConversationOptions> conversationOptions,
+    IOptionsMonitor<ConversationContextOptions> conversationContextOptions
+) : IConversationOrchestrator
 {
     private readonly ConcurrentDictionary<
         Guid,
         (IConversationSession Session, ValueTask RunTask)
     > _activeSessions = new();
 
-    private readonly IOptionsMonitor<ConversationContextOptions> _conversationContextOptions;
+    private readonly IOptionsMonitor<ConversationContextOptions> _conversationContextOptions =
+        conversationContextOptions;
 
-    private readonly IOptions<ConversationOptions> _conversationOptions;
+    private readonly IOptions<ConversationOptions> _conversationOptions = conversationOptions;
 
-    private readonly ILogger<ConversationOrchestrator> _logger;
+    private readonly ILogger<ConversationOrchestrator> _logger = logger;
 
     private readonly CancellationTokenSource _orchestratorCts = new();
 
-    private readonly IConversationSessionFactory _sessionFactory;
-
-    public ConversationOrchestrator(
-        ILogger<ConversationOrchestrator> logger,
-        IConversationSessionFactory sessionFactory,
-        IOptions<ConversationOptions> conversationOptions,
-        IOptionsMonitor<ConversationContextOptions> conversationContextOptions
-    )
-    {
-        _logger = logger;
-        _sessionFactory = sessionFactory;
-        _conversationOptions = conversationOptions;
-        _conversationContextOptions = conversationContextOptions;
-    }
+    private readonly IConversationSessionFactory _sessionFactory = sessionFactory;
 
     public async ValueTask DisposeAsync()
     {
@@ -229,91 +222,85 @@ public class ConversationOrchestrator : IConversationOrchestrator
         }
     }
 
-    public async ValueTask PauseAllSessionsAsync(CancellationToken cancellationToken = default)
-    {
-        var activeSessionIds = _activeSessions.Keys.ToList();
-        foreach (var sessionId in activeSessionIds)
-        {
-            if (!_activeSessions.TryGetValue(sessionId, out var sessionInfo))
-            {
-                continue;
-            }
+    public ValueTask PauseAllSessionsAsync(CancellationToken cancellationToken = default) =>
+        ForEachSessionAsync(
+            (s, ct) => s.PauseAsync(ct),
+            "Error pausing session {SessionId}.",
+            cancellationToken
+        );
 
-            try
-            {
-                await sessionInfo.Session.PauseAsync(cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error pausing session {SessionId}.", sessionId);
-            }
+    public ValueTask ResumeAllSessionsAsync(CancellationToken cancellationToken = default) =>
+        ForEachSessionAsync(
+            (s, ct) => s.ResumeAsync(ct),
+            "Error resuming session {SessionId}.",
+            cancellationToken
+        );
+
+    public ValueTask CancelActiveTurnsAsync(CancellationToken cancellationToken = default) =>
+        ForEachSessionAsync(
+            (s, ct) => s.CancelAsync(ct),
+            "Error cancelling active turn on session {SessionId}.",
+            cancellationToken
+        );
+
+    public ValueTask RetryErroredSessionsAsync(CancellationToken cancellationToken = default) =>
+        ForEachSessionAsync(
+            (s, ct) => s.RetryAsync(ct),
+            "Error retrying session {SessionId}.",
+            cancellationToken
+        );
+
+    /// <summary>
+    ///     Fan out an independent per-session async operation across every active session and
+    ///     await all of them concurrently. Each session's failure is logged with
+    ///     <paramref name="errorMessageTemplate"/> (which must contain the <c>{SessionId}</c>
+    ///     placeholder) and does not prevent other sessions from completing.
+    /// </summary>
+    private async ValueTask ForEachSessionAsync(
+        Func<IConversationSession, CancellationToken, ValueTask> action,
+        string errorMessageTemplate,
+        CancellationToken cancellationToken
+    )
+    {
+        var snapshot = _activeSessions.ToArray();
+        if (snapshot.Length == 0)
+        {
+            return;
         }
+
+        var tasks = new Task[snapshot.Length];
+        for (var i = 0; i < snapshot.Length; i++)
+        {
+            var sessionId = snapshot[i].Key;
+            var session = snapshot[i].Value.Session;
+            tasks[i] = InvokeAsync(session, sessionId, action, errorMessageTemplate, cancellationToken);
+        }
+
+        await Task.WhenAll(tasks).ConfigureAwait(false);
     }
 
-    public async ValueTask ResumeAllSessionsAsync(CancellationToken cancellationToken = default)
+    private async Task InvokeAsync(
+        IConversationSession? session,
+        Guid sessionId,
+        Func<IConversationSession, CancellationToken, ValueTask> action,
+        string errorMessageTemplate,
+        CancellationToken cancellationToken
+    )
     {
-        var activeSessionIds = _activeSessions.Keys.ToList();
-        foreach (var sessionId in activeSessionIds)
+        // Guard against the placeholder slot inserted by StartNewSessionAsync before
+        // the real session tuple is swapped in.
+        if (session is null)
         {
-            if (!_activeSessions.TryGetValue(sessionId, out var sessionInfo))
-            {
-                continue;
-            }
-
-            try
-            {
-                await sessionInfo.Session.ResumeAsync(cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error resuming session {SessionId}.", sessionId);
-            }
+            return;
         }
-    }
 
-    public async ValueTask CancelActiveTurnsAsync(CancellationToken cancellationToken = default)
-    {
-        var activeSessionIds = _activeSessions.Keys.ToList();
-        foreach (var sessionId in activeSessionIds)
+        try
         {
-            if (!_activeSessions.TryGetValue(sessionId, out var sessionInfo))
-            {
-                continue;
-            }
-
-            try
-            {
-                await sessionInfo.Session.CancelAsync(cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(
-                    ex,
-                    "Error cancelling active turn on session {SessionId}.",
-                    sessionId
-                );
-            }
+            await action(session, cancellationToken).ConfigureAwait(false);
         }
-    }
-
-    public async ValueTask RetryErroredSessionsAsync(CancellationToken cancellationToken = default)
-    {
-        var activeSessionIds = _activeSessions.Keys.ToList();
-        foreach (var sessionId in activeSessionIds)
+        catch (Exception ex)
         {
-            if (!_activeSessions.TryGetValue(sessionId, out var sessionInfo))
-            {
-                continue;
-            }
-
-            try
-            {
-                await sessionInfo.Session.RetryAsync(cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error retrying session {SessionId}.", sessionId);
-            }
+            _logger.LogError(ex, errorMessageTemplate, sessionId);
         }
     }
 
