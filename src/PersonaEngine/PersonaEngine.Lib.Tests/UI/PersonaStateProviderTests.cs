@@ -1,5 +1,4 @@
 using NSubstitute;
-using NSubstitute.ExceptionExtensions;
 using OpenAI.Chat;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Adapters;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
@@ -19,10 +18,21 @@ public class PersonaStateProviderTests
 
     private PersonaStateProvider CreateProvider() => new(_orchestrator, _amplitudeProvider);
 
+    private void StubFirstActiveSession(IConversationSession session)
+    {
+        _orchestrator
+            .TryGetFirstActiveSession(out Arg.Any<IConversationSession?>())
+            .Returns(call =>
+            {
+                call[0] = session;
+                return true;
+            });
+    }
+
     [Fact]
     public void State_NoSessions_ReturnsNoSession()
     {
-        _orchestrator.GetActiveSessionIds().Returns(Enumerable.Empty<Guid>());
+        // Default substitute returns false and null — no stubbing needed.
         var provider = CreateProvider();
 
         provider.Update(0.016f);
@@ -33,7 +43,6 @@ public class PersonaStateProviderTests
     [Fact]
     public void State_SessionWithNoPendingTurn_ReturnsIdle()
     {
-        var sessionId = Guid.NewGuid();
         var session = Substitute.For<IConversationSession>();
         var context = Substitute.For<IConversationContext>();
         context.PendingTurn.Returns((InteractionTurn?)null);
@@ -43,8 +52,7 @@ public class PersonaStateProviderTests
         // Pin an active state so the under-test Idle/Thinking/Speaking logic runs.
         session.CurrentState.Returns(ConversationState.Idle);
 
-        _orchestrator.GetActiveSessionIds().Returns(new[] { sessionId });
-        _orchestrator.GetSession(sessionId).Returns(session);
+        StubFirstActiveSession(session);
 
         var provider = CreateProvider();
         provider.Update(0.016f);
@@ -55,15 +63,13 @@ public class PersonaStateProviderTests
     [Fact]
     public void StateJustChanged_OnTransition_IsTrue()
     {
-        var sessionId = Guid.NewGuid();
         var session = Substitute.For<IConversationSession>();
         var context = Substitute.For<IConversationContext>();
         context.PendingTurn.Returns((InteractionTurn?)null);
         session.Context.Returns(context);
         session.CurrentState.Returns(ConversationState.Idle);
 
-        _orchestrator.GetActiveSessionIds().Returns(new[] { sessionId });
-        _orchestrator.GetSession(sessionId).Returns(session);
+        StubFirstActiveSession(session);
 
         var provider = CreateProvider();
 
@@ -79,7 +85,6 @@ public class PersonaStateProviderTests
     [Fact]
     public void AudioAmplitude_DelegatesToProvider()
     {
-        _orchestrator.GetActiveSessionIds().Returns(Enumerable.Empty<Guid>());
         _amplitudeProvider.CurrentAmplitude.Returns(0.75f);
 
         var provider = CreateProvider();
@@ -91,7 +96,6 @@ public class PersonaStateProviderTests
     [Fact]
     public void IsAudioPlaying_DelegatesToProvider()
     {
-        _orchestrator.GetActiveSessionIds().Returns(Enumerable.Empty<Guid>());
         _amplitudeProvider.IsPlaying.Returns(true);
 
         var provider = CreateProvider();
@@ -103,8 +107,6 @@ public class PersonaStateProviderTests
     [Fact]
     public void StateElapsed_Accumulates_WhenStateUnchanged()
     {
-        _orchestrator.GetActiveSessionIds().Returns(Enumerable.Empty<Guid>());
-
         var provider = CreateProvider();
         provider.Update(0.1f); // Initial → NoSession transition, elapsed resets then += 0.1
         provider.Update(0.2f); // Same state, elapsed += 0.2
@@ -116,11 +118,15 @@ public class PersonaStateProviderTests
     }
 
     [Fact]
-    public void GetSession_Throwing_FallsBackToNoSession()
+    public void TryGetFirstActiveSession_ReturnsFalse_FallsBackToNoSession()
     {
-        var sessionId = Guid.NewGuid();
-        _orchestrator.GetActiveSessionIds().Returns(new[] { sessionId });
-        _orchestrator.GetSession(sessionId).Throws(new KeyNotFoundException());
+        _orchestrator
+            .TryGetFirstActiveSession(out Arg.Any<IConversationSession?>())
+            .Returns(call =>
+            {
+                call[0] = null;
+                return false;
+            });
 
         var provider = CreateProvider();
         provider.Update(0.016f);
@@ -131,7 +137,6 @@ public class PersonaStateProviderTests
     [Fact]
     public void State_PendingTurnWithNoMessages_ReturnsThinking()
     {
-        var sessionId = Guid.NewGuid();
         var session = Substitute.For<IConversationSession>();
         var context = Substitute.For<IConversationContext>();
 
@@ -148,8 +153,7 @@ public class PersonaStateProviderTests
         session.Context.Returns(context);
         session.CurrentState.Returns(ConversationState.WaitingForLlm);
 
-        _orchestrator.GetActiveSessionIds().Returns(new[] { sessionId });
-        _orchestrator.GetSession(sessionId).Returns(session);
+        StubFirstActiveSession(session);
 
         var provider = CreateProvider();
         provider.Update(0.016f);
@@ -160,7 +164,6 @@ public class PersonaStateProviderTests
     [Fact]
     public void State_PendingTurnWithMessages_ReturnsSpeaking()
     {
-        var sessionId = Guid.NewGuid();
         var session = Substitute.For<IConversationSession>();
         var context = Substitute.For<IConversationContext>();
 
@@ -187,8 +190,7 @@ public class PersonaStateProviderTests
         session.Context.Returns(context);
         session.CurrentState.Returns(ConversationState.Speaking);
 
-        _orchestrator.GetActiveSessionIds().Returns(new[] { sessionId });
-        _orchestrator.GetSession(sessionId).Returns(session);
+        StubFirstActiveSession(session);
 
         var provider = CreateProvider();
         provider.Update(0.016f);

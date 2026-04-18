@@ -10,6 +10,22 @@ public interface IConversationOrchestrator : IAsyncDisposable
 
     IEnumerable<Guid> GetActiveSessionIds();
 
+    /// <summary>
+    ///     Non-allocating single-session accessor for UI hot paths that only need
+    ///     "the first session, if any". Returns <c>true</c> and sets
+    ///     <paramref name="session"/> when at least one session is active; returns
+    ///     <c>false</c> and <c>null</c> otherwise. Avoids the <see cref="List{T}"/>
+    ///     allocation performed by <see cref="GetActiveSessionIds"/> plus the
+    ///     subsequent <see cref="GetSession"/> lookup/throw cycle.
+    /// </summary>
+    bool TryGetFirstActiveSession([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IConversationSession? session);
+
+    /// <summary>
+    ///     Point-in-time active-session count. Allocation-free — unlike counting
+    ///     <see cref="GetActiveSessionIds"/>, which materialises a list.
+    /// </summary>
+    int ActiveSessionCount { get; }
+
     ValueTask StopAllSessionsAsync();
 
     /// <summary>

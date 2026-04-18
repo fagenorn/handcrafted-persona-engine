@@ -173,6 +173,31 @@ public class ConversationOrchestrator : IConversationOrchestrator
         return _activeSessions.Keys.ToList();
     }
 
+    public int ActiveSessionCount => _activeSessions.Count;
+
+    public bool TryGetFirstActiveSession(
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IConversationSession? session
+    )
+    {
+        // ConcurrentDictionary's struct enumerator is allocation-free and snapshots
+        // a valid point-in-time view (items are never torn). We take the first
+        // entry whose Session field has been populated — StartNewSessionAsync
+        // briefly inserts a placeholder (null!, CompletedTask) before swapping in
+        // the real tuple, so we must guard against the null sentinel here.
+        foreach (var kvp in _activeSessions)
+        {
+            var candidate = kvp.Value.Session;
+            if (candidate is not null)
+            {
+                session = candidate;
+                return true;
+            }
+        }
+
+        session = null;
+        return false;
+    }
+
     public async ValueTask StopAllSessionsAsync()
     {
         if (!_orchestratorCts.IsCancellationRequested)

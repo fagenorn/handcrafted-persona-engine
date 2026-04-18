@@ -18,9 +18,7 @@ public sealed class TranscriptSection(IConversationOrchestrator orchestrator)
 
         using (Ui.FillChild("##Messages", ImGuiChildFlags.Borders, padding: 8f))
         {
-            var session = TryGetActiveSession();
-
-            if (session is null)
+            if (!orchestrator.TryGetFirstActiveSession(out var session))
             {
                 ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
                 ImGui.TextUnformatted("No active conversation.");
@@ -71,22 +69,5 @@ public sealed class TranscriptSection(IConversationOrchestrator orchestrator)
         ImGui.PopTextWrapPos();
 
         ImGui.Spacing();
-    }
-
-    private IConversationSession? TryGetActiveSession()
-    {
-        var sessionIds = orchestrator.GetActiveSessionIds().ToList();
-
-        if (sessionIds.Count == 0)
-            return null;
-
-        try
-        {
-            return orchestrator.GetSession(sessionIds[0]);
-        }
-        catch (KeyNotFoundException)
-        {
-            return null;
-        }
     }
 }

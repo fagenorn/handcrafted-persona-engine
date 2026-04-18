@@ -57,27 +57,8 @@ public sealed class PersonaStateProvider
 
     private PersonaUiState DeriveState()
     {
-        var sessionIds = _orchestrator.GetActiveSessionIds();
-        Guid? firstId = null;
-
-        foreach (var id in sessionIds)
-        {
-            firstId = id;
-            break;
-        }
-
-        if (firstId is null)
+        if (!_orchestrator.TryGetFirstActiveSession(out var session))
             return PersonaUiState.NoSession;
-
-        IConversationSession session;
-        try
-        {
-            session = _orchestrator.GetSession(firstId.Value);
-        }
-        catch (KeyNotFoundException)
-        {
-            return PersonaUiState.NoSession;
-        }
 
         var conversationState = session.CurrentState;
 

@@ -21,6 +21,17 @@ public sealed class StatusBar(IConversationOrchestrator orchestrator, PresenceOr
 
     private float _smoothedAmplitude;
 
+    // Cache for the "Listening (N)" label so the multi-session case doesn't
+    // interpolate a fresh string each frame. _listeningLabelCount is the N
+    // that produced _cachedListeningLabel.
+    private int _listeningLabelCount = -1;
+    private string _cachedListeningLabel = "Listening";
+
+    // Cache the most recently rendered "\u2014 snippet" line so repeat frames with
+    // unchanged snippet text don't pay for a fresh string concatenation.
+    private string? _cachedSpeechSnippet;
+    private string? _cachedSpeechLine;
+
     public void Render(float deltaTime, PersonaStateProvider stateProvider)
     {
         presenceOrb.Update(deltaTime, stateProvider);
@@ -49,7 +60,7 @@ public sealed class StatusBar(IConversationOrchestrator orchestrator, PresenceOr
         {
             ImGui.SameLine(0f, 14f);
             ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextTertiary);
-            ImGui.TextUnformatted($"\u2014 {GetCurrentSpeechSnippet(speechText)}");
+            ImGui.TextUnformatted(BuildSpeechLine(GetCurrentSpeechSnippet(speechText)));
             ImGui.PopStyleColor();
         }
 
@@ -106,19 +117,7 @@ public sealed class StatusBar(IConversationOrchestrator orchestrator, PresenceOr
 
     private (Vector4 Color, string Label, string? SpeechText, bool IsActive) GetConversationState()
     {
-        var sessionIds = orchestrator.GetActiveSessionIds().ToList();
-
-        if (sessionIds.Count == 0)
-        {
-            return (Theme.TextSecondary, "No Session", null, false);
-        }
-
-        IConversationSession? session = null;
-        try
-        {
-            session = orchestrator.GetSession(sessionIds[0]);
-        }
-        catch (KeyNotFoundException)
+        if (!orchestrator.TryGetFirstActiveSession(out var session))
         {
             return (Theme.TextSecondary, "No Session", null, false);
         }
@@ -156,10 +155,35 @@ public sealed class StatusBar(IConversationOrchestrator orchestrator, PresenceOr
             return (Theme.Warning, "Thinking...", null, true);
         }
 
-        var sessionCount = sessionIds.Count;
-        var label = sessionCount == 1 ? "Listening" : $"Listening ({sessionCount})";
+        var sessionCount = orchestrator.ActiveSessionCount;
+        var label = sessionCount <= 1 ? "Listening" : GetListeningLabel(sessionCount);
 
         return (Theme.Success, label, null, true);
+    }
+
+    private string GetListeningLabel(int count)
+    {
+        if (count == _listeningLabelCount)
+            return _cachedListeningLabel;
+
+        _listeningLabelCount = count;
+        _cachedListeningLabel = $"Listening ({count})";
+        return _cachedListeningLabel;
+    }
+
+    private string BuildSpeechLine(string snippet)
+    {
+        if (
+            _cachedSpeechLine is not null
+            && string.Equals(_cachedSpeechSnippet, snippet, StringComparison.Ordinal)
+        )
+        {
+            return _cachedSpeechLine;
+        }
+
+        _cachedSpeechSnippet = snippet;
+        _cachedSpeechLine = "\u2014 " + snippet;
+        return _cachedSpeechLine;
     }
 
     private static string GetCurrentSpeechSnippet(string text)
