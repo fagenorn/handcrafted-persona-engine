@@ -4,6 +4,7 @@ using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.LLM.Connection;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Shared;
+using PersonaEngine.Lib.UI.ControlPanel.Threading;
 using PersonaEngine.Lib.UI.Overlay;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels.LlmConnection.Sections;
@@ -32,6 +33,8 @@ public sealed class TextLlmSection : IDisposable
 
     private readonly IConfigWriter _configWriter;
 
+    private readonly IUiThreadDispatcher _dispatcher;
+
     private readonly IDisposable? _onChangeSub;
 
     private readonly ILlmConnectionProbe _probe;
@@ -59,11 +62,13 @@ public sealed class TextLlmSection : IDisposable
     public TextLlmSection(
         IOptionsMonitor<LlmOptions> options,
         IConfigWriter configWriter,
-        ILlmConnectionProbe probe
+        ILlmConnectionProbe probe,
+        IUiThreadDispatcher dispatcher
     )
     {
         _configWriter = configWriter;
         _probe = probe;
+        _dispatcher = dispatcher;
         _snapshot = options.CurrentValue;
         SyncBuffersFromSnapshot();
 
@@ -83,6 +88,8 @@ public sealed class TextLlmSection : IDisposable
 
     public void Render(float dt)
     {
+        _dispatcher.DrainPending();
+
         if (!_initialized)
         {
             _initialized = true;
@@ -339,14 +346,17 @@ public sealed class TextLlmSection : IDisposable
 
     private void OnOptionsChanged(LlmOptions updated, string? _)
     {
-        _snapshot = updated;
-        if (!_initialized)
+        _dispatcher.Post(() =>
         {
-            return;
-        }
+            _snapshot = updated;
+            if (!_initialized)
+            {
+                return;
+            }
 
-        SyncBuffersFromSnapshot();
-        _modelPicker.RecomputeMissing(_modelBuf);
+            SyncBuffersFromSnapshot();
+            _modelPicker.RecomputeMissing(_modelBuf);
+        });
     }
 
     private void OnProbeStatus(LlmChannel ch)
@@ -356,19 +366,22 @@ public sealed class TextLlmSection : IDisposable
             return;
         }
 
-        var s = _probe.TextStatus.Status;
-        _probeInFlight = s == LlmProbeStatus.Probing;
-        if (!_probeInFlight && s != LlmProbeStatus.Unknown)
+        _dispatcher.Post(() =>
         {
-            _lastProbeTime = _probe.TextStatus.ProbedAt;
-        }
+            var s = _probe.TextStatus.Status;
+            _probeInFlight = s == LlmProbeStatus.Probing;
+            if (!_probeInFlight && s != LlmProbeStatus.Unknown)
+            {
+                _lastProbeTime = _probe.TextStatus.ProbedAt;
+            }
 
-        // Probe just refreshed the available models list — re-run the scan so
-        // the combo reflects the latest set and the missing flag is accurate.
-        if (_initialized)
-        {
-            _modelPicker.Refresh(_modelBuf);
-        }
+            // Probe just refreshed the available models list — re-run the scan so
+            // the combo reflects the latest set and the missing flag is accurate.
+            if (_initialized)
+            {
+                _modelPicker.Refresh(_modelBuf);
+            }
+        });
     }
 
     private void WriteSnapshot(LlmOptions next)
