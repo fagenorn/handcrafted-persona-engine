@@ -26,8 +26,6 @@ public sealed class VisionLlmSection : IDisposable
 
     private readonly IUiThreadDispatcher _dispatcher;
 
-    private readonly ScannedNamePicker _modelPicker;
-
     private readonly IDisposable? _onChangeSub;
 
     private readonly ILlmConnectionProbe _probe;
@@ -43,6 +41,8 @@ public sealed class VisionLlmSection : IDisposable
     private DateTimeOffset? _lastProbeTime;
 
     private string _modelBuf = string.Empty;
+
+    private bool _advancedModelOpen;
 
     private bool _probeInFlight;
 
@@ -67,10 +67,6 @@ public sealed class VisionLlmSection : IDisposable
 
         _enableKnob = new AnimatedFloat(_snapshot.VisionEnabled ? 1f : 0f);
 
-        // The picker's scan source is the probe's current vision model list —
-        // refreshed whenever the probe fires StatusChanged for the vision channel.
-        _modelPicker = new ScannedNamePicker(() => _probe.VisionStatus.AvailableModels);
-
         _onChangeSub = options.OnChange(OnOptionsChanged);
         _probe.StatusChanged += OnProbeStatus;
     }
@@ -90,7 +86,6 @@ public sealed class VisionLlmSection : IDisposable
             _initialized = true;
             if (_snapshot.VisionEnabled)
             {
-                _modelPicker.Refresh(_modelBuf);
                 _ = _probe.ProbeAsync(LlmChannel.Vision);
             }
         }
@@ -142,8 +137,7 @@ public sealed class VisionLlmSection : IDisposable
             WriteSnapshot(_snapshot with { VisionEnabled = on });
             if (on)
             {
-                // Flipping ON — re-scan models and probe. No probe on flip OFF.
-                _modelPicker.Refresh(_modelBuf);
+                // Flipping ON — probe. No probe on flip OFF.
                 _ = _probe.ProbeAsync(LlmChannel.Vision);
             }
         }
@@ -181,46 +175,19 @@ public sealed class VisionLlmSection : IDisposable
         var rowY = ImGui.GetCursorPosY();
         ImGuiHelpers.SettingLabel("Model", "Vision-capable model on the endpoint above.");
 
-        var status = _probe.VisionStatus.Status;
-        var haveModels =
-            status is LlmProbeStatus.Reachable or LlmProbeStatus.ModelMissing
-            && _probe.VisionStatus.AvailableModels.Count > 0;
+        ScannedModelPicker.Render(
+            _probe.VisionStatus.Status,
+            _probe.VisionStatus.AvailableModels,
+            _modelBuf,
+            out var next,
+            onRequestReprobe: () => _ = _probe.ProbeAsync(LlmChannel.Vision),
+            ref _advancedModelOpen
+        );
 
-        if (haveModels)
+        if (next is not null)
         {
-            if (
-                ImGuiHelpers.ScannedCombo(
-                    "VisionModel",
-                    _modelPicker,
-                    _modelBuf,
-                    out var picked,
-                    onRefresh: () => _ = _probe.ProbeAsync(LlmChannel.Vision),
-                    refreshTooltip: "Re-probe the endpoint to refresh the model list."
-                )
-            )
-            {
-                _modelBuf = picked;
-                WriteSnapshot(_snapshot with { VisionModel = picked });
-                _modelPicker.RecomputeMissing(_modelBuf);
-            }
-
-            if (_modelPicker.IsMissing && !string.IsNullOrEmpty(_modelBuf))
-            {
-                ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextTertiary);
-                ImGui.TextUnformatted($"'{_modelBuf}' not served by this endpoint.");
-                ImGui.PopStyleColor();
-            }
-        }
-        else
-        {
-            if (ImGui.InputText("##VisionModel", ref _modelBuf, 256))
-            {
-                WriteSnapshot(_snapshot with { VisionModel = _modelBuf });
-            }
-
-            ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextTertiary);
-            ImGui.TextUnformatted("Connect first to pick from the endpoint's model list.");
-            ImGui.PopStyleColor();
+            _modelBuf = next;
+            WriteSnapshot(_snapshot with { VisionModel = _modelBuf });
         }
 
         ImGuiHelpers.SettingEndRow(rowY);
@@ -326,7 +293,6 @@ public sealed class VisionLlmSection : IDisposable
             }
 
             SyncBuffersFromSnapshot();
-            _modelPicker.RecomputeMissing(_modelBuf);
         });
     }
 
@@ -344,13 +310,6 @@ public sealed class VisionLlmSection : IDisposable
             if (!_probeInFlight && s != LlmProbeStatus.Unknown)
             {
                 _lastProbeTime = _probe.VisionStatus.ProbedAt;
-            }
-
-            // Probe just refreshed the available models list — re-run the scan so
-            // the combo reflects the latest set and the missing flag is accurate.
-            if (_initialized)
-            {
-                _modelPicker.Refresh(_modelBuf);
             }
         });
     }

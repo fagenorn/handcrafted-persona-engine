@@ -37,8 +37,6 @@ public sealed class TextLlmSection : IDisposable
 
     private readonly ILlmConnectionProbe _probe;
 
-    private readonly ScannedNamePicker _modelPicker;
-
     private string _apiKeyBuf = string.Empty;
 
     private string _endpointBuf = string.Empty;
@@ -48,6 +46,8 @@ public sealed class TextLlmSection : IDisposable
     private DateTimeOffset? _lastProbeTime;
 
     private string _modelBuf = string.Empty;
+
+    private bool _advancedModelOpen;
 
     private bool _probeInFlight;
 
@@ -70,10 +70,6 @@ public sealed class TextLlmSection : IDisposable
         _snapshot = options.CurrentValue;
         SyncBuffersFromSnapshot();
 
-        // The picker's scan source is the probe's current model list — refreshed
-        // whenever the probe fires StatusChanged for the text channel.
-        _modelPicker = new ScannedNamePicker(() => _probe.TextStatus.AvailableModels);
-
         _onChangeSub = options.OnChange(OnOptionsChanged);
         _probe.StatusChanged += OnProbeStatus;
     }
@@ -91,7 +87,6 @@ public sealed class TextLlmSection : IDisposable
         if (!_initialized)
         {
             _initialized = true;
-            _modelPicker.Refresh(_modelBuf);
             _ = _probe.ProbeAsync(LlmChannel.Text);
         }
 
@@ -154,46 +149,19 @@ public sealed class TextLlmSection : IDisposable
         var rowY = ImGui.GetCursorPosY();
         ImGuiHelpers.SettingLabel("Model", "Which model to use for chat responses.");
 
-        var status = _probe.TextStatus.Status;
-        var haveModels =
-            status is LlmProbeStatus.Reachable or LlmProbeStatus.ModelMissing
-            && _probe.TextStatus.AvailableModels.Count > 0;
+        ScannedModelPicker.Render(
+            _probe.TextStatus.Status,
+            _probe.TextStatus.AvailableModels,
+            _modelBuf,
+            out var next,
+            onRequestReprobe: () => _ = _probe.ProbeAsync(LlmChannel.Text),
+            ref _advancedModelOpen
+        );
 
-        if (haveModels)
+        if (next is not null)
         {
-            if (
-                ImGuiHelpers.ScannedCombo(
-                    "TextModel",
-                    _modelPicker,
-                    _modelBuf,
-                    out var picked,
-                    onRefresh: () => _ = _probe.ProbeAsync(LlmChannel.Text),
-                    refreshTooltip: "Re-probe the endpoint to refresh the model list."
-                )
-            )
-            {
-                _modelBuf = picked;
-                WriteSnapshot(_snapshot with { TextModel = picked });
-                _modelPicker.RecomputeMissing(_modelBuf);
-            }
-
-            if (_modelPicker.IsMissing && !string.IsNullOrEmpty(_modelBuf))
-            {
-                ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextTertiary);
-                ImGui.TextUnformatted($"'{_modelBuf}' not served by this endpoint.");
-                ImGui.PopStyleColor();
-            }
-        }
-        else
-        {
-            if (ImGui.InputText("##TextModel", ref _modelBuf, 256))
-            {
-                WriteSnapshot(_snapshot with { TextModel = _modelBuf });
-            }
-
-            ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextTertiary);
-            ImGui.TextUnformatted("Connect first to pick from the endpoint's model list.");
-            ImGui.PopStyleColor();
+            _modelBuf = next;
+            WriteSnapshot(_snapshot with { TextModel = _modelBuf });
         }
 
         ImGuiHelpers.SettingEndRow(rowY);
@@ -299,7 +267,6 @@ public sealed class TextLlmSection : IDisposable
             }
 
             SyncBuffersFromSnapshot();
-            _modelPicker.RecomputeMissing(_modelBuf);
         });
     }
 
@@ -317,13 +284,6 @@ public sealed class TextLlmSection : IDisposable
             if (!_probeInFlight && s != LlmProbeStatus.Unknown)
             {
                 _lastProbeTime = _probe.TextStatus.ProbedAt;
-            }
-
-            // Probe just refreshed the available models list — re-run the scan so
-            // the combo reflects the latest set and the missing flag is accurate.
-            if (_initialized)
-            {
-                _modelPicker.Refresh(_modelBuf);
             }
         });
     }
