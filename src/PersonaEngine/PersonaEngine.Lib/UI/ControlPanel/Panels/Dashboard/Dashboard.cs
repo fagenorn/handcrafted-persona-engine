@@ -18,9 +18,22 @@ public sealed class Dashboard(
     SessionStatsSection sessionStats
 ) : IDisposable
 {
+    private bool _disposed;
+
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        // PresenceStripSection, TranscriptSection, and SessionStatsSection are not
+        // IDisposable — nothing to tear down. ControlsSection hooks orchestrator /
+        // mute-controller events, SystemHealthSection hooks probe.StatusChanged —
+        // both must unsubscribe to avoid handler leaks after shutdown.
         controls.Dispose();
+        systemHealth.Dispose();
     }
 
     public void Render(float deltaTime)
