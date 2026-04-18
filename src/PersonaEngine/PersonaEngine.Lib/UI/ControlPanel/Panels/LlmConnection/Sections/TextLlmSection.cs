@@ -164,13 +164,7 @@ public sealed class TextLlmSection : IDisposable
 
     private void RenderFooterRow(float dt)
     {
-        ProbeFooter.Render(
-            ref _footerState,
-            _lastProbeTime,
-            _probeInFlight,
-            dt,
-            _onTestClicked
-        );
+        ProbeFooter.Render(ref _footerState, _lastProbeTime, _probeInFlight, dt, _onTestClicked);
     }
 
     private void OnOptionsChanged(LlmOptions updated, string? _)

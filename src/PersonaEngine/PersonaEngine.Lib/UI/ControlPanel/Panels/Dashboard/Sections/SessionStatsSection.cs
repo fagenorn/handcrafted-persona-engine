@@ -80,11 +80,7 @@ public sealed class SessionStatsSection(SessionStatsCollector stats)
             return _cachedAvgLatencyText;
 
         _cachedAvgLatencyMs = rounded;
-        _cachedAvgLatencyText = string.Create(
-            null,
-            stackalloc char[16],
-            $"{rounded}ms"
-        );
+        _cachedAvgLatencyText = string.Create(null, stackalloc char[16], $"{rounded}ms");
         return _cachedAvgLatencyText;
     }
 

@@ -63,11 +63,7 @@ public static class TimeFormat
     }
 
     private static string FormatDays(int days) =>
-        string.Create(
-            null,
-            stackalloc char[16],
-            $"{days}d ago"
-        );
+        string.Create(null, stackalloc char[16], $"{days}d ago");
 
     private static FrozenDictionary<int, string> BuildSecondsCache()
     {

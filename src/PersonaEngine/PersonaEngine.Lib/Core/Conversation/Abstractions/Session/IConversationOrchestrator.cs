@@ -18,7 +18,9 @@ public interface IConversationOrchestrator : IAsyncDisposable
     ///     allocation performed by <see cref="GetActiveSessionIds"/> plus the
     ///     subsequent <see cref="GetSession"/> lookup/throw cycle.
     /// </summary>
-    bool TryGetFirstActiveSession([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IConversationSession? session);
+    bool TryGetFirstActiveSession(
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IConversationSession? session
+    );
 
     /// <summary>
     ///     Point-in-time active-session count. Allocation-free — unlike counting
