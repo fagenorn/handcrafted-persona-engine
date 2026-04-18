@@ -1,4 +1,3 @@
-using System.Numerics;
 using Hexa.NET.ImGui;
 using PersonaEngine.Lib.Health;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
@@ -14,10 +13,28 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard.Sections;
 /// </summary>
 public sealed class SystemHealthSection : IDisposable
 {
-    private const float CardHeight = 88f;
+    // Offset from the cursor origin to the chip's visible RIGHT edge. The
+    // chip's broadcast tint paints padX(8) to the LEFT of the cursor and
+    // padX(8) + dot diameter(10) + gap(6) = 24 to the right of the cursor
+    // (plus the label width). So `newCursor + 24 + labelW` is where the
+    // visible right edge lands — that's what we right-align to the content
+    // region right edge so the chip's visible padding matches the title's
+    // visible left padding inside the Ui.Card.
+    private const float ChipRightEdgeOffsetFromCursor = 24f;
+
+    // Guaranteed breathing room between the title's right edge and the chip's
+    // visible left edge (chip tint extends 8 px left of cursor). Subtracted
+    // from the label budget so a long status label truncates before it can
+    // crowd the title, even when the card is narrow.
+    private const float MinTitleChipGap = 8f;
 
     private readonly INavRequestBus _nav;
     private readonly IReadOnlyList<ISubsystemHealthProbe> _probes;
+
+    // Monotonic animation clock — owned here so the chip's live-ring phase is
+    // stable-precision (float loses enough precision at UTC-epoch magnitudes
+    // that `elapsed % 1.6f` stops varying).
+    private float _elapsed;
 
     public SystemHealthSection(IEnumerable<ISubsystemHealthProbe> probes, INavRequestBus nav)
     {
@@ -35,6 +52,7 @@ public sealed class SystemHealthSection : IDisposable
 
     public void Render(float dt)
     {
+        _elapsed += dt;
         ImGuiHelpers.SectionHeader("System Health");
 
         if (_probes.Count == 0)
@@ -43,14 +61,16 @@ public sealed class SystemHealthSection : IDisposable
             return;
         }
 
-        using var cols = Ui.EqualCols(_probes.Count, CardHeight, gap: 12f);
+        // Grid (auto-height table) lets each card size to its own content and
+        // equalises to the tallest card, instead of forcing a hardcoded height
+        // on Ui.EqualCols. Ui.Card uses AutoResizeY so the card grows around
+        // label + chip + optional detail line without spawning a scrollbar.
+        using var grid = Ui.Grid("##health_grid", _probes.Count);
+        grid.Row();
 
         for (var i = 0; i < _probes.Count; i++)
         {
-            if (!cols.NextCol())
-            {
-                continue;
-            }
+            grid.Col();
 
             var probe = _probes[i];
             using (Ui.Card(id: $"##health_{probe.Name}", padding: 15f))
@@ -72,42 +92,43 @@ public sealed class SystemHealthSection : IDisposable
     {
         var status = probe.Current;
 
-        // Claim the hit region first so the entire card is clickable. We're
-        // inside the Ui.Card child scope here; GetItemRectMin/Max would
-        // return the last item from the OUTER scope, so we use the current
-        // cursor / available content region instead.
-        var origin = ImGui.GetCursorScreenPos();
-        var avail = ImGui.GetContentRegionAvail();
+        // Row 1: probe name (left) + status chip (right-aligned).
+        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextPrimary);
+        ImGui.TextUnformatted(probe.Name);
+        ImGui.PopStyleColor();
 
-        // Skip the hit region on frames where the column has zero width/height
-        // (e.g. first frame before layout settles) — InvisibleButton asserts on
-        // zero-size.
-        if (avail.X > 0f && avail.Y > 0f)
+        ImGui.SameLine();
+        var rowAvail = ImGui.GetContentRegionAvail().X;
+        // Label budget: whatever's left in the row minus the chip's right-of-cursor
+        // chrome and a guaranteed gap so the chip never crowds the title.
+        var labelBudget = Math.Max(0f, rowAvail - ChipRightEdgeOffsetFromCursor - MinTitleChipGap);
+        // Measure the label the chip will ACTUALLY draw (post-truncation) — otherwise
+        // the cursor offset below over-shoots and the chip floats left of the edge.
+        var displayLabel = SubsystemStatusChip.TruncateLabel(status.Label, labelBudget);
+        var labelW = ImGui.CalcTextSize(displayLabel).X;
+        ImGui.SetCursorPosX(
+            ImGui.GetCursorPosX() + (rowAvail - (labelW + ChipRightEdgeOffsetFromCursor))
+        );
+        SubsystemStatusChip.Render(status, _elapsed, maxLabelWidth: labelBudget);
+
+        // Whole-card hit region: we can't use InvisibleButton up front the way
+        // EqualCols did, because Ui.Card is AutoResizeY and GetContentRegionAvail().Y
+        // is unbounded. Instead, check hover on the current (child) window after
+        // content has been laid out — its rect is the card's final size.
+        if (ImGui.IsWindowHovered())
         {
-            ImGui.InvisibleButton($"##nav_{probe.Name}", avail);
             ImGuiHelpers.HandCursorOnHover();
 
-            if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
-            {
-                _nav.Request(probe.TargetPanel);
-            }
-
-            if (!string.IsNullOrEmpty(status.Detail) && ImGui.IsItemHovered())
+            if (!string.IsNullOrEmpty(status.Detail))
             {
                 ImGui.SetTooltip(status.Detail);
             }
 
-            // Reset cursor to the origin so the visual content draws on top of
-            // the invisible hit region.
-            ImGui.SetCursorScreenPos(origin);
+            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+            {
+                _nav.Request(probe.TargetPanel);
+            }
         }
-
-        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
-        ImGui.TextUnformatted(probe.Name);
-        ImGui.PopStyleColor();
-
-        ImGui.SameLine(0f, 8f);
-        SubsystemStatusChip.Render(status);
     }
 
     private void OnProbeChanged(SubsystemStatus _)

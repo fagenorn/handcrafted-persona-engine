@@ -4,9 +4,11 @@ using PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard.Sections;
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard;
 
 /// <summary>
-///     Thin orchestrator for the Dashboard panel. Uses a five-row layout:
-///     presence strip (fixed), health cards (fixed), transcript (fill),
-///     controls (fixed), session stats (fixed).
+///     Thin orchestrator for the Dashboard panel. Every section except the
+///     transcript sizes to its own content via <see cref="Sz.Auto"/>; the
+///     transcript claims whatever space remains via <see cref="Sz.Fill"/>.
+///     The health strip and transcript share a nested gap-0 row group so they
+///     still read as one conversation surface the chat is flowing across.
 /// </summary>
 public sealed class Dashboard(
     PresenceStripSection presenceStrip,
@@ -16,10 +18,6 @@ public sealed class Dashboard(
     SessionStatsSection sessionStats
 ) : IDisposable
 {
-    private const float HealthSectionHeight = 132f;
-    private const float ControlsSectionHeight = 64f;
-    private const float StatsSectionHeight = 100f;
-
     public void Dispose()
     {
         controls.Dispose();
@@ -28,22 +26,34 @@ public sealed class Dashboard(
     public void Render(float deltaTime)
     {
         using var rows = Ui.Rows(
+            "Dashboard.outer",
             12f,
-            Sz.Fixed(PresenceStripSection.StripHeight),
-            Sz.Fixed(HealthSectionHeight),
-            Sz.Fill(),
-            Sz.Fixed(ControlsSectionHeight),
-            Sz.Fixed(StatsSectionHeight)
+            Sz.Auto(), // presence strip — natural height
+            Sz.Fill(), // health + transcript rendered as a seamless pair
+            Sz.Auto(), // controls — natural height
+            Sz.Auto() // session stats — natural height
         );
 
         using (rows.Next())
             presenceStrip.Render(deltaTime);
 
         using (rows.Next())
-            systemHealth.Render(deltaTime);
+        {
+            // Nested gap=0 group: the health strip tiles directly into the
+            // transcript below it so they read as one conversation surface.
+            using var inner = Ui.Rows(
+                "Dashboard.conversation",
+                12f,
+                Sz.Auto(), // health strip
+                Sz.Fill() // transcript
+            );
 
-        using (rows.Next())
-            transcript.Render(deltaTime);
+            using (inner.Next())
+                systemHealth.Render(deltaTime);
+
+            using (inner.Next())
+                transcript.Render(deltaTime);
+        }
 
         using (rows.Next())
             controls.Render(deltaTime);
