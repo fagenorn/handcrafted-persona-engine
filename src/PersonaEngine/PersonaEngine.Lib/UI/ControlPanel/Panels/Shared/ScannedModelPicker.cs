@@ -5,10 +5,9 @@ using Hexa.NET.ImGui;
 using PersonaEngine.Lib.LLM.Connection;
 
 /// <summary>
-///     Model picker that is always a dropdown (no free-text fallback in the happy path).
-///     Disabled placeholders explain why the list is empty. An Advanced disclosure reveals
-///     a plain input for private / gated model names — state is section-local, not
-///     persisted. <see cref="LlmProbeStatus.Reachable" /> and
+///     Model picker — always a dropdown, populated from the endpoint probe. No free-text
+///     fallback: if the endpoint isn't reachable the combo is disabled with an explanatory
+///     placeholder. <see cref="LlmProbeStatus.Reachable" /> and
 ///     <see cref="LlmProbeStatus.ModelMissing" /> are treated identically here: both mean
 ///     "endpoint is up, model list available".
 /// </summary>
@@ -79,32 +78,27 @@ public static class ScannedModelPicker
     }
 
     /// <summary>
-    ///     Renders the combo + optional warning + Advanced disclosure. Sets
-    ///     <paramref name="next" /> to the newly-picked model when the user selects one
-    ///     or types into the Advanced input. <paramref name="advancedOpen" /> tracks
-    ///     whether the Advanced disclosure is expanded (section-local UI state).
+    ///     Renders the combo + optional warning. Sets <paramref name="next" /> to the
+    ///     newly-picked model when the user selects one; otherwise leaves it
+    ///     <see langword="null" />.
     /// </summary>
     /// <param name="probeStatus">Most recent probe status for the LLM channel.</param>
     /// <param name="availableModels">Model ids returned by the endpoint probe.</param>
     /// <param name="current">Currently saved model id.</param>
     /// <param name="next">
-    ///     Set to the newly-selected model id when the user interacts with the picker;
-    ///     otherwise <see langword="null" />.
+    ///     Set to the newly-selected model id when the user picks a new entry; otherwise
+    ///     <see langword="null" />.
     /// </param>
     /// <param name="onRequestReprobe">
     ///     Callback invoked when a new model is selected so the caller can trigger a
     ///     fresh probe.
-    /// </param>
-    /// <param name="advancedOpen">
-    ///     Section-local state tracking whether the Advanced disclosure is expanded.
     /// </param>
     public static void Render(
         LlmProbeStatus probeStatus,
         IReadOnlyList<string> availableModels,
         string current,
         out string? next,
-        Action onRequestReprobe,
-        ref bool advancedOpen
+        Action onRequestReprobe
     )
     {
         ArgumentNullException.ThrowIfNull(availableModels);
@@ -128,8 +122,11 @@ public static class ScannedModelPicker
             ImGui.BeginDisabled();
         }
 
+        // Use a hidden id ("##model") so ImGui doesn't paint a visible label to the
+        // right of the combo — that label was overflowing the card's right edge when
+        // SettingLabel set next-item width to -1.
         var preview = state.Disabled ? state.Placeholder ?? string.Empty : current;
-        if (ImGui.BeginCombo("Model", preview))
+        if (ImGui.BeginCombo("##model", preview))
         {
             foreach (var model in availableModels)
             {
@@ -157,20 +154,6 @@ public static class ScannedModelPicker
         if (state.Warning is not null)
         {
             ImGui.TextColored(WarningColor, state.Warning);
-        }
-
-        if (ImGui.CollapsingHeader("Advanced: custom model name"))
-        {
-            advancedOpen = true;
-            var buffer = current ?? string.Empty;
-            if (ImGui.InputText("##advanced_custom_model", ref buffer, 256))
-            {
-                next = buffer;
-            }
-        }
-        else
-        {
-            advancedOpen = false;
         }
     }
 }

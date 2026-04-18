@@ -19,10 +19,6 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels.LlmConnection.Sections;
 /// </summary>
 public sealed class VisionLlmSection : IDisposable
 {
-    private const string OpenAiUrl = "https://api.openai.com/v1";
-
-    private static readonly (string Label, string Url)[] EndpointPresets = [("OpenAI", OpenAiUrl)];
-
     private readonly IConfigWriter _configWriter;
 
     private readonly IUiThreadDispatcher _dispatcher;
@@ -35,6 +31,11 @@ public sealed class VisionLlmSection : IDisposable
 
     private string _apiKeyBuf = string.Empty;
 
+    // Monotonic accumulator for the chip's live-pulse animation. Owning this
+    // locally keeps the value small enough for float precision (see the
+    // SubsystemStatusChip.Render doc comment).
+    private float _elapsed;
+
     private string _endpointBuf = string.Empty;
 
     private bool _initialized;
@@ -42,8 +43,6 @@ public sealed class VisionLlmSection : IDisposable
     private DateTimeOffset? _lastProbeTime;
 
     private string _modelBuf = string.Empty;
-
-    private bool _advancedModelOpen;
 
     private bool _probeInFlight;
 
@@ -81,6 +80,7 @@ public sealed class VisionLlmSection : IDisposable
     public void Render(float dt)
     {
         _dispatcher.DrainPending();
+        _elapsed += dt;
 
         if (!_initialized)
         {
@@ -124,16 +124,32 @@ public sealed class VisionLlmSection : IDisposable
             )
             : new SubsystemStatus(SubsystemHealth.Disabled, "Off", null);
 
-        var avail = ImGui.GetContentRegionAvail().X;
-        var toggleW = 40f;
-        var pillWidth = ImGui.CalcTextSize(visionChipStatus.Label).X + 32f;
-        var rightW = pillWidth + 8f + toggleW;
-
+        // Layout: "Vision LLM" ──────────── [toggle] [chip]. Chip matches the TextLlm
+        // header exactly (right-aligned, no vertical offset, drawn at the label's
+        // baseline); the toggle sits just to its left, pulled UP so its vertical
+        // center aligns with the chip's midline.
         ImGui.SameLine();
+        var avail = ImGui.GetContentRegionAvail().X;
+
+        const float toggleW = 40f;
+        // Gap between toggle and chip. The chip's broadcast tint extends 8 px LEFT of
+        // its cursor, so a logical gap of 18 translates to ~10 px visible breathing
+        // room — enough to not look like they're touching.
+        const float toggleChipGap = 18f;
+        // Chip visible width = tint padX (8) + dot (10) + dot-to-label gap (6) +
+        // label + tint padX (8) = 32 + label.
+        var chipW = ImGui.CalcTextSize(visionChipStatus.Label).X + 32f;
+        var rightW = toggleW + toggleChipGap + chipW;
+
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + Math.Max(0f, avail - rightW));
 
-        SubsystemStatusChip.Render(visionChipStatus);
-        ImGui.SameLine(0f, 8f);
+        // Baseline Y of this header row — the chip is rendered at exactly this Y
+        // (same as TextLlm's chip). The toggle is pulled up by FramePadding.Y to
+        // cancel its built-in FrameHeight self-centering, so its 20 px track ends
+        // up centered on the chip's textH-tall midline (both centers land at
+        // baselineY + textH/2).
+        var baselineY = ImGui.GetCursorPosY();
+        ImGui.SetCursorPosY(baselineY - ImGui.GetStyle().FramePadding.Y);
 
         var on = visionOn;
         if (ImGuiHelpers.ToggleSwitch("##VisionEnabled", ref on, ref _enableKnob, dt))
@@ -145,6 +161,12 @@ public sealed class VisionLlmSection : IDisposable
                 _ = _probe.ProbeAsync(LlmChannel.Vision);
             }
         }
+
+        ImGui.SameLine(0f, toggleChipGap);
+        // SameLine restores cursor Y to the toggle's (offset) top; reset to the
+        // original baseline so the chip renders in the same style as TextLlm.
+        ImGui.SetCursorPosY(baselineY);
+        SubsystemStatusChip.Render(visionChipStatus, _elapsed);
 
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
         ImGui.TextUnformatted("Lets the avatar see your screen. Used by Screen Awareness.");
@@ -159,8 +181,7 @@ public sealed class VisionLlmSection : IDisposable
 
         EndpointPickerRow.Render(
             "VisionEndpoint",
-            "Vision-capable OpenAI-compatible URL.",
-            EndpointPresets,
+            EndpointPickerRow.DefaultPresets,
             _endpointBuf,
             out var next
         );
@@ -184,8 +205,7 @@ public sealed class VisionLlmSection : IDisposable
             _probe.VisionStatus.AvailableModels,
             _modelBuf,
             out var next,
-            onRequestReprobe: () => _ = _probe.ProbeAsync(LlmChannel.Vision),
-            ref _advancedModelOpen
+            onRequestReprobe: () => _ = _probe.ProbeAsync(LlmChannel.Vision)
         );
 
         if (next is not null)
@@ -204,6 +224,14 @@ public sealed class VisionLlmSection : IDisposable
             "API Key",
             "Authentication token. Leave blank for local endpoints."
         );
+
+        // Reserve horizontal space for the Hide/Show button so it doesn't overflow
+        // the card. SubtleButton uses FramePadding(10, 5) so width ≈ text + 20.
+        var visibleBtnText = _showKey ? "Hide" : "Show";
+        var style = ImGui.GetStyle();
+        var buttonW = ImGui.CalcTextSize(visibleBtnText).X + 20f;
+        var avail = ImGui.GetContentRegionAvail().X;
+        ImGui.SetNextItemWidth(MathF.Max(60f, avail - buttonW - style.ItemSpacing.X));
 
         var flags = _showKey ? ImGuiInputTextFlags.None : ImGuiInputTextFlags.Password;
         if (ImGui.InputText("##VisionApiKey", ref _apiKeyBuf, 512, flags))

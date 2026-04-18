@@ -16,19 +16,6 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels.LlmConnection.Sections;
 /// </summary>
 public sealed class TextLlmSection : IDisposable
 {
-    private const string OpenAiUrl = "https://api.openai.com/v1";
-
-    private const string LmStudioUrl = "http://localhost:1234/v1";
-
-    private const string OllamaUrl = "http://localhost:11434/v1";
-
-    private static readonly (string Label, string Url)[] EndpointPresets =
-    [
-        ("OpenAI", OpenAiUrl),
-        ("LM Studio", LmStudioUrl),
-        ("Ollama", OllamaUrl),
-    ];
-
     private readonly IConfigWriter _configWriter;
 
     private readonly IUiThreadDispatcher _dispatcher;
@@ -39,6 +26,11 @@ public sealed class TextLlmSection : IDisposable
 
     private string _apiKeyBuf = string.Empty;
 
+    // Monotonic accumulator for the chip's live-pulse animation. Owning this
+    // locally keeps the value small enough for float precision (see the
+    // SubsystemStatusChip.Render doc comment).
+    private float _elapsed;
+
     private string _endpointBuf = string.Empty;
 
     private bool _initialized;
@@ -46,8 +38,6 @@ public sealed class TextLlmSection : IDisposable
     private DateTimeOffset? _lastProbeTime;
 
     private string _modelBuf = string.Empty;
-
-    private bool _advancedModelOpen;
 
     private bool _probeInFlight;
 
@@ -83,6 +73,7 @@ public sealed class TextLlmSection : IDisposable
     public void Render(float dt)
     {
         _dispatcher.DrainPending();
+        _elapsed += dt;
 
         if (!_initialized)
         {
@@ -114,7 +105,7 @@ public sealed class TextLlmSection : IDisposable
         var avail = ImGui.GetContentRegionAvail().X;
         var pillWidth = ImGui.CalcTextSize(subsystemStatus.Label).X + 32f;
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + Math.Max(0f, avail - pillWidth));
-        SubsystemStatusChip.Render(subsystemStatus);
+        SubsystemStatusChip.Render(subsystemStatus, _elapsed);
 
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
         ImGui.TextUnformatted("The primary language model. Changes apply on the next turn.");
@@ -129,8 +120,7 @@ public sealed class TextLlmSection : IDisposable
 
         EndpointPickerRow.Render(
             "TextEndpoint",
-            "Base URL of the OpenAI-compatible API.",
-            EndpointPresets,
+            EndpointPickerRow.DefaultPresets,
             _endpointBuf,
             out var next
         );
@@ -154,8 +144,7 @@ public sealed class TextLlmSection : IDisposable
             _probe.TextStatus.AvailableModels,
             _modelBuf,
             out var next,
-            onRequestReprobe: () => _ = _probe.ProbeAsync(LlmChannel.Text),
-            ref _advancedModelOpen
+            onRequestReprobe: () => _ = _probe.ProbeAsync(LlmChannel.Text)
         );
 
         if (next is not null)
@@ -174,6 +163,14 @@ public sealed class TextLlmSection : IDisposable
             "API Key",
             "Authentication token. Leave blank for local endpoints."
         );
+
+        // Reserve horizontal space for the Hide/Show button so it doesn't overflow
+        // the card. SubtleButton uses FramePadding(10, 5) so width ≈ text + 20.
+        var visibleBtnText = _showKey ? "Hide" : "Show";
+        var style = ImGui.GetStyle();
+        var buttonW = ImGui.CalcTextSize(visibleBtnText).X + 20f;
+        var avail = ImGui.GetContentRegionAvail().X;
+        ImGui.SetNextItemWidth(MathF.Max(60f, avail - buttonW - style.ItemSpacing.X));
 
         var flags = _showKey ? ImGuiInputTextFlags.None : ImGuiInputTextFlags.Password;
         if (ImGui.InputText("##TextApiKey", ref _apiKeyBuf, 512, flags))
