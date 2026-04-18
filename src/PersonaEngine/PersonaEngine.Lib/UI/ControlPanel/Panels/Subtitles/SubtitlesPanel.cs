@@ -9,6 +9,12 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Subtitles;
 ///     Orchestrator for the Subtitles panel. Owns nothing beyond its child sections.
 ///     Preview sits at the top so every edit to text style, colors, placement, or
 ///     canvas updates visibly while the Performer is scrolling.
+///     <para>
+///         All five child sections are <see cref="IDisposable" />: four hold
+///         <c>IOptionsMonitor.OnChange</c> subscriptions, and <see cref="PreviewSection" />
+///         additionally owns a <c>SubtitlePreviewRenderer</c> with a GL framebuffer
+///         object. <see cref="Dispose" /> forwards teardown to all of them.
+///     </para>
 /// </summary>
 public sealed class SubtitlesPanel(
     PreviewSection preview,
@@ -16,8 +22,10 @@ public sealed class SubtitlesPanel(
     ColorsSection colors,
     PlacementSection placement,
     CanvasSection canvas
-)
+) : IDisposable
 {
+    private bool _disposed;
+
     public void Initialize(GL gl) => preview.Initialize(gl);
 
     public void Render(float dt)
@@ -34,5 +42,20 @@ public sealed class SubtitlesPanel(
             ImGui.Spacing();
             canvas.Render(dt);
         }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        preview.Dispose();
+        textStyle.Dispose();
+        colors.Dispose();
+        placement.Dispose();
+        canvas.Dispose();
     }
 }
