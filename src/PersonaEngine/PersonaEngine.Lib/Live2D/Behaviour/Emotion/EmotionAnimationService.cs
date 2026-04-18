@@ -61,7 +61,6 @@ public class EmotionAnimationService : AnimationServiceBase
     private const MotionPriority NEUTRAL_TALKING_MOTION_PRIORITY = MotionPriority.PriorityNormal;
 
     // Defines the mapping between detected emotion identifiers (e.g., emojis) and Live2D assets.
-    // TODO: Consider loading this from an external configuration file for customization.
     private static readonly Dictionary<string, EmotionMapping> EmotionMap = new()
     {
         // Positive Emotions
@@ -178,11 +177,6 @@ public class EmotionAnimationService : AnimationServiceBase
         {
             ManageNeutralTalkingMotion();
         }
-        // Optionally ensure neutral talking motion is stopped/faded out if needed when not playing,
-        // though priority system might handle this.
-        // If _neutralTalkingMotionEntry exists and isn't finished, it might need explicit stopping
-        // depending on desired behavior when audio stops mid-talk.
-        // For now, we assume idle animations (handled elsewhere) will override it.
     }
 
     private void CheckExpressionTimeout()
@@ -521,11 +515,8 @@ public class EmotionAnimationService : AnimationServiceBase
         _activeEmotions.Clear();
         _currentEmotionIndex = -1;
 
-        // Expression timeout is handled by Update loop (CheckExpressionTimeout).
-        // Motions will finish naturally or be overridden by idle animations (assumed).
-        // Resetting _triggeredEmotionEmoji ensures the next chunk starts fresh.
-        // Keep _activeExpressionId as is until timeout or next emotion.
-        // _triggeredEmotionEmoji = null; // Reset last triggered emoji immediately? Or let timeout handle expression? Let timeout handle.
+        // _activeExpressionId is intentionally retained until the timeout fires or a new
+        // emotion is triggered, so brief gaps between speech chunks do not snap back to neutral.
     }
 
     private void HandleProgress(object? sender, AudioPlaybackProgressEvent e)
