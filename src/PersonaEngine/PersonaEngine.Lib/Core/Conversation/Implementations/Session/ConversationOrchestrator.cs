@@ -241,6 +241,52 @@ public class ConversationOrchestrator : IConversationOrchestrator
         }
     }
 
+    public async ValueTask CancelActiveTurnsAsync(CancellationToken cancellationToken = default)
+    {
+        var activeSessionIds = _activeSessions.Keys.ToList();
+        foreach (var sessionId in activeSessionIds)
+        {
+            if (!_activeSessions.TryGetValue(sessionId, out var sessionInfo))
+            {
+                continue;
+            }
+
+            try
+            {
+                await sessionInfo.Session.CancelAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Error cancelling active turn on session {SessionId}.",
+                    sessionId
+                );
+            }
+        }
+    }
+
+    public async ValueTask RetryErroredSessionsAsync(CancellationToken cancellationToken = default)
+    {
+        var activeSessionIds = _activeSessions.Keys.ToList();
+        foreach (var sessionId in activeSessionIds)
+        {
+            if (!_activeSessions.TryGetValue(sessionId, out var sessionInfo))
+            {
+                continue;
+            }
+
+            try
+            {
+                await sessionInfo.Session.RetryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrying session {SessionId}.", sessionId);
+            }
+        }
+    }
+
     public event EventHandler? SessionsUpdated;
 
     /// <inheritdoc />

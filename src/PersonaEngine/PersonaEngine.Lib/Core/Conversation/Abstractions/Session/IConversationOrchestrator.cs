@@ -26,6 +26,20 @@ public interface IConversationOrchestrator : IAsyncDisposable
     /// </summary>
     ValueTask ResumeAllSessionsAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Invokes <see cref="IConversationSession.CancelAsync" /> on every active session.
+    ///     Errors on individual sessions are logged and do not prevent other sessions from
+    ///     being cancelled.
+    /// </summary>
+    ValueTask CancelActiveTurnsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Invokes <see cref="IConversationSession.RetryAsync" /> on every session currently
+    ///     in <see cref="ConversationState.Error" />. Errors on individual sessions are
+    ///     logged and do not prevent others from retrying.
+    /// </summary>
+    ValueTask RetryErroredSessionsAsync(CancellationToken cancellationToken = default);
+
     event EventHandler? SessionsUpdated;
 
     /// <summary>
