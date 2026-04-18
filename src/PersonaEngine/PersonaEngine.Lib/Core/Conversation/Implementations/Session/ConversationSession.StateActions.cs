@@ -255,7 +255,7 @@ public partial class ConversationSession
         }
     }
 
-    private async Task HandleErrorAsync(Exception error)
+    private Task HandleErrorAsync(Exception error)
     {
         _logger.LogError(
             error,
@@ -263,7 +263,14 @@ public partial class ConversationSession
             SessionId
         );
         _metrics.IncrementErrors(SessionId, _pipeline.CurrentTurnId, error);
-        await _stateMachine.FireAsync(ConversationTrigger.StopRequested);
+
+        // Do NOT auto-fire StopRequested here — Error is a durable state the user
+        // recovers from via the Retry card (RetryRequested → Idle, configured in
+        // ConfigureStateMachine). Firing StopRequested here collapsed Error → Ended
+        // atomically, so the session was removed from the orchestrator before the
+        // UI could ever enable the Retry button.
+        // Turn-state cleanup still runs via the Error state's OnEntryAsync hook.
+        return Task.CompletedTask;
     }
 
     private async Task CleanupSessionAsync()
