@@ -12,6 +12,16 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Shared;
 public static class SubsystemStatusChip
 {
     /// <summary>
+    ///     Fixed pixel chrome wrapping the chip's label: the broadcast tint
+    ///     contributes 8 px on each side (16 total) plus the status dot
+    ///     (10 px) plus the dot-to-label gap (6 px). Callers sizing a right-
+    ///     aligned chip can add this to <see cref="ImGui.CalcTextSize" /> of
+    ///     the label to compute the full rendered width without re-measuring
+    ///     the chip pieces each frame.
+    /// </summary>
+    public const float ChromeWidth = 32f;
+
+    /// <summary>
     ///     Maps a <see cref="SubsystemHealth" /> bucket to the corresponding
     ///     <see cref="OverlayStatus" /> used by <see cref="StatusPill" />.
     /// </summary>

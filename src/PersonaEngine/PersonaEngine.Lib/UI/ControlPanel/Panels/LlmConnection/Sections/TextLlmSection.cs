@@ -106,7 +106,8 @@ public sealed class TextLlmSection : IDisposable
             _probe.TextStatus.DetailMessage
         );
         var avail = ImGui.GetContentRegionAvail().X;
-        var pillWidth = ImGui.CalcTextSize(subsystemStatus.Label).X + 32f;
+        var pillWidth =
+            ImGui.CalcTextSize(subsystemStatus.Label).X + SubsystemStatusChip.ChromeWidth;
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + Math.Max(0f, avail - pillWidth));
         SubsystemStatusChip.Render(subsystemStatus, _elapsed);
 

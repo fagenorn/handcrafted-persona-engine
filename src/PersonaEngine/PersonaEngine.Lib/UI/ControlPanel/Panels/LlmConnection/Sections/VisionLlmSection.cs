@@ -140,8 +140,8 @@ public sealed class VisionLlmSection : IDisposable
         // room — enough to not look like they're touching.
         const float toggleChipGap = 18f;
         // Chip visible width = tint padX (8) + dot (10) + dot-to-label gap (6) +
-        // label + tint padX (8) = 32 + label.
-        var chipW = ImGui.CalcTextSize(visionChipStatus.Label).X + 32f;
+        // label + tint padX (8) = SubsystemStatusChip.ChromeWidth + label.
+        var chipW = ImGui.CalcTextSize(visionChipStatus.Label).X + SubsystemStatusChip.ChromeWidth;
         var rightW = toggleW + toggleChipGap + chipW;
 
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + Math.Max(0f, avail - rightW));
