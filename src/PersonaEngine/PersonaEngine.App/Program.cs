@@ -65,6 +65,8 @@ internal static class Program
             NativeLibraryConfig.LLama.WithLibrary(llamaDll);
         }
 
+        CreateLogger();
+
         var llamaLogger = Log.ForContext("SourceContext", "llama.cpp");
         NativeLibraryConfig.LLama.WithLogCallback(
             (level, message) =>
@@ -77,6 +79,18 @@ internal static class Program
                 {
                     case LLamaLogLevel.Error:
                         llamaLogger.Error("{Message}", msg);
+                        // ggml/llama call abort() shortly after emitting an error. Flush
+                        // the managed Console buffer synchronously so the line survives.
+                        try
+                        {
+                            Console.Out.Flush();
+                            Console.Error.Flush();
+                        }
+                        catch
+                        {
+                            // Ignore — we're on a best-effort pre-abort path
+                        }
+
                         break;
                     case LLamaLogLevel.Warning:
                         llamaLogger.Warning("{Message}", msg);
@@ -91,7 +105,24 @@ internal static class Program
             }
         );
 
-        CreateLogger();
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            if (e.ExceptionObject is Exception ex)
+            {
+                Log.Fatal(ex, "Unhandled exception (terminating={Terminating})", e.IsTerminating);
+            }
+            else
+            {
+                Log.Fatal("Unhandled non-Exception object: {Object}", e.ExceptionObject);
+            }
+
+            Log.CloseAndFlush();
+        };
+
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            Log.CloseAndFlush();
+        };
 
         // Suppress ONNX Runtime warnings globally before any sessions are created
         OrtEnv.Instance().EnvLogLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR;
