@@ -468,6 +468,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<PresenceStripSection>();
         services.AddSingleton<SystemHealthSection>();
         services.AddSingleton<TranscriptSection>();
+        services.AddSingleton<ControlsSection>();
         services.AddSingleton<SessionStatsSection>();
 
         // Panels
