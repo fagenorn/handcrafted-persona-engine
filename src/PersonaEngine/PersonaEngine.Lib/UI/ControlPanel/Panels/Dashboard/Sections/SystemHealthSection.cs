@@ -9,7 +9,7 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard.Sections;
 ///     Dashboard health strip. One <see cref="Ui.Card" /> per registered
 ///     <see cref="ISubsystemHealthProbe" />, coloured dot + label + click-through
 ///     navigation via <see cref="INavRequestBus" />. Registration order in DI
-///     defines column order (Mic → LLM → TTS → Spout).
+///     defines column order (Mic → LLM → TTS).
 /// </summary>
 public sealed class SystemHealthSection : IDisposable
 {

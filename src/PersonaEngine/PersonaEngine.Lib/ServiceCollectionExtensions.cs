@@ -462,7 +462,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISubsystemHealthProbe>(sp => sp.GetRequiredService<LlmHealthProbe>());
         services.AddSingleton<TtsHealthProbe>();
         services.AddSingleton<ISubsystemHealthProbe>(sp => sp.GetRequiredService<TtsHealthProbe>());
-        // TODO(Task 14/later): register SpoutHealthProbe once SpoutRegistry moves to DI.
 
         // Dashboard panel sections + services
         services.AddSingleton<SessionStatsCollector>();
