@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -29,10 +30,6 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
     private WaveInEvent? _waveIn;
 
     public event AudioSamplesHandler? SamplesAvailable;
-
-    // Scratch float buffer for int16 → float conversion before raising SamplesAvailable.
-    // Pre-allocated for 1 second at 16 kHz (16000 samples), grown via Array.Resize if needed.
-    private float[] _samplesScratch = new float[16000];
 
     public MicrophoneInputNAudioSource(
         ILogger<MicrophoneInputNAudioSource> logger,
@@ -370,18 +367,25 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
 
         // WaveFormat is fixed at 16-bit mono 16 kHz (see InitializeMicrophone).
         var int16s = MemoryMarshal.Cast<byte, short>(buffer.AsSpan(0, bytesRecorded));
-        if (_samplesScratch.Length < int16s.Length)
-        {
-            Array.Resize(ref _samplesScratch, int16s.Length);
-        }
 
-        var floatSpan = _samplesScratch.AsSpan(0, int16s.Length);
-        for (var i = 0; i < int16s.Length; i++)
+        // Rent a scratch buffer per call. The AudioSamplesHandler contract on
+        // IMicrophone says the span is only valid for the duration of the call, so
+        // there's no need to keep the buffer alive beyond this invocation.
+        var scratch = ArrayPool<float>.Shared.Rent(int16s.Length);
+        try
         {
-            floatSpan[i] = int16s[i] / 32768f;
-        }
+            var floatSpan = scratch.AsSpan(0, int16s.Length);
+            for (var i = 0; i < int16s.Length; i++)
+            {
+                floatSpan[i] = int16s[i] / 32768f;
+            }
 
-        handler(floatSpan, 16000);
+            handler(floatSpan, 16000);
+        }
+        finally
+        {
+            ArrayPool<float>.Shared.Return(scratch);
+        }
     }
 
     private void WaveInRecordingStopped(object? sender, StoppedEventArgs e)

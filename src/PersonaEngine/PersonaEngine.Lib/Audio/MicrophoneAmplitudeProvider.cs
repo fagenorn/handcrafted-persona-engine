@@ -23,6 +23,7 @@ public sealed class MicrophoneAmplitudeProvider : IMicrophoneAmplitudeProvider, 
     private readonly IMicrophone _microphone;
     private FloatRingBuffer _history = new(HistoryCapacity);
     private float _smoothed;
+    private volatile bool _disposed;
 
     public MicrophoneAmplitudeProvider(IMicrophone microphone)
     {
@@ -30,17 +31,30 @@ public sealed class MicrophoneAmplitudeProvider : IMicrophoneAmplitudeProvider, 
         _microphone.SamplesAvailable += OnSamplesAvailable;
     }
 
-    public float CurrentAmplitude => _smoothed;
+    // _smoothed is written from the capture callback thread and read from the UI
+    // thread. Float reads/writes are atomic on .NET, but Volatile ensures the UI sees
+    // a recently-published value rather than a cached register. _history is a ring
+    // buffer of floats — readers may observe a torn write across the head boundary,
+    // which is acceptable for a UI meter and avoids taking a lock on the audio
+    // capture hot path.
+    public float CurrentAmplitude => Volatile.Read(ref _smoothed);
 
     public ReadOnlySpan<float> History => _history.Values;
 
     public int HistoryHead => _history.Head;
 
-    public void Dispose() => _microphone.SamplesAvailable -= OnSamplesAvailable;
+    public void Dispose()
+    {
+        _disposed = true;
+        _microphone.SamplesAvailable -= OnSamplesAvailable;
+    }
 
     private void OnSamplesAvailable(ReadOnlySpan<float> samples, int sampleRate)
     {
-        if (samples.IsEmpty || sampleRate <= 0)
+        // Bail early if we've been disposed: the mic source may still invoke subscribers
+        // for an in-flight buffer after our unsubscribe depending on NAudio's callback
+        // timing, and we don't want to mutate state after Dispose.
+        if (_disposed || samples.IsEmpty || sampleRate <= 0)
             return;
 
         // Split the buffer into sub-windows. If the buffer is smaller than the nominal
@@ -81,8 +95,9 @@ public sealed class MicrophoneAmplitudeProvider : IMicrophoneAmplitudeProvider, 
         // Exponential smoothing — dt is this sub-window's duration.
         var dt = window.Length / (float)sampleRate;
         var alpha = 1f - MathF.Exp(-SmoothingRate * dt);
-        _smoothed += (rms - _smoothed) * alpha;
+        var nextSmoothed = _smoothed + (rms - _smoothed) * alpha;
+        Volatile.Write(ref _smoothed, nextSmoothed);
 
-        _history.Push(_smoothed);
+        _history.Push(nextSmoothed);
     }
 }
