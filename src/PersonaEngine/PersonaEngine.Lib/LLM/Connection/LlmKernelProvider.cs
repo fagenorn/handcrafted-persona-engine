@@ -24,6 +24,11 @@ public sealed class LlmKernelProvider : ILlmKernelProvider, IDisposable
         "personaengine.llm.kernel.rebuilds.count"
     );
 
+    // Grace period before disposing a replaced Kernel. Covers any in-flight
+    // chat operations that captured the old instance via ILlmKernelProvider.Current
+    // just before the swap. Overlaps with the LLM Polly timeout (60s) with margin.
+    private static readonly TimeSpan DisposeGrace = TimeSpan.FromSeconds(30);
+
     private readonly Action<IKernelBuilder>? _configure;
     private readonly IKernelReloadCoordinator _coordinator;
     private readonly ILogger<LlmKernelProvider> _log;
@@ -74,6 +79,13 @@ public sealed class LlmKernelProvider : ILlmKernelProvider, IDisposable
     {
         _onChangeSub?.Dispose();
         _coordinator.SafeToReload -= OnSafeToReload;
+
+        // No grace period on shutdown: the host is tearing down, in-flight
+        // chat operations are being cancelled anyway.
+        if (Volatile.Read(ref _current)?.Services is IDisposable services)
+        {
+            services.Dispose();
+        }
     }
 
     private void OnOptionsChanged(LlmOptions updated, string? _)
@@ -102,6 +114,16 @@ public sealed class LlmKernelProvider : ILlmKernelProvider, IDisposable
         {
             while (true)
             {
+                // Re-check safety at the top of each drain iteration. State may have
+                // flipped Idle→Busy between SafeToReload firing (outside the
+                // coordinator's lock) and us getting here, or between a successful
+                // rebuild and picking up another coalesced change. Leave _pending
+                // intact so the next idle transition retries.
+                if (!_coordinator.IsSafeToReloadNow)
+                {
+                    return;
+                }
+
                 LlmOptions? pending;
                 lock (_pendingLock)
                 {
@@ -114,12 +136,10 @@ public sealed class LlmKernelProvider : ILlmKernelProvider, IDisposable
                     return;
                 }
 
+                Kernel next;
                 try
                 {
-                    var next = Build(pending, _configure);
-                    Volatile.Write(ref _current, next);
-                    RebuildsCounter.Add(1);
-                    KernelRebuilt?.Invoke();
+                    next = Build(pending, _configure);
                 }
                 catch (Exception ex)
                 {
@@ -127,13 +147,71 @@ public sealed class LlmKernelProvider : ILlmKernelProvider, IDisposable
                         ex,
                         "Failed to rebuild Kernel from updated LlmOptions — keeping previous instance."
                     );
+                    continue;
                 }
+
+                // Second-gate check: Build() is the expensive step. Between taking
+                // _pending and finishing Build() the session may have transitioned
+                // Idle→Busy; publishing the new kernel now would land mid-turn.
+                // Re-queue the options we just built against and bail — next idle
+                // retries (and discards the freshly-built kernel).
+                if (!_coordinator.IsSafeToReloadNow)
+                {
+                    lock (_pendingLock)
+                    {
+                        // If no newer change has arrived, restore the one we consumed
+                        // so the next SafeToReload rebuilds from the same baseline.
+                        _pending ??= pending;
+                    }
+
+                    ScheduleDispose(next);
+                    return;
+                }
+
+                var previous = Volatile.Read(ref _current);
+                Volatile.Write(ref _current, next);
+                RebuildsCounter.Add(1);
+                ScheduleDispose(previous);
+                KernelRebuilt?.Invoke();
             }
         }
         finally
         {
             Interlocked.Exchange(ref _building, 0);
         }
+    }
+
+    /// <summary>
+    ///     Schedules the previous <see cref="Kernel" /> for disposal after
+    ///     <see cref="DisposeGrace" />. Chat engines that captured it via
+    ///     <see cref="ILlmKernelProvider.Current" /> finish their in-flight calls
+    ///     against that instance; the grace period covers the Polly-bounded
+    ///     worst-case. Multiple overlapping swaps each schedule independently —
+    ///     no queue or slot coordination is needed because each replaced kernel
+    ///     owns its own services graph.
+    /// </summary>
+    private static void ScheduleDispose(Kernel? kernel)
+    {
+        if (kernel is null)
+        {
+            return;
+        }
+
+        // Kernel itself isn't IDisposable, but Kernel.Services is a DI
+        // ServiceProvider that owns the registered OpenAIChatCompletionService
+        // instances (and their HttpClients). Disposing it releases those sockets.
+        if (kernel.Services is not IDisposable disposable)
+        {
+            return;
+        }
+
+        _ = Task.Delay(DisposeGrace)
+            .ContinueWith(
+                _ => disposable.Dispose(),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default
+            );
     }
 
     private static Kernel Build(LlmOptions opts, Action<IKernelBuilder>? configure)

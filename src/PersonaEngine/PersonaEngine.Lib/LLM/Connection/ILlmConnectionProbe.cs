@@ -18,7 +18,12 @@ public interface ILlmConnectionProbe
     /// <summary>Latest observation for the vision channel.</summary>
     LlmProbeResult VisionStatus { get; }
 
-    /// <summary>Raised whenever a channel's status changes (including the initial <see cref="LlmProbeStatus.Probing" /> entry).</summary>
+    /// <summary>
+    ///     Raised when a channel's status changes. A re-probe that yields the same
+    ///     status (and the same available-models surface) does not raise the event —
+    ///     consumers only learn about transitions, never about repeated confirmations
+    ///     of the current state.
+    /// </summary>
     event Action<LlmChannel>? StatusChanged;
 
     /// <summary>

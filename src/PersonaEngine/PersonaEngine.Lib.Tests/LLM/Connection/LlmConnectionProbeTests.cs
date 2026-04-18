@@ -24,8 +24,12 @@ public class LlmConnectionProbeTests
 
     private static LlmConnectionProbe Make(StubHandler handler, LlmOptions seed)
     {
-        var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(5) };
-        return new LlmConnectionProbe(Monitor(seed), http, NullLogger<LlmConnectionProbe>.Instance);
+        var factory = new StubHttpClientFactory(handler);
+        return new LlmConnectionProbe(
+            Monitor(seed),
+            factory,
+            NullLogger<LlmConnectionProbe>.Instance
+        );
     }
 
     [Fact]
@@ -187,5 +191,15 @@ public class LlmConnectionProbeTests
             HttpRequestMessage request,
             CancellationToken cancellationToken
         ) => Task.FromResult(_factory(request));
+    }
+
+    private sealed class StubHttpClientFactory : IHttpClientFactory
+    {
+        private readonly HttpMessageHandler _handler;
+
+        public StubHttpClientFactory(HttpMessageHandler handler) => _handler = handler;
+
+        public HttpClient CreateClient(string name) =>
+            new(_handler, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(5) };
     }
 }

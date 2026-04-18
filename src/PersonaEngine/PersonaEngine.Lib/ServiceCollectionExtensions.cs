@@ -244,10 +244,13 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<LlmOptions>(configuration.GetSection("Config:Llm"));
 
-        services.AddSingleton<HttpClient>(_ => new HttpClient
-        {
-            Timeout = TimeSpan.FromSeconds(5),
-        });
+        // Named client so IHttpClientFactory pools/rotates the SocketsHttpHandler
+        // (default 2-minute lifetime) — avoids DNS pinning from a long-lived
+        // HttpClient singleton while keeping the 5-second probe timeout.
+        services.AddHttpClient(
+            LlmConnectionProbe.HttpClientName,
+            c => c.Timeout = TimeSpan.FromSeconds(5)
+        );
         services.AddSingleton<ILlmConnectionProbe, LlmConnectionProbe>();
         services.AddSingleton<IKernelReloadCoordinator, KernelReloadCoordinator>();
         services.AddSingleton<ILlmKernelProvider>(sp => new LlmKernelProvider(

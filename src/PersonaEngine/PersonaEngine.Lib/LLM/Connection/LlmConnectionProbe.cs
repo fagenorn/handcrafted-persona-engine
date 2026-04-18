@@ -7,14 +7,20 @@ using PersonaEngine.Lib.Configuration;
 namespace PersonaEngine.Lib.LLM.Connection;
 
 /// <summary>
-///     Default <see cref="ILlmConnectionProbe" /> implementation. Uses a shared
-///     <see cref="HttpClient" /> to hit <c>/models</c> on each configured endpoint,
-///     and auto-reprobes when <see cref="IOptionsMonitor{T}.OnChange" /> fires for
-///     the relevant <see cref="LlmOptions" /> fields.
+///     Default <see cref="ILlmConnectionProbe" /> implementation. Uses
+///     <see cref="IHttpClientFactory" /> to hit <c>/models</c> on each configured
+///     endpoint, and auto-reprobes when <see cref="IOptionsMonitor{T}.OnChange" />
+///     fires for the relevant <see cref="LlmOptions" /> fields.
 /// </summary>
 public sealed class LlmConnectionProbe : ILlmConnectionProbe, IDisposable
 {
-    private readonly HttpClient _http;
+    /// <summary>
+    ///     Name under which the probe's <see cref="HttpClient" /> is registered with
+    ///     <see cref="IHttpClientFactory" />. DI wires the timeout on this name.
+    /// </summary>
+    public const string HttpClientName = "llm-probe";
+
+    private readonly IHttpClientFactory _httpFactory;
     private readonly ILogger<LlmConnectionProbe> _log;
     private readonly IOptionsMonitor<LlmOptions> _monitor;
     private readonly IDisposable? _onChangeSub;
@@ -28,12 +34,12 @@ public sealed class LlmConnectionProbe : ILlmConnectionProbe, IDisposable
 
     public LlmConnectionProbe(
         IOptionsMonitor<LlmOptions> monitor,
-        HttpClient http,
+        IHttpClientFactory httpFactory,
         ILogger<LlmConnectionProbe> log
     )
     {
         _monitor = monitor;
-        _http = http;
+        _httpFactory = httpFactory;
         _log = log;
         _lastSnapshot = monitor.CurrentValue;
         _onChangeSub = monitor.OnChange(OnOptionsChanged);
@@ -100,12 +106,9 @@ public sealed class LlmConnectionProbe : ILlmConnectionProbe, IDisposable
                 .ConfigureAwait(false);
             Store(channel, result);
         }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            // Caller-cancelled mid-probe: don't leave the channel stuck in Probing.
-            Store(channel, LlmProbeResult.Unknown);
-            throw;
-        }
+        // Caller-cancelled mid-probe: leave the prior status in place rather than
+        // flapping the UI to grey "Not tested". The dedup in Store() means a
+        // re-probe that lands back on the same status won't raise StatusChanged.
         finally
         {
             gate.Release();
@@ -129,19 +132,60 @@ public sealed class LlmConnectionProbe : ILlmConnectionProbe, IDisposable
 
     private void Store(LlmChannel channel, LlmProbeResult result)
     {
+        bool changed;
         lock (_syncRoot)
         {
             if (channel == LlmChannel.Text)
             {
+                changed = !SameSurface(_text, result);
                 _text = result;
             }
             else
             {
+                changed = !SameSurface(_vision, result);
                 _vision = result;
             }
         }
 
-        StatusChanged?.Invoke(channel);
+        if (changed)
+        {
+            StatusChanged?.Invoke(channel);
+        }
+    }
+
+    // Dedup transitions on the fields a consumer actually reacts to. Detail
+    // text and ProbedAt change on every probe and would otherwise storm
+    // StatusChanged even when the surface is unchanged. AvailableModels
+    // changes rarely, but we still gate on it so a freshly-served model id
+    // wakes the UI.
+    private static bool SameSurface(LlmProbeResult a, LlmProbeResult b)
+    {
+        if (a.Status != b.Status)
+        {
+            return false;
+        }
+
+        var am = a.AvailableModels;
+        var bm = b.AvailableModels;
+        if (ReferenceEquals(am, bm))
+        {
+            return true;
+        }
+
+        if (am.Count != bm.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < am.Count; i++)
+        {
+            if (!string.Equals(am[i], bm[i], StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private async Task<LlmProbeResult> ProbeEndpointAsync(
@@ -177,7 +221,8 @@ public sealed class LlmConnectionProbe : ILlmConnectionProbe, IDisposable
 
         try
         {
-            using var resp = await _http
+            var http = _httpFactory.CreateClient(HttpClientName);
+            using var resp = await http
                 .SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct)
                 .ConfigureAwait(false);
 
@@ -267,8 +312,14 @@ public sealed class LlmConnectionProbe : ILlmConnectionProbe, IDisposable
 
     private void OnOptionsChanged(LlmOptions updated, string? name)
     {
-        var prev = _lastSnapshot;
-        _lastSnapshot = updated;
+        // Hold _syncRoot across read+swap so concurrent OnChange callbacks
+        // can't both observe the same prev and race past a mid-edit.
+        LlmOptions prev;
+        lock (_syncRoot)
+        {
+            prev = _lastSnapshot;
+            _lastSnapshot = updated;
+        }
 
         if (
             !SameTuple(
