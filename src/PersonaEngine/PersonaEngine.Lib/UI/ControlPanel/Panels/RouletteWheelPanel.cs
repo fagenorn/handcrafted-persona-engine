@@ -15,12 +15,21 @@ public sealed class RouletteWheelPanel(
     IConfigWriter configWriter
 )
 {
+    // Shared placeholder array for the disabled "(no sections)" combo. Lifting it
+    // to a static field avoids the per-frame collection-expression allocation.
+    private static readonly string[] NoSectionsPlaceholder = ["(no sections)"];
+
     private string[] _fonts = [];
     private bool _initialized;
 
     // Playground state
     private int _playgroundTargetIndex;
     private string _newLabelBuffer = string.Empty;
+
+    // Scratch list reused across Sections-section edits so the editor doesn't
+    // allocate a fresh List<string> every frame. Only mutated while the user is
+    // actively editing; SectionLabels remains the source of truth.
+    private readonly List<string> _sectionEditBuffer = [];
 
     private RouletteWheelOptions _opts;
 
@@ -68,8 +77,12 @@ public sealed class RouletteWheelPanel(
             if (labels.Length == 0)
             {
                 ImGui.BeginDisabled();
-                var noSections = "(no sections)";
-                ImGui.Combo("##WheelPlayTarget", ref _playgroundTargetIndex, [noSections], 1);
+                ImGui.Combo(
+                    "##WheelPlayTarget",
+                    ref _playgroundTargetIndex,
+                    NoSectionsPlaceholder,
+                    1
+                );
                 ImGuiHelpers.HandCursorOnHover();
                 ImGui.EndDisabled();
             }
@@ -137,7 +150,16 @@ public sealed class RouletteWheelPanel(
     {
         ImGuiHelpers.SectionHeader("Sections");
 
-        var labels = _opts.SectionLabels.ToList();
+        // Reuse the scratch buffer instead of allocating a new List<string> on
+        // every frame. It's refilled from SectionLabels each frame so edits are
+        // always applied against the current config snapshot.
+        var labels = _sectionEditBuffer;
+        labels.Clear();
+        var source = _opts.SectionLabels;
+        for (var i = 0; i < source.Length; i++)
+        {
+            labels.Add(source[i]);
+        }
         var changed = false;
 
         for (var i = 0; i < labels.Count; i++)
