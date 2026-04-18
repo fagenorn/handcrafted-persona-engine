@@ -50,7 +50,9 @@ public sealed class VisionLlmSection : IDisposable
 
     private LlmOptions _snapshot;
 
-    private OneShotAnimation _testPulse;
+    private ProbeFooter.State _footerState;
+
+    private readonly Action _onTestClicked;
 
     public VisionLlmSection(
         IOptionsMonitor<LlmOptions> options,
@@ -67,6 +69,7 @@ public sealed class VisionLlmSection : IDisposable
 
         _enableKnob = new AnimatedFloat(_snapshot.VisionEnabled ? 1f : 0f);
 
+        _onTestClicked = () => _ = _probe.ProbeAsync(LlmChannel.Vision);
         _onChangeSub = options.OnChange(OnOptionsChanged);
         _probe.StatusChanged += OnProbeStatus;
     }
@@ -205,7 +208,7 @@ public sealed class VisionLlmSection : IDisposable
             _probe.VisionStatus.AvailableModels,
             _modelBuf,
             out var next,
-            onRequestReprobe: () => _ = _probe.ProbeAsync(LlmChannel.Vision)
+            onRequestReprobe: _onTestClicked
         );
 
         if (next is not null)
@@ -225,34 +228,10 @@ public sealed class VisionLlmSection : IDisposable
             "Authentication token. Leave blank for local endpoints."
         );
 
-        // Reserve horizontal space for the Hide/Show button so it doesn't overflow
-        // the card. SubtleButton uses FramePadding(10, 5) so width ≈ text + 20.
-        var visibleBtnText = _showKey ? "Hide" : "Show";
-        var style = ImGui.GetStyle();
-        var buttonW = ImGui.CalcTextSize(visibleBtnText).X + 20f;
-        var avail = ImGui.GetContentRegionAvail().X;
-        ImGui.SetNextItemWidth(MathF.Max(60f, avail - buttonW - style.ItemSpacing.X));
-
-        var flags = _showKey ? ImGuiInputTextFlags.None : ImGuiInputTextFlags.Password;
-        if (ImGui.InputText("##VisionApiKey", ref _apiKeyBuf, 512, flags))
+        ApiKeyRow.Render("VisionKey", ref _apiKeyBuf, ref _showKey, _endpointBuf, out var next);
+        if (next is not null)
         {
             WriteSnapshot(_snapshot with { VisionApiKey = _apiKeyBuf });
-        }
-
-        ImGui.SameLine();
-        if (ImGuiHelpers.SubtleButton(_showKey ? "Hide##VisionKey" : "Show##VisionKey"))
-        {
-            _showKey = !_showKey;
-        }
-
-        if (
-            _endpointBuf.Contains("api.openai.com", StringComparison.OrdinalIgnoreCase)
-            && string.IsNullOrWhiteSpace(_apiKeyBuf)
-        )
-        {
-            ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextTertiary);
-            ImGui.TextUnformatted("OpenAI requires an API key.");
-            ImGui.PopStyleColor();
         }
 
         ImGuiHelpers.SettingEndRow(rowY);
@@ -260,38 +239,13 @@ public sealed class VisionLlmSection : IDisposable
 
     private void RenderFooterRow(float dt)
     {
-        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextTertiary);
-        ImGui.TextUnformatted(FooterLeftText());
-        ImGui.PopStyleColor();
-
-        ImGui.SameLine();
-        var btnText = _probeInFlight ? "Testing\u2026" : "Test connection";
-        var btnW = ImGui.CalcTextSize(btnText).X + 32f;
-        var avail = ImGui.GetContentRegionAvail().X;
-        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + Math.Max(0f, avail - btnW));
-
-        ImGui.BeginDisabled(_probeInFlight);
-        if (ImGuiHelpers.PrimaryButtonWithFeedback(btnText, ref _testPulse, dt))
-        {
-            _ = _probe.ProbeAsync(LlmChannel.Vision);
-        }
-
-        ImGui.EndDisabled();
-    }
-
-    private string FooterLeftText()
-    {
-        if (_probeInFlight)
-        {
-            return "Testing\u2026";
-        }
-
-        if (_lastProbeTime is null)
-        {
-            return "Not tested yet";
-        }
-
-        return $"Last tested: {TimeFormat.HumaniseAgo(DateTimeOffset.UtcNow - _lastProbeTime.Value)}";
+        ProbeFooter.Render(
+            ref _footerState,
+            _lastProbeTime,
+            _probeInFlight,
+            dt,
+            _onTestClicked
+        );
     }
 
     private void OnOptionsChanged(LlmOptions updated, string? _)
