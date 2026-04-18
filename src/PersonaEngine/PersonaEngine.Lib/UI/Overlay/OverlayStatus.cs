@@ -22,4 +22,13 @@ public enum OverlayStatus
 
     /// <summary>Last start attempt threw. <c>LastError</c> on the host explains why.</summary>
     Failed,
+
+    /// <summary>Warning-tier live state — subsystem is running but degraded (e.g. TTS cache stale but working).</summary>
+    Degraded,
+
+    /// <summary>User-silenced state (e.g. microphone muted by the user).</summary>
+    Muted,
+
+    /// <summary>Probe has not yet reported; state is indeterminate.</summary>
+    Unknown,
 }

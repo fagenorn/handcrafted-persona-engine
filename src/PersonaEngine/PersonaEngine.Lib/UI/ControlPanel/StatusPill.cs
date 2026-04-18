@@ -257,6 +257,9 @@ public static class StatusPill
             OverlayStatus.Active => (Theme.Success, "Active", false),
             OverlayStatus.Stopping => (Theme.Warning, "Stopping…", true),
             OverlayStatus.Failed => (Theme.Error, "Failed — click to retry", false),
+            OverlayStatus.Degraded => (Theme.Warning, "Degraded", false),
+            OverlayStatus.Muted => (Theme.TextTertiary, "Muted", false),
+            OverlayStatus.Unknown => (Theme.TextTertiary, "?", false),
             _ => (Theme.TextTertiary, "?", false),
         };
 
