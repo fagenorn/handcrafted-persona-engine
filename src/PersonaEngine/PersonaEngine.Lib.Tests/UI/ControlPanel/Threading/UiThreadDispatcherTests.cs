@@ -24,18 +24,22 @@ public class UiThreadDispatcherTests
     public void DrainPending_BoundsPerFrameBatch()
     {
         var dispatcher = new UiThreadDispatcher(NullLogger<UiThreadDispatcher>.Instance);
+        const int total = 200;
         var calls = 0;
-        for (var i = 0; i < 200; i++)
+        for (var i = 0; i < total; i++)
         {
             dispatcher.Post(() => calls++);
         }
 
         dispatcher.DrainPending();
-
         Assert.Equal(UiThreadDispatcher.MaxPerFrame, calls);
 
-        dispatcher.DrainPending();
-        Assert.Equal(200, calls);
+        while (calls < total)
+        {
+            dispatcher.DrainPending();
+        }
+
+        Assert.Equal(total, calls);
     }
 
     [Fact]

@@ -5,7 +5,7 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Threading;
 
 public sealed class UiThreadDispatcher(ILogger<UiThreadDispatcher> logger) : IUiThreadDispatcher
 {
-    internal const int MaxPerFrame = 100;
+    internal const int MaxPerFrame = 64;
 
     private readonly ConcurrentQueue<Action> _queue = new();
 

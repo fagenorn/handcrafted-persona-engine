@@ -9,12 +9,16 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Threading;
 public interface IUiThreadDispatcher
 {
     /// <summary>Enqueue <paramref name="work" /> to run on the next UI frame. Thread-safe.</summary>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="work"/> is <see langword="null"/>.</exception>
     void Post(Action work);
 
     /// <summary>
     ///     Drain up to an implementation-defined per-frame cap of queued actions, running
     ///     each inline on the calling (UI) thread. Must be invoked from the UI thread.
     ///     Exceptions from individual actions are logged and swallowed.
+    ///     Actions posted during a drain may be picked up in the same drain if the
+    ///     per-frame cap has not yet been reached; otherwise they are deferred to
+    ///     the next drain.
     /// </summary>
     void DrainPending();
 }
