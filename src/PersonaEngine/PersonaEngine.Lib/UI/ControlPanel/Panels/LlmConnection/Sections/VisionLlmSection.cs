@@ -13,14 +13,14 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels.LlmConnection.Sections;
 ///     Configure the optional vision LLM. A <see cref="ImGuiHelpers.ToggleSwitch" />
 ///     in the header controls <see cref="LlmOptions.VisionEnabled" />; when off, only
 ///     the header row renders. When on, exposes endpoint + model + API key with live
-///     probe feedback via a broadcast-style <see cref="SubsystemStatusChip" />, plus
-///     <c>OpenAI · Custom</c> endpoint chips and an explicit "Test connection" button.
+///     probe feedback via a broadcast-style <see cref="SubsystemStatusChip" />, plus a
+///     preset endpoint picker and an explicit "Test connection" button.
 /// </summary>
 public sealed class VisionLlmSection : IDisposable
 {
-    private const float ChipGap = 6f;
-
     private const string OpenAiUrl = "https://api.openai.com/v1";
+
+    private static readonly (string Label, string Url)[] EndpointPresets = [("OpenAI", OpenAiUrl)];
 
     private readonly IConfigWriter _configWriter;
 
@@ -158,29 +158,20 @@ public sealed class VisionLlmSection : IDisposable
     {
         var rowY = ImGui.GetCursorPosY();
         ImGuiHelpers.SettingLabel("Endpoint", "Vision-capable OpenAI-compatible URL.");
-        if (ImGui.InputText("##VisionEndpoint", ref _endpointBuf, 512))
-        {
-            WriteSnapshot(_snapshot with { VisionEndpoint = _endpointBuf });
-        }
 
-        var ep = _endpointBuf;
-        var isOpenAi = string.Equals(
-            ep.TrimEnd('/'),
-            OpenAiUrl.TrimEnd('/'),
-            StringComparison.OrdinalIgnoreCase
+        EndpointPickerRow.Render(
+            "VisionEndpoint",
+            "Vision-capable OpenAI-compatible URL.",
+            EndpointPresets,
+            _endpointBuf,
+            out var next
         );
-        var isCustom = !isOpenAi && !string.IsNullOrWhiteSpace(ep);
 
-        if (ImGuiHelpers.Chip("OpenAI", isOpenAi))
+        if (next is not null)
         {
-            _endpointBuf = OpenAiUrl;
+            _endpointBuf = next;
             WriteSnapshot(_snapshot with { VisionEndpoint = _endpointBuf });
         }
-
-        ImGui.SameLine(0f, ChipGap);
-        // "Custom" chip is visual-only — clicking it doesn't mutate state because
-        // the user is already typing a custom URL by definition.
-        ImGuiHelpers.Chip("Custom", isCustom, interactive: false);
 
         ImGuiHelpers.SettingEndRow(rowY);
     }

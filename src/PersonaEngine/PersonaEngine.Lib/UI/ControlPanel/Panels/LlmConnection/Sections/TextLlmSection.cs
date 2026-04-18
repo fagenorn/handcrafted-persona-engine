@@ -11,13 +11,11 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels.LlmConnection.Sections;
 
 /// <summary>
 ///     Configure the primary text LLM. Endpoint + model + API key with live probe
-///     feedback via a broadcast-style <see cref="SubsystemStatusChip" />, plus preset
-///     endpoint chips and an explicit "Test connection" button.
+///     feedback via a broadcast-style <see cref="SubsystemStatusChip" />, plus a preset
+///     endpoint picker and an explicit "Test connection" button.
 /// </summary>
 public sealed class TextLlmSection : IDisposable
 {
-    private const float ChipGap = 6f;
-
     private const string OpenAiUrl = "https://api.openai.com/v1";
 
     private const string LmStudioUrl = "http://localhost:1234/v1";
@@ -133,41 +131,20 @@ public sealed class TextLlmSection : IDisposable
     {
         var rowY = ImGui.GetCursorPosY();
         ImGuiHelpers.SettingLabel("Endpoint", "Base URL of the OpenAI-compatible API.");
-        if (ImGui.InputText("##TextEndpoint", ref _endpointBuf, 512))
+
+        EndpointPickerRow.Render(
+            "TextEndpoint",
+            "Base URL of the OpenAI-compatible API.",
+            EndpointPresets,
+            _endpointBuf,
+            out var next
+        );
+
+        if (next is not null)
         {
+            _endpointBuf = next;
             WriteSnapshot(_snapshot with { TextEndpoint = _endpointBuf });
         }
-
-        var ep = _endpointBuf;
-        var selectedIndex = Array.FindIndex(
-            EndpointPresets,
-            m =>
-                string.Equals(
-                    ep.TrimEnd('/'),
-                    m.Url.TrimEnd('/'),
-                    StringComparison.OrdinalIgnoreCase
-                )
-        );
-        var isCustom = selectedIndex == -1 && !string.IsNullOrWhiteSpace(ep);
-
-        for (var i = 0; i < EndpointPresets.Length; i++)
-        {
-            if (i > 0)
-            {
-                ImGui.SameLine(0f, ChipGap);
-            }
-
-            if (ImGuiHelpers.Chip(EndpointPresets[i].Label, selectedIndex == i))
-            {
-                _endpointBuf = EndpointPresets[i].Url;
-                WriteSnapshot(_snapshot with { TextEndpoint = _endpointBuf });
-            }
-        }
-
-        ImGui.SameLine(0f, ChipGap);
-        // "Custom" chip is visual-only — clicking it doesn't mutate state because
-        // the user is already typing a custom URL by definition.
-        ImGuiHelpers.Chip("Custom", isCustom, interactive: false);
 
         ImGuiHelpers.SettingEndRow(rowY);
     }
