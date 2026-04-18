@@ -45,6 +45,11 @@ public sealed class ControlPanelComponent : IRenderComponent
     private readonly Navigation _navigation = new();
     private readonly Dictionary<NavSection, PanelRegistration> _panelRegistrations = new();
 
+    // Disposable panels that must have Dispose() forwarded from this component.
+    private readonly Dashboard _dashboard;
+    private readonly LlmConnectionPanel _llmConnectionPanel;
+    private readonly ScreenAwareness _screenAwareness;
+
     private readonly record struct PanelRegistration(
         Action<float> Render,
         IActivatablePanel? Lifecycle
@@ -101,8 +106,13 @@ public sealed class ControlPanelComponent : IRenderComponent
         _subtitlesPanel = subtitlesPanel;
         _navBus = navBus;
 
-        RegisterPanel(NavSection.Dashboard, dt => dashboard.Render(dt));
-        RegisterPanel(NavSection.LlmConnection, dt => llmConnectionPanel.Render(dt));
+        // Hold disposable panels as fields so Dispose() can forward to them.
+        _dashboard = dashboard;
+        _llmConnectionPanel = llmConnectionPanel;
+        _screenAwareness = screenAwareness;
+
+        RegisterPanel(NavSection.Dashboard, dt => _dashboard.Render(dt));
+        RegisterPanel(NavSection.LlmConnection, dt => _llmConnectionPanel.Render(dt));
         RegisterPanel(NavSection.Personality, dt => personalityPanel.Render(dt));
         RegisterPanel(NavSection.Listening, dt => listeningPanel.Render(dt), listeningPanel);
         RegisterPanel(NavSection.Voice, dt => voicePanel.Render(dt));
@@ -111,7 +121,7 @@ public sealed class ControlPanelComponent : IRenderComponent
         RegisterPanel(NavSection.Overlay, dt => overlayPanel.Render(dt));
         RegisterPanel(NavSection.Streaming, dt => streaming.Render(dt));
         RegisterPanel(NavSection.RouletteWheel, dt => rouletteWheelPanel.Render(dt));
-        RegisterPanel(NavSection.ScreenAwareness, dt => screenAwareness.Render(dt));
+        RegisterPanel(NavSection.ScreenAwareness, dt => _screenAwareness.Render(dt));
         RegisterPanel(NavSection.Application, dt => application.Render(dt));
 
         _navBus.Requested += OnNavRequested;
@@ -153,6 +163,9 @@ public sealed class ControlPanelComponent : IRenderComponent
         }
 
         _ambientRenderer.Dispose();
+        _dashboard.Dispose();
+        _llmConnectionPanel.Dispose();
+        _screenAwareness.Dispose();
     }
 
     /// <summary>
