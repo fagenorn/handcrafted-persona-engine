@@ -30,6 +30,18 @@ public sealed class CloneLayerSection : IDisposable
     private float _elapsed;
     private readonly ImGuiHelpers.CollapsibleState _collapseState = new();
 
+    // Per-frame arguments + closure for the body renderer. Cached as instance
+    // fields so CollapsibleSection's Action argument reuses the same delegate
+    // instance across frames instead of allocating a new closure each render.
+    private float _bodyDt;
+    private VoiceMode _bodyMode;
+    private readonly Action _renderBodyAction;
+
+    // RVC voice list cached so the voice picker doesn't re-array the provider
+    // every frame. Rebuilt when the provider's list size changes so
+    // newly-added voices still surface.
+    private string[] _rvcVoicesCache = [];
+
     public CloneLayerSection(
         IOptionsMonitor<TtsConfiguration> ttsOptions,
         IOptionsMonitor<RVCFilterOptions> rvcOptions,
@@ -44,6 +56,7 @@ public sealed class CloneLayerSection : IDisposable
         _configWriter = configWriter;
 
         _rvc = rvcOptions.CurrentValue;
+        _renderBodyAction = () => RenderBody(_bodyDt, _bodyMode);
 
         _changeSubscription = rvcOptions.OnChange((updated, _) => _rvc = updated);
     }
@@ -64,11 +77,14 @@ public sealed class CloneLayerSection : IDisposable
                 ? "Recommended \u2014 gives Kokoro character."
                 : "Rarely needed \u2014 Qwen3 reads emotion from context.";
 
+        _bodyDt = dt;
+        _bodyMode = mode;
+
         ImGuiHelpers.CollapsibleSection(
             "Clone Voice",
             subtitle: null,
             defaultOpen,
-            () => RenderBody(dt, mode),
+            _renderBodyAction,
             hint: hint,
             animState: _collapseState,
             dt: dt
@@ -96,7 +112,7 @@ public sealed class CloneLayerSection : IDisposable
 
         // Voice picker
         rowY = ImGui.GetCursorPosY();
-        var rvcVoices = _rvcVoiceProvider.GetAvailableVoices().ToArray();
+        var rvcVoices = GetRvcVoices();
         if (rvcVoices.Length > 0)
         {
             var current = _rvc.DefaultVoice;
@@ -144,6 +160,30 @@ public sealed class CloneLayerSection : IDisposable
 
         if (!enabled)
             ImGui.EndDisabled();
+    }
+
+    private string[] GetRvcVoices()
+    {
+        // The provider returns a fresh IReadOnlyList<string> every call (disk
+        // scan). We can't avoid that here, but we can avoid materialising a
+        // fresh array every frame: reuse the cached copy as long as the
+        // provider's list length matches. A mismatch (rare — voice directory
+        // contents rarely change during a session) triggers a rebuild so
+        // newly-added voices still appear in the picker.
+        var live = _rvcVoiceProvider.GetAvailableVoices();
+        if (live.Count == _rvcVoicesCache.Length)
+        {
+            return _rvcVoicesCache;
+        }
+
+        var buffer = new string[live.Count];
+        for (var i = 0; i < live.Count; i++)
+        {
+            buffer[i] = live[i];
+        }
+
+        _rvcVoicesCache = buffer;
+        return _rvcVoicesCache;
     }
 
     private VoiceAuditionRequest BuildPreviewRequest(VoiceMode mode, int pitch, string previewId)

@@ -35,6 +35,16 @@ public sealed class VoiceGallery : IDisposable
     private float _elapsed;
     private readonly UniformHeightTracker _tileHeight = new();
 
+    // Scratch buffer for the per-frame gender-filtered slice. Reused across
+    // frames so we don't allocate Where()+ToArray() every render. Cleared and
+    // refilled at the top of Render.
+    private readonly List<VoiceDescriptor> _filtered = new(capacity: 64);
+
+    // Per-descriptor tile id cache, keyed on descriptor identity, so the tile
+    // loop doesn't interpolate $"tile_{engine}_{id}" every frame. Capacity
+    // matches the gallery size (dozens).
+    private readonly Dictionary<VoiceDescriptor, string> _tilePreviewIds = new();
+
     public VoiceGallery(
         IOptionsMonitor<TtsConfiguration> ttsOptions,
         IOptionsMonitor<RVCFilterOptions> rvcOptions,
@@ -72,7 +82,17 @@ public sealed class VoiceGallery : IDisposable
 
         RenderFilters();
 
-        var descriptors = _catalog.List(engine).Where(PassesFilter).ToArray();
+        _filtered.Clear();
+        var source = _catalog.List(engine);
+        for (var i = 0; i < source.Count; i++)
+        {
+            var d = source[i];
+            if (PassesFilter(d))
+            {
+                _filtered.Add(d);
+            }
+        }
+
         var currentVoice = GetCurrentVoice(mode);
 
         // Strip height: on the first frame _tileHeight.Height is 0 → use a reasonable
@@ -88,15 +108,15 @@ public sealed class VoiceGallery : IDisposable
             )
         )
         {
-            for (var i = 0; i < descriptors.Length; i++)
+            for (var i = 0; i < _filtered.Count; i++)
             {
-                var descriptor = descriptors[i];
+                var descriptor = _filtered[i];
                 if (i > 0)
                     ImGui.SameLine(0f, TileGap);
 
                 var selected = string.Equals(descriptor.Id, currentVoice, StringComparison.Ordinal);
 
-                var tilePreviewId = $"tile_{descriptor.Engine}_{descriptor.Id}";
+                var tilePreviewId = GetTilePreviewId(descriptor);
                 var tilePreviewState =
                     _audition.ActivePreviewId == tilePreviewId
                         ? ImGuiHelpers.PreviewButtonState.Playing
@@ -151,6 +171,16 @@ public sealed class VoiceGallery : IDisposable
 
     private bool PassesFilter(VoiceDescriptor d) =>
         _genderFilter is null || d.Gender == _genderFilter;
+
+    private string GetTilePreviewId(VoiceDescriptor descriptor)
+    {
+        if (_tilePreviewIds.TryGetValue(descriptor, out var id))
+            return id;
+
+        id = $"tile_{descriptor.Engine}_{descriptor.Id}";
+        _tilePreviewIds[descriptor] = id;
+        return id;
+    }
 
     private string GetCurrentVoice(VoiceMode mode) =>
         mode == VoiceMode.Clear ? _kokoro.DefaultVoice : _qwen3.Speaker;
