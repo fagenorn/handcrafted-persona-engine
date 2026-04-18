@@ -79,8 +79,7 @@ public static class Ui
     public static RowGroupScope Rows(params Sz[] sizes) => new(string.Empty, sizes, 0f);
 
     /// <summary>Variadic overload — see <see cref="Rows(float, ReadOnlySpan{Sz})"/>.</summary>
-    public static RowGroupScope Rows(float gap, params Sz[] sizes) =>
-        new(string.Empty, sizes, gap);
+    public static RowGroupScope Rows(float gap, params Sz[] sizes) => new(string.Empty, sizes, gap);
 
     /// <summary>Variadic overload — see <see cref="Rows(string, ReadOnlySpan{Sz})"/>.</summary>
     public static RowGroupScope Rows(string id, params Sz[] sizes) => new(id, sizes, 0f);

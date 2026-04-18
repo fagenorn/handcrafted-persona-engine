@@ -80,7 +80,10 @@ public sealed class UiThreadDispatcher(ILogger<UiThreadDispatcher> logger) : IUi
         }
 
         // Only the thread that actually advances the milestone emits the log.
-        if (Interlocked.CompareExchange(ref _lastLoggedDropMilestone, milestone, previous) == previous)
+        if (
+            Interlocked.CompareExchange(ref _lastLoggedDropMilestone, milestone, previous)
+            == previous
+        )
         {
             logger.LogWarning(
                 "UiThreadDispatcher dropped {TotalDropped} queued actions (cap={Cap}). Investigate producer-side back-pressure.",

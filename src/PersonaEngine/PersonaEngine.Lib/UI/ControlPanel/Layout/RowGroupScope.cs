@@ -270,10 +270,7 @@ public ref struct RowGroupScope
     {
         lock (_cacheLock)
         {
-            if (
-                AutoHeightCache.TryGetValue(id, out var cached)
-                && cached.Length == length
-            )
+            if (AutoHeightCache.TryGetValue(id, out var cached) && cached.Length == length)
             {
                 return cached;
             }

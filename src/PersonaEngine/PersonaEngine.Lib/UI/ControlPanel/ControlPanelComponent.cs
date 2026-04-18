@@ -125,12 +125,7 @@ public sealed class ControlPanelComponent : IRenderComponent
             disposable: listeningPanel
         );
         Register(builder, NavSection.Voice, dt => voicePanel.Render(dt), disposable: voicePanel);
-        Register(
-            builder,
-            NavSection.Avatar,
-            dt => avatarPanel.Render(dt),
-            disposable: avatarPanel
-        );
+        Register(builder, NavSection.Avatar, dt => avatarPanel.Render(dt), disposable: avatarPanel);
         Register(
             builder,
             NavSection.Subtitles,

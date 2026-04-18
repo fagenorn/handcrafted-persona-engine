@@ -126,8 +126,7 @@ public sealed class LiveMeterWidget
     }
 
     /// <summary>Sample at chronological index <paramref name="i" /> (0 = oldest, <see cref="_count" /> - 1 = newest).</summary>
-    private TraceSample GetSample(int i) =>
-        _samples[(_head - _count + i) & CapacityMask];
+    private TraceSample GetSample(int i) => _samples[(_head - _count + i) & CapacityMask];
 
     /// <summary>First chronological index whose timestamp is within the visible window.</summary>
     private int FirstVisibleIndex()
