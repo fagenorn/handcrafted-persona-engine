@@ -230,11 +230,11 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
                             hidden,
                             prefillLen,
                             options,
-                            entropyAccumulator
+                            entropyAccumulator,
+                            cancellationToken
                         )
                     )
                     {
-                        cancellationToken.ThrowIfCancellationRequested();
                         allCodes.Add(codes);
 
                         // Log a warning if no audio has been emitted for 30s
@@ -701,7 +701,8 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
         float[] initialHidden,
         int prefillLen,
         Qwen3GenerationOptions options,
-        List<float>? entropyAccumulator = null
+        List<float>? entropyAccumulator = null,
+        CancellationToken cancellationToken = default
     )
     {
         var numCodeGroups = _config.CodecNumCodebooks;
@@ -741,6 +742,10 @@ public sealed class Qwen3TtsGgufEngine : IDisposable
 
         for (var step = 0; step < maxSteps; step++)
         {
+            // Abort promptly on barge-in so we don't decode to EOS while holding the
+            // rented LlamaTtsContext. Reset() will clear the KV caches on return.
+            cancellationToken.ThrowIfCancellationRequested();
+
             stepSw.Restart();
 
             // Capture entropy for word timing estimation
