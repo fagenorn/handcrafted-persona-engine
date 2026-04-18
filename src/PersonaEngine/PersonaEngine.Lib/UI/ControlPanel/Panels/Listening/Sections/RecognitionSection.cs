@@ -31,9 +31,23 @@ public sealed class RecognitionSection : IDisposable
     private readonly IConfigWriter _configWriter;
     private readonly IDisposable? _changeSubscription;
 
+    // Pre-built "##vocab_{i}" ids up to MaxVocabulary so the per-chip
+    // InvisibleButton doesn't interpolate a fresh string every frame.
+    private static readonly string[] VocabChipIds = BuildVocabChipIds();
+
     private AsrConfiguration _asr;
     private string _inputBuffer = string.Empty;
     private List<string> _vocabulary = new();
+
+    private static string[] BuildVocabChipIds()
+    {
+        var ids = new string[MaxVocabulary];
+        for (var i = 0; i < MaxVocabulary; i++)
+        {
+            ids[i] = $"##vocab_{i}";
+        }
+        return ids;
+    }
 
     public RecognitionSection(IOptionsMonitor<AsrConfiguration> monitor, IConfigWriter configWriter)
     {
@@ -224,7 +238,11 @@ public sealed class RecognitionSection : IDisposable
         var size = new Vector2(totalWidth, totalHeight);
 
         var cursor = ImGui.GetCursorScreenPos();
-        var clicked = ImGui.InvisibleButton($"##vocab_{index}", size);
+        // Chip limit is enforced at the add-input gate; defensively clamp here
+        // so a future refactor that lifts MaxVocabulary can't index past the
+        // cached id table.
+        var chipId = index < VocabChipIds.Length ? VocabChipIds[index] : $"##vocab_{index}";
+        var clicked = ImGui.InvisibleButton(chipId, size);
         ImGuiHelpers.HandCursorOnHover();
         var hovered = ImGui.IsItemHovered();
 
