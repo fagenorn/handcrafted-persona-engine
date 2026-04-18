@@ -1,5 +1,6 @@
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Shared;
 
+using System.Collections.Immutable;
 using Hexa.NET.ImGui;
 
 /// <summary>
@@ -18,35 +19,12 @@ public static class EndpointPickerRow
     ///     Default preset list shared by every LLM connection section (text + vision).
     ///     OpenAI public endpoint + the two locally-hosted OpenAI-compatible runtimes.
     /// </summary>
-    public static readonly (string Label, string Url)[] DefaultPresets =
+    public static readonly ImmutableArray<(string Label, string Url)> DefaultPresets =
     [
         ("OpenAI", "https://api.openai.com/v1"),
         ("LM Studio", "http://localhost:1234/v1"),
         ("Ollama", "http://localhost:11434/v1"),
     ];
-
-    /// <summary>
-    ///     Returns the preset label whose URL matches <paramref name="current" />
-    ///     ignoring case and a single trailing slash. <see langword="null" /> when no
-    ///     preset matches.
-    /// </summary>
-    public static string? MatchPreset(
-        IReadOnlyList<(string Label, string Url)> presets,
-        string current
-    )
-    {
-        ArgumentNullException.ThrowIfNull(presets);
-        var normalized = Normalize(current);
-        foreach (var (label, url) in presets)
-        {
-            if (string.Equals(Normalize(url), normalized, StringComparison.OrdinalIgnoreCase))
-            {
-                return label;
-            }
-        }
-
-        return null;
-    }
 
     /// <summary>
     ///     Renders the endpoint input + presets combo. Sets <paramref name="next" /> to
@@ -108,6 +86,4 @@ public static class EndpointPickerRow
             ImGui.PopID();
         }
     }
-
-    private static string Normalize(string? url) => (url ?? string.Empty).Trim().TrimEnd('/');
 }
