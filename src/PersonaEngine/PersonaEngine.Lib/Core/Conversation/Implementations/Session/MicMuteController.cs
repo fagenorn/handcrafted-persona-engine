@@ -14,9 +14,12 @@ public sealed class MicMuteController(IConversationInputGate gate) : IMicMuteCon
 
     public void SetMuted(bool muted)
     {
-        bool changed;
+        // Invoke MutedChanged under the lock so near-simultaneous toggles can't deliver
+        // events in reverse order. Subscribers run on the caller's thread — keep them cheap;
+        // UI consumers should marshal via IUiThreadDispatcher if they need the UI thread.
         lock (_lock)
         {
+            bool changed;
             if (muted && _scope is null)
             {
                 _scope = gate.CloseScope(ScopeReason);
@@ -32,11 +35,11 @@ public sealed class MicMuteController(IConversationInputGate gate) : IMicMuteCon
             {
                 changed = false;
             }
-        }
 
-        if (changed)
-        {
-            MutedChanged?.Invoke(muted);
+            if (changed)
+            {
+                MutedChanged?.Invoke(muted);
+            }
         }
     }
 }
