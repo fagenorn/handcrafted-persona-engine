@@ -2,6 +2,7 @@ using System.Numerics;
 using Hexa.NET.ImGui;
 using PersonaEngine.Lib.Health;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Shared;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard.Sections;
 
@@ -70,7 +71,6 @@ public sealed class SystemHealthSection : IDisposable
     private void RenderCard(ISubsystemHealthProbe probe)
     {
         var status = probe.Current;
-        var (dotColor, labelColor) = Palette(status.Health);
 
         // Claim the hit region first so the entire card is clickable. We're
         // inside the Ui.Card child scope here; GetItemRectMin/Max would
@@ -107,23 +107,8 @@ public sealed class SystemHealthSection : IDisposable
         ImGui.PopStyleColor();
 
         ImGui.SameLine(0f, 8f);
-        ImGuiHelpers.StatusDot(dotColor);
-
-        ImGui.PushStyleColor(ImGuiCol.Text, labelColor);
-        ImGui.TextUnformatted(status.Label);
-        ImGui.PopStyleColor();
+        SubsystemStatusChip.Render(status);
     }
-
-    private static (Vector4 Dot, Vector4 Label) Palette(SubsystemHealth h) =>
-        h switch
-        {
-            SubsystemHealth.Healthy => (Theme.Success, Theme.TextPrimary),
-            SubsystemHealth.Degraded => (Theme.Warning, Theme.TextPrimary),
-            SubsystemHealth.Failed => (Theme.Error, Theme.TextPrimary),
-            SubsystemHealth.Unknown => (Theme.TextTertiary, Theme.TextTertiary),
-            SubsystemHealth.Disabled => (Theme.TextTertiary, Theme.TextTertiary),
-            _ => (Theme.TextTertiary, Theme.TextTertiary),
-        };
 
     private void OnProbeChanged(SubsystemStatus _)
     {
