@@ -36,6 +36,8 @@ public sealed class SystemHealthSection : IDisposable
     // that `elapsed % 1.6f` stops varying).
     private float _elapsed;
 
+    private bool _disposed;
+
     public SystemHealthSection(IEnumerable<ISubsystemHealthProbe> probes, INavRequestBus nav)
     {
         ArgumentNullException.ThrowIfNull(probes);
@@ -82,6 +84,12 @@ public sealed class SystemHealthSection : IDisposable
 
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
         foreach (var p in _probes)
         {
             p.StatusChanged -= OnProbeChanged;
