@@ -41,18 +41,26 @@ public partial class ConversationSession
             ConversationTrigger.ErrorOccurred
         );
 
+        // Cancel/Retry are user-initiated triggers. Only ActiveTurn (Cancel) and Error (Retry)
+        // accept them as real transitions; every other state ignores them so that a stale
+        // Cancel/Retry request fired after the target state has already moved on becomes a
+        // benign no-op rather than an unhandled trigger → Error.
         _stateMachine
             .Configure(ConversationState.Initial)
             .Permit(ConversationTrigger.InitializeRequested, ConversationState.Initializing)
             .Permit(ConversationTrigger.StopRequested, ConversationState.Ended)
-            .Permit(ConversationTrigger.ErrorOccurred, ConversationState.Error);
+            .Permit(ConversationTrigger.ErrorOccurred, ConversationState.Error)
+            .Ignore(ConversationTrigger.CancelRequested)
+            .Ignore(ConversationTrigger.RetryRequested);
 
         _stateMachine
             .Configure(ConversationState.Initializing)
             .OnEntryAsync(InitializeSessionAsync, "Initialize Session Resources")
             .Permit(ConversationTrigger.InitializeComplete, ConversationState.Idle)
             .Permit(ConversationTrigger.ErrorOccurred, ConversationState.Error)
-            .Permit(ConversationTrigger.StopRequested, ConversationState.Ended);
+            .Permit(ConversationTrigger.StopRequested, ConversationState.Ended)
+            .Ignore(ConversationTrigger.CancelRequested)
+            .Ignore(ConversationTrigger.RetryRequested);
 
         _stateMachine
             .Configure(ConversationState.Idle)
@@ -66,6 +74,8 @@ public partial class ConversationSession
             .Ignore(ConversationTrigger.LlmStreamEnded)
             .Ignore(ConversationTrigger.TtsStreamEnded)
             .Ignore(ConversationTrigger.AudioStreamEnded)
+            .Ignore(ConversationTrigger.CancelRequested)
+            .Ignore(ConversationTrigger.RetryRequested)
             .Permit(ConversationTrigger.InputDetected, ConversationState.Listening)
             .Permit(ConversationTrigger.InputFinalized, ConversationState.ProcessingInput)
             .Permit(ConversationTrigger.StopRequested, ConversationState.Ended)
@@ -94,7 +104,8 @@ public partial class ConversationSession
                 ShouldAllowBargeIn,
                 "Barge-In"
             )
-            .Permit(ConversationTrigger.CancelRequested, ConversationState.Cancelled);
+            .Permit(ConversationTrigger.CancelRequested, ConversationState.Cancelled)
+            .Ignore(ConversationTrigger.RetryRequested);
 
         _stateMachine
             .Configure(ConversationState.ProcessingInput)
@@ -180,6 +191,8 @@ public partial class ConversationSession
             .Ignore(ConversationTrigger.LlmStreamEnded)
             .Ignore(ConversationTrigger.TtsStreamEnded)
             .Ignore(ConversationTrigger.AudioStreamEnded)
+            .Ignore(ConversationTrigger.CancelRequested)
+            .Ignore(ConversationTrigger.RetryRequested)
             .Permit(ConversationTrigger.InputDetected, ConversationState.Listening)
             .Permit(ConversationTrigger.InputFinalized, ConversationState.ProcessingInput)
             .Permit(ConversationTrigger.StopRequested, ConversationState.Ended)
@@ -202,7 +215,9 @@ public partial class ConversationSession
             .Ignore(ConversationTrigger.AudioStreamEnded)
             .Ignore(ConversationTrigger.InputDetected)
             .Ignore(ConversationTrigger.InputFinalized)
-            .Ignore(ConversationTrigger.CancelRequested);
+            .Ignore(ConversationTrigger.CancelRequested)
+            .Ignore(ConversationTrigger.RetryRequested)
+            .Ignore(ConversationTrigger.PauseRequested);
 
         _stateMachine
             .Configure(ConversationState.Paused)
@@ -210,6 +225,8 @@ public partial class ConversationSession
             .Permit(ConversationTrigger.ResumeRequested, ConversationState.Idle)
             .Permit(ConversationTrigger.StopRequested, ConversationState.Ended)
             .Permit(ConversationTrigger.ErrorOccurred, ConversationState.Error)
+            .Ignore(ConversationTrigger.CancelRequested)
+            .Ignore(ConversationTrigger.RetryRequested)
             .OnExitAsync(ResumeActivitiesAsync, "Resume Adapters/Activities");
 
         _stateMachine

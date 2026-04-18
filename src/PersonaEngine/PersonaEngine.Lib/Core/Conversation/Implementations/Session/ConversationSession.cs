@@ -256,24 +256,31 @@ public partial class ConversationSession : IConversationSession
         return new ValueTask(_stateMachine.FireAsync(ConversationTrigger.ResumeRequested));
     }
 
+    /// <summary>
+    ///     Fires <see cref="ConversationTrigger.CancelRequested" /> on the FSM. The state
+    ///     machine is the single source of truth: only <see cref="ConversationState.ActiveTurn" />
+    ///     transitions to <see cref="ConversationState.Cancelled" />; every other state
+    ///     ignores the trigger as a benign no-op. No pre-state check here — any check would
+    ///     race with the FSM.
+    /// </summary>
     public ValueTask CancelAsync(CancellationToken cancellationToken = default)
     {
         if (_isDisposed)
-            return ValueTask.CompletedTask;
-
-        if (!_stateMachine.IsInState(ConversationState.ActiveTurn))
             return ValueTask.CompletedTask;
 
         _logger.LogInformation("{SessionId} | Cancel requested.", SessionId);
         return new ValueTask(_stateMachine.FireAsync(ConversationTrigger.CancelRequested));
     }
 
+    /// <summary>
+    ///     Fires <see cref="ConversationTrigger.RetryRequested" /> on the FSM. Only
+    ///     <see cref="ConversationState.Error" /> transitions to
+    ///     <see cref="ConversationState.Idle" />; every other state ignores the trigger as a
+    ///     benign no-op. No pre-state check here — any check would race with the FSM.
+    /// </summary>
     public ValueTask RetryAsync(CancellationToken cancellationToken = default)
     {
         if (_isDisposed)
-            return ValueTask.CompletedTask;
-
-        if (_stateMachine.State != ConversationState.Error)
             return ValueTask.CompletedTask;
 
         _logger.LogInformation("{SessionId} | Retry requested.", SessionId);
