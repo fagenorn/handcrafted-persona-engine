@@ -45,14 +45,10 @@ public sealed class ControlPanelComponent : IRenderComponent
     private readonly Navigation _navigation = new();
     private readonly Dictionary<NavSection, PanelRegistration> _panelRegistrations = new();
 
-    // Disposable panels that must have Dispose() forwarded from this component.
-    private readonly Dashboard _dashboard;
-    private readonly LlmConnectionPanel _llmConnectionPanel;
-    private readonly ScreenAwareness _screenAwareness;
-
     private readonly record struct PanelRegistration(
         Action<float> Render,
-        IActivatablePanel? Lifecycle
+        IActivatablePanel? Lifecycle,
+        IDisposable? Disposable
     );
 
     private readonly StatusBar _statusBar;
@@ -106,22 +102,38 @@ public sealed class ControlPanelComponent : IRenderComponent
         _subtitlesPanel = subtitlesPanel;
         _navBus = navBus;
 
-        // Hold disposable panels as fields so Dispose() can forward to them.
-        _dashboard = dashboard;
-        _llmConnectionPanel = llmConnectionPanel;
-        _screenAwareness = screenAwareness;
-
-        RegisterPanel(NavSection.Dashboard, dt => _dashboard.Render(dt));
-        RegisterPanel(NavSection.LlmConnection, dt => _llmConnectionPanel.Render(dt));
-        RegisterPanel(NavSection.Personality, dt => personalityPanel.Render(dt));
-        RegisterPanel(NavSection.Listening, dt => listeningPanel.Render(dt), listeningPanel);
-        RegisterPanel(NavSection.Voice, dt => voicePanel.Render(dt));
-        RegisterPanel(NavSection.Avatar, dt => avatarPanel.Render(dt));
-        RegisterPanel(NavSection.Subtitles, dt => subtitlesPanel.Render(dt));
+        RegisterPanel(NavSection.Dashboard, dt => dashboard.Render(dt), disposable: dashboard);
+        RegisterPanel(
+            NavSection.LlmConnection,
+            dt => llmConnectionPanel.Render(dt),
+            disposable: llmConnectionPanel
+        );
+        RegisterPanel(
+            NavSection.Personality,
+            dt => personalityPanel.Render(dt),
+            disposable: personalityPanel
+        );
+        RegisterPanel(
+            NavSection.Listening,
+            dt => listeningPanel.Render(dt),
+            lifecycle: listeningPanel,
+            disposable: listeningPanel
+        );
+        RegisterPanel(NavSection.Voice, dt => voicePanel.Render(dt), disposable: voicePanel);
+        RegisterPanel(NavSection.Avatar, dt => avatarPanel.Render(dt), disposable: avatarPanel);
+        RegisterPanel(
+            NavSection.Subtitles,
+            dt => subtitlesPanel.Render(dt),
+            disposable: subtitlesPanel
+        );
         RegisterPanel(NavSection.Overlay, dt => overlayPanel.Render(dt));
         RegisterPanel(NavSection.Streaming, dt => streaming.Render(dt));
         RegisterPanel(NavSection.RouletteWheel, dt => rouletteWheelPanel.Render(dt));
-        RegisterPanel(NavSection.ScreenAwareness, dt => _screenAwareness.Render(dt));
+        RegisterPanel(
+            NavSection.ScreenAwareness,
+            dt => screenAwareness.Render(dt),
+            disposable: screenAwareness
+        );
         RegisterPanel(NavSection.Application, dt => application.Render(dt));
 
         _navBus.Requested += OnNavRequested;
@@ -163,21 +175,29 @@ public sealed class ControlPanelComponent : IRenderComponent
         }
 
         _ambientRenderer.Dispose();
-        _dashboard.Dispose();
-        _llmConnectionPanel.Dispose();
-        _screenAwareness.Dispose();
+
+        // Dispose every registered panel that opted in via RegisterPanel(..., disposable: ...).
+        // Panels are expected to be _disposed-guarded so repeat calls are safe.
+        foreach (var registration in _panelRegistrations.Values)
+        {
+            registration.Disposable?.Dispose();
+        }
     }
 
     /// <summary>
     ///     Registers a renderer for the given navigation section. Optionally associates a
     ///     lifecycle-aware panel object so <see cref="IActivatablePanel.OnActivated" /> /
-    ///     <see cref="IActivatablePanel.OnDeactivated" /> fire on section transitions.
+    ///     <see cref="IActivatablePanel.OnDeactivated" /> fire on section transitions, and
+    ///     optionally a disposable so <see cref="Dispose" /> tears down owned resources
+    ///     (e.g. <c>IOptionsMonitor.OnChange</c> subscriptions, GL FBOs, event hooks).
+    ///     A panel may be both lifecycle-aware and disposable — these axes are orthogonal.
     /// </summary>
     public void RegisterPanel(
         NavSection section,
         Action<float> renderer,
-        IActivatablePanel? lifecycle = null
-    ) => _panelRegistrations[section] = new PanelRegistration(renderer, lifecycle);
+        IActivatablePanel? lifecycle = null,
+        IDisposable? disposable = null
+    ) => _panelRegistrations[section] = new PanelRegistration(renderer, lifecycle, disposable);
 
     public void Render(float deltaTime)
     {
