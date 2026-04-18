@@ -1,6 +1,7 @@
 using Hexa.NET.ImGui;
 using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Configuration;
+using PersonaEngine.Lib.Health;
 using PersonaEngine.Lib.LLM.Connection;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.LlmConnection;
@@ -112,24 +113,27 @@ public sealed class VisionLlmSection : IDisposable
 
         var visionOn = _snapshot.VisionEnabled;
 
-        // Reserve header right-side space: chip + toggle when on, toggle only when off.
+        // Always render the chip — when the section is off, synthesise an "Off" status
+        // so the toggle has a visual anchor and the user can see at a glance what state
+        // the section is in. (The probe does not run when the channel is disabled, so
+        // we cannot rely on _probe.VisionStatus to describe the off state.)
+        var visionChipStatus = visionOn
+            ? LlmProbeStatusAdapter.ToSubsystemStatus(
+                _probe.VisionStatus.Status,
+                _probe.VisionStatus.DetailMessage
+            )
+            : new SubsystemStatus(SubsystemHealth.Disabled, "Off", null);
+
         var avail = ImGui.GetContentRegionAvail().X;
         var toggleW = 40f;
-        var visionChipStatus = LlmProbeStatusAdapter.ToSubsystemStatus(
-            _probe.VisionStatus.Status,
-            _probe.VisionStatus.DetailMessage
-        );
         var pillWidth = ImGui.CalcTextSize(visionChipStatus.Label).X + 32f;
-        var rightW = visionOn ? pillWidth + 8f + toggleW : toggleW;
+        var rightW = pillWidth + 8f + toggleW;
 
         ImGui.SameLine();
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + Math.Max(0f, avail - rightW));
 
-        if (visionOn)
-        {
-            SubsystemStatusChip.Render(visionChipStatus);
-            ImGui.SameLine(0f, 8f);
-        }
+        SubsystemStatusChip.Render(visionChipStatus);
+        ImGui.SameLine(0f, 8f);
 
         var on = visionOn;
         if (ImGuiHelpers.ToggleSwitch("##VisionEnabled", ref on, ref _enableKnob, dt))
