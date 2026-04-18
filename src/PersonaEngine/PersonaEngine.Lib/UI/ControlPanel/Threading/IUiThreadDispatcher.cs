@@ -8,7 +8,19 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Threading;
 /// </summary>
 public interface IUiThreadDispatcher
 {
-    /// <summary>Enqueue <paramref name="work" /> to run on the next UI frame. Thread-safe.</summary>
+    /// <summary>
+    ///     Enqueue <paramref name="work" /> to run on the next UI frame. Thread-safe.
+    ///     <para>
+    ///         The implementation bounds its internal queue at an implementation-defined
+    ///         maximum depth. When <see cref="Post" /> is called while the queue is at
+    ///         that cap, the <em>oldest</em> pending action is dropped to make room for
+    ///         the new one. Drops are counted and surfaced via the implementation's
+    ///         diagnostics; a warning is logged at intervals so a sustained drop storm
+    ///         does not flood the log. This bounds memory under producer-side cascades
+    ///         (e.g. probe storms, TTS error loops) at the cost of losing the oldest
+    ///         deferred work — callers must not assume posted work always runs.
+    ///     </para>
+    /// </summary>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="work"/> is <see langword="null"/>.</exception>
     void Post(Action work);
 
