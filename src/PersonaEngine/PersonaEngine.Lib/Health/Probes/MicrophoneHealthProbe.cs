@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Audio;
 using PersonaEngine.Lib.Configuration;
+using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
 
 namespace PersonaEngine.Lib.Health.Probes;
@@ -13,6 +14,7 @@ namespace PersonaEngine.Lib.Health.Probes;
 public sealed class MicrophoneHealthProbe : ISubsystemHealthProbe, IDisposable
 {
     private readonly IMicrophone _mic;
+    private readonly IMicMuteController _muteController;
     private readonly IOptionsMonitor<MicrophoneConfiguration> _monitor;
     private readonly IDisposable? _onChangeSub;
     private readonly Timer _timer;
@@ -20,12 +22,18 @@ public sealed class MicrophoneHealthProbe : ISubsystemHealthProbe, IDisposable
     private SubsystemStatus _current;
     private bool _disposed;
 
-    public MicrophoneHealthProbe(IMicrophone mic, IOptionsMonitor<MicrophoneConfiguration> monitor)
+    public MicrophoneHealthProbe(
+        IMicrophone mic,
+        IOptionsMonitor<MicrophoneConfiguration> monitor,
+        IMicMuteController muteController
+    )
     {
         _mic = mic;
         _monitor = monitor;
-        _current = Compute();
+        _muteController = muteController;
+        _current = ComputeCurrent();
         _onChangeSub = monitor.OnChange((_, _) => Refresh());
+        _muteController.MutedChanged += OnMuteChanged;
         _timer = new Timer(_ => Refresh(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
     }
 
@@ -58,9 +66,12 @@ public sealed class MicrophoneHealthProbe : ISubsystemHealthProbe, IDisposable
             _disposed = true;
         }
 
+        _muteController.MutedChanged -= OnMuteChanged;
         _onChangeSub?.Dispose();
         _timer.Dispose();
     }
+
+    private void OnMuteChanged(bool _) => Refresh();
 
     private void Refresh()
     {
@@ -72,7 +83,7 @@ public sealed class MicrophoneHealthProbe : ISubsystemHealthProbe, IDisposable
                 return;
             }
 
-            var next = Compute();
+            var next = ComputeCurrent();
             if (next.Equals(_current))
             {
                 return;
@@ -86,6 +97,20 @@ public sealed class MicrophoneHealthProbe : ISubsystemHealthProbe, IDisposable
         {
             StatusChanged?.Invoke(status);
         }
+    }
+
+    private SubsystemStatus ComputeCurrent()
+    {
+        if (_muteController.IsMuted)
+        {
+            return new SubsystemStatus(
+                SubsystemHealth.Muted,
+                "Muted",
+                "User muted the microphone."
+            );
+        }
+
+        return Compute();
     }
 
     private SubsystemStatus Compute()

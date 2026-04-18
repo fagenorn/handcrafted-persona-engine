@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using PersonaEngine.Lib.Audio;
 using PersonaEngine.Lib.Configuration;
+using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
 using PersonaEngine.Lib.Health;
 using PersonaEngine.Lib.Health.Probes;
 using Xunit;
@@ -28,13 +29,20 @@ public class MicrophoneHealthProbeTests
         return mic;
     }
 
+    private static IMicMuteController UnmutedController()
+    {
+        var ctrl = Substitute.For<IMicMuteController>();
+        ctrl.IsMuted.Returns(false);
+        return ctrl;
+    }
+
     [Fact]
     public void Healthy_WhenConfiguredDeviceIsOpen()
     {
         var mic = Mic("My USB Mic", "My USB Mic", "Default");
         var monitor = Monitor("My USB Mic");
 
-        using var probe = new MicrophoneHealthProbe(mic, monitor);
+        using var probe = new MicrophoneHealthProbe(mic, monitor, UnmutedController());
 
         Assert.Equal(SubsystemHealth.Healthy, probe.Current.Health);
         Assert.Contains("My USB Mic", probe.Current.Label);
@@ -46,7 +54,7 @@ public class MicrophoneHealthProbeTests
         var mic = Mic("Default", "Other");
         var monitor = Monitor("Mic X");
 
-        using var probe = new MicrophoneHealthProbe(mic, monitor);
+        using var probe = new MicrophoneHealthProbe(mic, monitor, UnmutedController());
 
         Assert.Equal(SubsystemHealth.Degraded, probe.Current.Health);
         Assert.Equal("Fell back to default", probe.Current.Label);
@@ -58,7 +66,7 @@ public class MicrophoneHealthProbeTests
         var mic = Mic(null);
         var monitor = Monitor("");
 
-        using var probe = new MicrophoneHealthProbe(mic, monitor);
+        using var probe = new MicrophoneHealthProbe(mic, monitor, UnmutedController());
 
         Assert.Equal(SubsystemHealth.Failed, probe.Current.Health);
         Assert.Equal("No input devices available", probe.Current.Label);
@@ -83,7 +91,7 @@ public class MicrophoneHealthProbeTests
                 return Substitute.For<IDisposable>();
             });
 
-        using var probe = new MicrophoneHealthProbe(mic, monitorSub);
+        using var probe = new MicrophoneHealthProbe(mic, monitorSub, UnmutedController());
         var fired = 0;
         probe.StatusChanged += _ => fired++;
 
@@ -95,5 +103,19 @@ public class MicrophoneHealthProbeTests
         mic.AvailableDevices.Returns(Array.Empty<string>());
         capturedCallback?.Invoke(new MicrophoneConfiguration { DeviceName = "My Mic" }, null);
         Assert.Equal(1, fired);
+    }
+
+    [Fact]
+    public void Muted_WhenMuteControllerReportsMuted()
+    {
+        var mic = Mic("My USB Mic", "My USB Mic");
+        var monitor = Monitor("My USB Mic");
+        var ctrl = Substitute.For<IMicMuteController>();
+        ctrl.IsMuted.Returns(true);
+
+        using var probe = new MicrophoneHealthProbe(mic, monitor, ctrl);
+
+        Assert.Equal(SubsystemHealth.Muted, probe.Current.Health);
+        Assert.Equal("Muted", probe.Current.Label);
     }
 }
