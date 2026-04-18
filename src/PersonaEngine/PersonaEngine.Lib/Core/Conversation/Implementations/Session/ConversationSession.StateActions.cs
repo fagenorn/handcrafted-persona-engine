@@ -146,8 +146,21 @@ public partial class ConversationSession
     private async Task HandleCancelledAsync()
     {
         _logger.LogInformation("{SessionId} | User cancel: tearing down active turn.", SessionId);
-        await CancelCurrentTurnProcessingAsync();
-        await _stateMachine.FireAsync(ConversationTrigger.CancelComplete);
+        try
+        {
+            await CancelCurrentTurnProcessingAsync();
+        }
+        catch (Exception ex)
+        {
+            // Cancel is user-initiated; route back to Idle even if teardown misbehaves so
+            // the session never gets stuck in Cancelled. Bubbling to Error would punish the
+            // user for an internal pipeline fault on a path they asked to abort.
+            _logger.LogError(ex, "{SessionId} | Error during user cancel teardown.", SessionId);
+        }
+        finally
+        {
+            await _stateMachine.FireAsync(ConversationTrigger.CancelComplete);
+        }
     }
 
     private void HandleInterruption()
