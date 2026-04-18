@@ -220,6 +220,7 @@ public partial class ConversationSession
                 "Log Error and Update Context"
             )
             .OnEntryAsync(CancelCurrentTurnProcessingAsync, "Ensure Pipeline Cancelled on Error")
+            .Permit(ConversationTrigger.RetryRequested, ConversationState.Idle)
             .Permit(ConversationTrigger.StopRequested, ConversationState.Ended)
             .Ignore(ConversationTrigger.ErrorOccurred);
 
