@@ -33,16 +33,20 @@ public static class Ui
     ///     sibling Fixed rows. Call <see cref="RowGroupScope.Next"/> for each row in order.
     ///     Does not support <see cref="Sz.Auto"/>; use the <c>id</c>-carrying overloads
     ///     for mixed Fixed/Auto/Fill groups.
+    ///     <para>
+    ///         Span overload — preferred to avoid heap allocation of variadic arguments.
+    ///         C# 12 collection expressions (<c>[Sz.Fixed(40), Sz.Fill()]</c>) bind here
+    ///         automatically.
+    ///     </para>
     /// </summary>
-    public static RowGroupScope Rows(params Sz[] sizes) => new(string.Empty, sizes, 0f);
+    public static RowGroupScope Rows(ReadOnlySpan<Sz> sizes) => new(string.Empty, sizes, 0f);
 
     /// <summary>
     ///     Pre-resolves a sequence of row sizes with a gap between each row.
-    ///     Call <see cref="RowGroupScope.Next"/> for each row in order.
-    ///     Does not support <see cref="Sz.Auto"/>; use the <c>id</c>-carrying overloads
-    ///     for mixed Fixed/Auto/Fill groups.
+    ///     Span overload — see <see cref="Rows(ReadOnlySpan{Sz})"/>.
     /// </summary>
-    public static RowGroupScope Rows(float gap, params Sz[] sizes) => new(string.Empty, sizes, gap);
+    public static RowGroupScope Rows(float gap, ReadOnlySpan<Sz> sizes) =>
+        new(string.Empty, sizes, gap);
 
     /// <summary>
     ///     Identity-keyed row group that supports <see cref="Sz.Auto"/> alongside
@@ -51,13 +55,37 @@ public static class Ui
     ///     compute their share correctly without a second pass. Use distinct ids for
     ///     distinct call sites (sharing an id collapses their caches, which is only
     ///     safe if the two sites always render identically-shaped groups).
+    ///     <para>
+    ///         Ids MUST come from a finite, stable set — one stable string per call site.
+    ///         The cache is bounded (drop-oldest at 256 entries) so a varying-id caller
+    ///         cannot leak unboundedly, but varying ids also defeat the auto-height
+    ///         cache (every frame starts from zeros).
+    ///     </para>
     /// </summary>
-    public static RowGroupScope Rows(string id, params Sz[] sizes) => new(id, sizes, 0f);
+    public static RowGroupScope Rows(string id, ReadOnlySpan<Sz> sizes) => new(id, sizes, 0f);
 
     /// <summary>
-    ///     Identity-keyed row group (see <see cref="Rows(string, Sz[])"/>) with a gap
-    ///     between rows.
+    ///     Identity-keyed row group (see <see cref="Rows(string, ReadOnlySpan{Sz})"/>) with
+    ///     a gap between rows.
     /// </summary>
+    public static RowGroupScope Rows(string id, float gap, ReadOnlySpan<Sz> sizes) =>
+        new(id, sizes, gap);
+
+    /// <summary>
+    ///     Variadic overload — forwards to the span overload. Kept so existing call sites
+    ///     compile unchanged; new call sites should prefer collection-expression / span
+    ///     forms to avoid the params-array allocation.
+    /// </summary>
+    public static RowGroupScope Rows(params Sz[] sizes) => new(string.Empty, sizes, 0f);
+
+    /// <summary>Variadic overload — see <see cref="Rows(float, ReadOnlySpan{Sz})"/>.</summary>
+    public static RowGroupScope Rows(float gap, params Sz[] sizes) =>
+        new(string.Empty, sizes, gap);
+
+    /// <summary>Variadic overload — see <see cref="Rows(string, ReadOnlySpan{Sz})"/>.</summary>
+    public static RowGroupScope Rows(string id, params Sz[] sizes) => new(id, sizes, 0f);
+
+    /// <summary>Variadic overload — see <see cref="Rows(string, float, ReadOnlySpan{Sz})"/>.</summary>
     public static RowGroupScope Rows(string id, float gap, params Sz[] sizes) =>
         new(id, sizes, gap);
 

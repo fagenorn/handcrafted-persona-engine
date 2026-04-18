@@ -9,6 +9,22 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Layout;
 /// </summary>
 public ref struct GridScope
 {
+    /// <summary>
+    ///     Pre-computed column ids to avoid per-frame <c>$"##c{i}"</c> string interpolation.
+    ///     Covers the common case (up to 8 columns); anything larger falls back to interpolation.
+    /// </summary>
+    private static readonly string[] ColIds =
+    {
+        "##c0",
+        "##c1",
+        "##c2",
+        "##c3",
+        "##c4",
+        "##c5",
+        "##c6",
+        "##c7",
+    };
+
     private readonly bool _open;
     private bool _disposed;
 
@@ -21,7 +37,10 @@ public ref struct GridScope
             return;
 
         for (var i = 0; i < columns; i++)
-            ImGui.TableSetupColumn($"##c{i}", ImGuiTableColumnFlags.WidthStretch);
+        {
+            var colId = i < ColIds.Length ? ColIds[i] : $"##c{i}";
+            ImGui.TableSetupColumn(colId, ImGuiTableColumnFlags.WidthStretch);
+        }
     }
 
     /// <summary>Begins a new row. Call before the first <see cref="Col"/> in each row.</summary>

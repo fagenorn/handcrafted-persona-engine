@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Numerics;
 using Hexa.NET.ImGui;
 
@@ -26,18 +25,66 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Layout;
 public ref struct RowGroupScope
 {
     /// <summary>
-    ///     Cache of per-group auto-row heights, keyed by the caller-supplied group id.
-    ///     Updated on <see cref="Dispose"/> so the next frame has stable reservations
-    ///     for Fill-row math. Static so each group carries its own history across frames.
+    ///     Maximum number of distinct group ids retained across frames. When the cache
+    ///     grows beyond this cap the oldest entry is evicted. Callers should use a
+    ///     finite, stable id space (one id per call site) — this cap is a safety net
+    ///     for misuse (e.g. accidentally per-frame varying ids), not a design point.
     /// </summary>
-    private static readonly ConcurrentDictionary<string, float[]> AutoHeightCache = new();
+    private const int CacheMaxEntries = 256;
 
-    private readonly string _cacheKey;
-    private readonly Sz[] _sizes;
+    /// <summary>
+    ///     Pre-computed row child ids up to 16, to avoid per-row-per-frame string
+    ///     interpolation. Larger groups fall back to interpolation (practically never
+    ///     occurs in this codebase).
+    /// </summary>
+    private static readonly string[] RowIds =
+    {
+        "##r0",
+        "##r1",
+        "##r2",
+        "##r3",
+        "##r4",
+        "##r5",
+        "##r6",
+        "##r7",
+        "##r8",
+        "##r9",
+        "##r10",
+        "##r11",
+        "##r12",
+        "##r13",
+        "##r14",
+        "##r15",
+    };
 
-    // Live per-index auto heights. Seeded from the cache (or zeros on first frame);
-    // overwritten with measured values as each auto row closes. Used every time a Fill
-    // row opens so Fill's share always reflects the best information available.
+    /// <summary>
+    ///     Cache of per-group auto-row heights, keyed by the caller-supplied group id.
+    ///     Arrays are reused in place across frames so Fill-row math has stable
+    ///     reservations without per-frame allocations. Accessed only from the UI
+    ///     thread (ImGui is single-threaded), so a plain <see cref="Dictionary{TKey,TValue}"/>
+    ///     with an <see cref="_cacheLock"/> for eviction safety is sufficient.
+    ///     Bounded at <see cref="CacheMaxEntries"/> via drop-oldest LRU so a misbehaving
+    ///     caller with a varying id space cannot leak unboundedly.
+    /// </summary>
+    private static readonly Dictionary<string, float[]> AutoHeightCache = new(CacheMaxEntries);
+
+    /// <summary>
+    ///     Insertion-order list of ids used for drop-oldest eviction. Node per entry
+    ///     is stored in <see cref="AutoHeightCacheNodes"/> so eviction is O(1).
+    /// </summary>
+    private static readonly LinkedList<string> AutoHeightCacheOrder = new();
+
+    private static readonly Dictionary<string, LinkedListNode<string>> AutoHeightCacheNodes = new(
+        CacheMaxEntries
+    );
+
+    private static readonly object _cacheLock = new();
+
+    private readonly ReadOnlySpan<Sz> _sizes;
+
+    // Reference to the cached auto-heights array for this group. Writes go straight
+    // into the cache slot so there is no per-frame allocation or copy-back on Dispose.
+    // The array length matches _sizes.Length; mismatches are resolved at construction.
     private readonly float[] _autoHeights;
 
     private readonly float _parentWidth;
@@ -56,7 +103,7 @@ public ref struct RowGroupScope
 
     internal RowGroupScope(string id, ReadOnlySpan<Sz> sizes, float gap)
     {
-        _cacheKey = id;
+        _sizes = sizes;
         _gap = gap;
 
         var totalGap = gap * MathF.Max(0f, sizes.Length - 1);
@@ -64,40 +111,33 @@ public ref struct RowGroupScope
         _parentWidth = LayoutContext.Width();
         _parentAvail = MathF.Max(0f, available);
 
-        // Snapshot Sz into a local array. ReadOnlySpan can't be held across awaits
-        // or returned from methods; the copy is tiny (one entry per row).
-        _sizes = new Sz[sizes.Length];
+        // Resolve the per-id auto-heights array. On the very first frame (or when the
+        // group's row count changed) we start from zeros → Fill temporarily over-claims
+        // below-Fill autos and self-corrects next frame. Autos ABOVE a Fill are always
+        // measured before the Fill opens, so they never need to rely on the cache.
+        _autoHeights = GetOrCreateAutoHeights(id, sizes.Length);
+
+        // For non-auto slots, keep zero so the Fill remainder calculation is correct
+        // regardless of stale data carried in the cached array from a prior shape.
         for (var i = 0; i < sizes.Length; i++)
         {
-            _sizes[i] = sizes[i];
-        }
-
-        // Seed live auto heights from the per-id cache. On the very first frame the
-        // cache is empty → zeros → Fill temporarily over-claims below-Fill autos and
-        // self-corrects next frame. Autos ABOVE a Fill are always measured before
-        // the Fill opens, so they never need to rely on the cache.
-        if (!AutoHeightCache.TryGetValue(id, out var cached) || cached.Length != sizes.Length)
-        {
-            cached = new float[sizes.Length];
-        }
-
-        _autoHeights = new float[sizes.Length];
-        for (var i = 0; i < sizes.Length; i++)
-        {
-            _autoHeights[i] = _sizes[i].IsAuto ? cached[i] : 0f;
+            if (!sizes[i].IsAuto)
+            {
+                _autoHeights[i] = 0f;
+            }
         }
 
         _totalFixed = 0f;
         _totalFillWeight = 0f;
         for (var i = 0; i < sizes.Length; i++)
         {
-            if (_sizes[i].IsFixed)
+            if (sizes[i].IsFixed)
             {
-                _totalFixed += _sizes[i].Value;
+                _totalFixed += sizes[i].Value;
             }
-            else if (_sizes[i].IsFill)
+            else if (sizes[i].IsFill)
             {
-                _totalFillWeight += _sizes[i].Value;
+                _totalFillWeight += sizes[i].Value;
             }
         }
 
@@ -134,18 +174,24 @@ public ref struct RowGroupScope
             ImGui.Dummy(new Vector2(0f, _gap));
         }
 
-        var size = _sizes[_nextIndex];
+        var index = _nextIndex;
+        var size = _sizes[index];
         var autoResize = size.IsAuto;
-        var height = ResolveHeightFor(_nextIndex);
+        var height = ResolveHeightFor(index);
 
         if (autoResize)
         {
-            _lastAutoIndex = _nextIndex;
+            _lastAutoIndex = index;
         }
 
         _nextIndex++;
 
+        // Stable id per row-index within this scope; parent window/context scopes the
+        // id further so siblings in different groups don't collide.
+        var rowId = index < RowIds.Length ? RowIds[index] : $"##r{index}";
+
         return new RowItemScope(
+            rowId,
             _parentWidth,
             height,
             style,
@@ -165,10 +211,9 @@ public ref struct RowGroupScope
         _disposed = true;
 
         // Last row may be an auto; capture it before tearing down style state.
+        // The write lands directly in the cache slot (_autoHeights IS the cache array),
+        // so there is no explicit copy-back.
         CaptureLastAutoHeight();
-
-        // Write measured heights back to the shared cache for the next frame.
-        AutoHeightCache[_cacheKey] = _autoHeights;
 
         ImGui.PopStyleVar(); // ItemSpacing zero
     }
@@ -184,7 +229,7 @@ public ref struct RowGroupScope
         _lastAutoIndex = -1;
     }
 
-    private float ResolveHeightFor(int index)
+    private readonly float ResolveHeightFor(int index)
     {
         var sz = _sizes[index];
 
@@ -214,6 +259,57 @@ public ref struct RowGroupScope
         var remaining = MathF.Max(0f, _parentAvail - _totalFixed - autoTotal);
         return remaining * (sz.Value / _totalFillWeight);
     }
+
+    /// <summary>
+    ///     Look up (or create) the auto-heights array for <paramref name="id"/>. The
+    ///     returned array is reused across frames — callers write measured heights into
+    ///     it in place. Bounded at <see cref="CacheMaxEntries"/> via drop-oldest eviction
+    ///     if a caller feeds varying ids.
+    /// </summary>
+    private static float[] GetOrCreateAutoHeights(string id, int length)
+    {
+        lock (_cacheLock)
+        {
+            if (
+                AutoHeightCache.TryGetValue(id, out var cached)
+                && cached.Length == length
+            )
+            {
+                return cached;
+            }
+
+            // Shape changed (or first observation) → fresh zero-filled array. We do NOT
+            // try to preserve old values: a shape change means the caller's layout has
+            // been edited and the old measurements are no longer meaningful.
+            var array = new float[length];
+
+            // If the id already exists (shape change), swap the array but keep the
+            // existing insertion-order node so a recently-edited call site doesn't get
+            // bumped to the head of the eviction queue.
+            if (AutoHeightCacheNodes.ContainsKey(id))
+            {
+                AutoHeightCache[id] = array;
+                return array;
+            }
+
+            // Bounded at CacheMaxEntries via drop-oldest FIFO so a caller that feeds
+            // varying ids (e.g. accidentally per-frame strings) cannot leak unboundedly.
+            if (AutoHeightCache.Count >= CacheMaxEntries)
+            {
+                var oldest = AutoHeightCacheOrder.First;
+                if (oldest is not null)
+                {
+                    AutoHeightCacheOrder.RemoveFirst();
+                    AutoHeightCacheNodes.Remove(oldest.Value);
+                    AutoHeightCache.Remove(oldest.Value);
+                }
+            }
+
+            AutoHeightCache[id] = array;
+            AutoHeightCacheNodes[id] = AutoHeightCacheOrder.AddLast(id);
+            return array;
+        }
+    }
 }
 
 /// <summary>
@@ -228,6 +324,7 @@ public ref struct RowItemScope
     private bool _disposed;
 
     internal RowItemScope(
+        string rowId,
         float width,
         float height,
         Style style,
@@ -267,13 +364,9 @@ public ref struct RowItemScope
             flags |= ImGuiChildFlags.AutoResizeY;
         }
 
-        // Use a monotonically-growing id based on parent cursor so two siblings with
-        // identical heights (e.g. two auto rows rendered tall) don't collide.
-        ImGui.BeginChild(
-            $"##RowItem_{height:F0}_{ImGui.GetCursorPosY():F0}",
-            new Vector2(width, height),
-            flags
-        );
+        // Stable per-row id. The parent group scope disambiguates across sibling groups,
+        // and the row index disambiguates within a group, so two rows never collide.
+        ImGui.BeginChild(rowId, new Vector2(width, height), flags);
 
         // ── After BeginChild ────────────────────────────────────────────
         // Set content spacing for items inside this row.
