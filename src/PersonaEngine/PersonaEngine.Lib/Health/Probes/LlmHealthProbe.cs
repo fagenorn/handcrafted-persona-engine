@@ -123,9 +123,16 @@ public sealed class LlmHealthProbe : ISubsystemHealthProbe, IDisposable
             _ => SubsystemHealth.Degraded,
         };
 
+        // Text is load-bearing: if it is Healthy, an Unknown vision (never probed
+        // because the channel is off in config, or still in-flight) must not drag
+        // the card into grey "?" territory — the user sees "Ready" next to a
+        // disabled-looking chip and concludes something is broken. Vision panel
+        // surfaces its own state; overall Unknown is reserved for "text itself
+        // has no reading yet."
         var overall = (textHealth, visionHealth) switch
         {
             (SubsystemHealth.Healthy, SubsystemHealth.Healthy) => SubsystemHealth.Healthy,
+            (SubsystemHealth.Healthy, SubsystemHealth.Unknown) => SubsystemHealth.Healthy,
             (SubsystemHealth.Degraded, _) => SubsystemHealth.Degraded,
             (_, SubsystemHealth.Degraded) => SubsystemHealth.Degraded,
             _ => SubsystemHealth.Unknown,

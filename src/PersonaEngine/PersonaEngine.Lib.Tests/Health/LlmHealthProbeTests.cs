@@ -30,10 +30,14 @@ public class LlmHealthProbeTests
     [InlineData(LlmProbeStatus.Unauthorized, LlmProbeStatus.Reachable, SubsystemHealth.Failed)]
     [InlineData(LlmProbeStatus.InvalidUrl, LlmProbeStatus.Reachable, SubsystemHealth.Failed)]
     [InlineData(LlmProbeStatus.Unknown, LlmProbeStatus.Unknown, SubsystemHealth.Unknown)]
-    // Probing handling
+    // Probing handling. Once text is Reachable the card shows "Ready" — if we
+    // returned Unknown here it would render as a grey "Ready" and look broken.
     [InlineData(LlmProbeStatus.Probing, LlmProbeStatus.Probing, SubsystemHealth.Unknown)]
     [InlineData(LlmProbeStatus.Probing, LlmProbeStatus.Reachable, SubsystemHealth.Unknown)]
-    [InlineData(LlmProbeStatus.Reachable, LlmProbeStatus.Probing, SubsystemHealth.Unknown)]
+    [InlineData(LlmProbeStatus.Reachable, LlmProbeStatus.Probing, SubsystemHealth.Healthy)]
+    // Text Reachable while vision was never probed (channel off / first frame)
+    // must stay green — this was the "Ready but grey" bug.
+    [InlineData(LlmProbeStatus.Reachable, LlmProbeStatus.Unknown, SubsystemHealth.Healthy)]
     // Vision ModelMissing + InvalidUrl while text is Reachable
     [InlineData(LlmProbeStatus.Reachable, LlmProbeStatus.ModelMissing, SubsystemHealth.Degraded)]
     [InlineData(LlmProbeStatus.Reachable, LlmProbeStatus.InvalidUrl, SubsystemHealth.Degraded)]
