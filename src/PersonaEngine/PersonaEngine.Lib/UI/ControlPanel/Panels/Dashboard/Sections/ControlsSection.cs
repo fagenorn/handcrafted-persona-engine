@@ -32,6 +32,13 @@ public sealed class ControlsSection : IDisposable
 
     private readonly IConversationOrchestrator _orchestrator;
 
+    // Pre-allocated click handlers so we don't synthesise a fresh closure
+    // capturing 'this' + spec every frame. ImGui runs at 60-120 Hz so three
+    // per-frame delegate allocations compound quickly.
+    private readonly Action _cancelClick;
+    private readonly Action _retryClick;
+    private readonly Action _muteClick;
+
     private bool _disposed;
 
     private ConversationState _latestState = ConversationState.Initial;
@@ -51,6 +58,10 @@ public sealed class ControlsSection : IDisposable
         _orchestrator = orchestrator;
         _muteController = muteController;
         _dispatcher = dispatcher;
+
+        _cancelClick = () => _ = _orchestrator.CancelActiveTurnsAsync();
+        _retryClick = () => _ = _orchestrator.RetryErroredSessionsAsync();
+        _muteClick = () => _muteController.SetMuted(!_muteController.IsMuted);
 
         _muted = muteController.IsMuted;
 
@@ -87,7 +98,7 @@ public sealed class ControlsSection : IDisposable
             Accent: Theme.Error,
             Enabled: cancelEnabled,
             Emphasized: false,
-            OnClick: () => _ = _orchestrator.CancelActiveTurnsAsync()
+            OnClick: _cancelClick
         );
 
         var retry = new CardSpec(
@@ -98,7 +109,7 @@ public sealed class ControlsSection : IDisposable
             Accent: Theme.Warning,
             Enabled: retryEnabled,
             Emphasized: false,
-            OnClick: () => _ = _orchestrator.RetryErroredSessionsAsync()
+            OnClick: _retryClick
         );
 
         // Mute is always clickable. When muted, the card lights up in the accent
@@ -112,7 +123,7 @@ public sealed class ControlsSection : IDisposable
             Accent: _muted ? Theme.AccentPrimary : Theme.TextSecondary,
             Enabled: true,
             Emphasized: _muted,
-            OnClick: () => _muteController.SetMuted(!_muteController.IsMuted)
+            OnClick: _muteClick
         );
 
         using var cols = Ui.EqualCols(3, CardHeight, gap: CardGap);

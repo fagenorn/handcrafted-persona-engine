@@ -31,6 +31,10 @@ public sealed class SystemHealthSection : IDisposable
     private readonly INavRequestBus _nav;
     private readonly IReadOnlyList<ISubsystemHealthProbe> _probes;
 
+    // Pre-built per-probe ImGui child ids — "##health_{probe.Name}". Computing
+    // these once avoids a fresh string interpolation per probe per frame.
+    private readonly string[] _cardIds;
+
     // Monotonic animation clock — owned here so the chip's live-ring phase is
     // stable-precision (float loses enough precision at UTC-epoch magnitudes
     // that `elapsed % 1.6f` stops varying).
@@ -45,6 +49,12 @@ public sealed class SystemHealthSection : IDisposable
 
         _probes = probes.ToArray();
         _nav = nav;
+
+        _cardIds = new string[_probes.Count];
+        for (var i = 0; i < _probes.Count; i++)
+        {
+            _cardIds[i] = $"##health_{_probes[i].Name}";
+        }
 
         foreach (var p in _probes)
         {
@@ -75,7 +85,7 @@ public sealed class SystemHealthSection : IDisposable
             grid.Col();
 
             var probe = _probes[i];
-            using (Ui.Card(id: $"##health_{probe.Name}", padding: 15f))
+            using (Ui.Card(id: _cardIds[i], padding: 15f))
             {
                 RenderCard(probe);
             }
