@@ -140,9 +140,7 @@ internal sealed class FloatRingBuffer : IDisposable
 #if DEBUG
         int needed = channels * frames;
         if (needed > Length)
-            throw new InvalidOperationException(
-                $"Not enough data: need {needed}, have {Length}."
-            );
+            throw new InvalidOperationException($"Not enough data: need {needed}, have {Length}.");
 #endif
         long start = _read;
         int cap = _buf.Length;

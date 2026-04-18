@@ -273,7 +273,13 @@ public class ConversationOrchestrator(
         {
             var sessionId = snapshot[i].Key;
             var session = snapshot[i].Value.Session;
-            tasks[i] = InvokeAsync(session, sessionId, action, errorMessageTemplate, cancellationToken);
+            tasks[i] = InvokeAsync(
+                session,
+                sessionId,
+                action,
+                errorMessageTemplate,
+                cancellationToken
+            );
         }
 
         await Task.WhenAll(tasks).ConfigureAwait(false);
