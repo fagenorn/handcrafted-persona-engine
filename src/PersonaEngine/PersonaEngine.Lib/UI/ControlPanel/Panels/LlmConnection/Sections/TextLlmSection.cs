@@ -230,27 +230,7 @@ public sealed class TextLlmSection : IDisposable
             return "Not tested yet";
         }
 
-        return $"Last tested: {HumaniseAgo(DateTimeOffset.UtcNow - _lastProbeTime.Value)}";
-    }
-
-    private static string HumaniseAgo(TimeSpan ago)
-    {
-        if (ago.TotalSeconds < 1)
-        {
-            return "just now";
-        }
-
-        if (ago.TotalSeconds < 60)
-        {
-            return $"{(int)ago.TotalSeconds}s ago";
-        }
-
-        if (ago.TotalMinutes < 60)
-        {
-            return $"{(int)ago.TotalMinutes}m ago";
-        }
-
-        return $"{(int)ago.TotalHours}h ago";
+        return $"Last tested: {TimeFormat.HumaniseAgo(DateTimeOffset.UtcNow - _lastProbeTime.Value)}";
     }
 
     private void OnOptionsChanged(LlmOptions updated, string? _)
