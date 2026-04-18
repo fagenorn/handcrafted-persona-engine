@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Adapters;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
 using PersonaEngine.Lib.TTS.Synthesis;
+using PersonaEngine.Lib.UI.ControlPanel;
 
 namespace PersonaEngine.Lib.Live2D.Behaviour.LipSync;
 
@@ -162,7 +163,7 @@ public sealed class VBridgerLipSyncService : AnimationServiceBase
             return;
         }
 
-        var easedT = EaseInOutQuad(_interpolationT);
+        var easedT = Easing.EaseInOutQuad(_interpolationT);
         var frameTargetPose = PhonemePose.Lerp(_currentTargetPose, _nextTargetPose, easedT);
         SmoothParametersToTarget(frameTargetPose, deltaTime);
         ApplySmoothedParameters();
@@ -521,8 +522,7 @@ public sealed class VBridgerLipSyncService : AnimationServiceBase
                 .Select(t => t.EndTs!.Value + _cumulativeTimeOffset)
                 .DefaultIfEmpty(0.0)
                 .Max();
-            var existingMaxEnd =
-                _activePhonemes.Count > 0 ? _activePhonemes[^1].EndTime : 0.0;
+            var existingMaxEnd = _activePhonemes.Count > 0 ? _activePhonemes[^1].EndTime : 0.0;
 
             if (newMaxEnd >= existingMaxEnd)
             {
@@ -714,13 +714,6 @@ public sealed class VBridgerLipSyncService : AnimationServiceBase
     #endregion
 
     #region Helper Functions
-
-    private static float EaseInOutQuad(float t)
-    {
-        t = Math.Clamp(t, 0.0f, 1.0f);
-
-        return t < 0.5f ? 2.0f * t * t : 1.0f - (float)Math.Pow(-2.0 * t + 2.0, 2.0) / 2.0f;
-    }
 
     private static float Lerp(float a, float b, float t)
     {

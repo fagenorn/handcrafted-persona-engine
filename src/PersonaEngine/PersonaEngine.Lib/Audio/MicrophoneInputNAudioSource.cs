@@ -1,3 +1,5 @@
+using System.Buffers;
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NAudio.Wave;
@@ -26,6 +28,8 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
     private bool _wasRecordingBeforeReconfigure = false;
 
     private WaveInEvent? _waveIn;
+
+    public event AudioSamplesHandler? SamplesAvailable;
 
     public MicrophoneInputNAudioSource(
         ILogger<MicrophoneInputNAudioSource> logger,
@@ -93,6 +97,10 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
     {
         return GetAvailableDevicesInternal(_logger);
     }
+
+    public string? CurrentDeviceName => _currentOptions.DeviceName;
+
+    public IReadOnlyList<string> AvailableDevices => GetAvailableDevicesInternal(_logger).ToList();
 
     public new void Dispose()
     {
@@ -347,6 +355,37 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
 
         var sourceSpan = e.Buffer.AsMemory(0, e.BytesRecorded);
         WriteData(sourceSpan);
+
+        RaiseSamplesAvailable(e.Buffer, e.BytesRecorded);
+    }
+
+    private void RaiseSamplesAvailable(byte[] buffer, int bytesRecorded)
+    {
+        var handler = SamplesAvailable;
+        if (handler is null)
+            return;
+
+        // WaveFormat is fixed at 16-bit mono 16 kHz (see InitializeMicrophone).
+        var int16s = MemoryMarshal.Cast<byte, short>(buffer.AsSpan(0, bytesRecorded));
+
+        // Rent a scratch buffer per call. The AudioSamplesHandler contract on
+        // IMicrophone says the span is only valid for the duration of the call, so
+        // there's no need to keep the buffer alive beyond this invocation.
+        var scratch = ArrayPool<float>.Shared.Rent(int16s.Length);
+        try
+        {
+            var floatSpan = scratch.AsSpan(0, int16s.Length);
+            for (var i = 0; i < int16s.Length; i++)
+            {
+                floatSpan[i] = int16s[i] / 32768f;
+            }
+
+            handler(floatSpan, 16000);
+        }
+        finally
+        {
+            ArrayPool<float>.Shared.Return(scratch);
+        }
     }
 
     private void WaveInRecordingStopped(object? sender, StoppedEventArgs e)

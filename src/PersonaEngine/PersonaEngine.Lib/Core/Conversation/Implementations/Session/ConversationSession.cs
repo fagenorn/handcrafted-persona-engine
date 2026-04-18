@@ -26,6 +26,7 @@ public partial class ConversationSession : IConversationSession
     // Dependencies & Configuration
     private readonly IBargeInStrategy _bargeInStrategy;
     private readonly ConversationContext _context;
+    private readonly IConversationInputGate _inputGate;
     private readonly List<IInputAdapter> _inputAdapters = new();
     private readonly ILogger _logger;
     private readonly ConversationMetrics _metrics;
@@ -57,7 +58,8 @@ public partial class ConversationSession : IConversationSession
         Guid sessionId,
         ConversationOptions options,
         ConversationContext context,
-        IBargeInStrategy bargeInStrategy
+        IBargeInStrategy bargeInStrategy,
+        IConversationInputGate inputGate
     )
     {
         _logger = logger;
@@ -68,6 +70,7 @@ public partial class ConversationSession : IConversationSession
         _options = options;
         _context = context;
         _bargeInStrategy = bargeInStrategy;
+        _inputGate = inputGate;
 
         _pipeline = new TurnPipelineCoordinator(chatEngine, ttsEngine, outputAdapter, logger);
 
@@ -89,7 +92,14 @@ public partial class ConversationSession : IConversationSession
 
     public IConversationContext Context => _context;
 
+    public ConversationState CurrentState => _stateMachine.State;
+
+    public bool IsPaused => _stateMachine.State == ConversationState.Paused;
+
     public Guid SessionId { get; }
+
+    /// <inheritdoc />
+    public event Action<ConversationState>? StateChanged;
 
     public async ValueTask DisposeAsync()
     {
@@ -220,5 +230,60 @@ public partial class ConversationSession : IConversationSession
         {
             await _sessionCts.CancelAsync();
         }
+    }
+
+    public ValueTask PauseAsync(CancellationToken cancellationToken = default)
+    {
+        if (_isDisposed)
+            return ValueTask.CompletedTask;
+
+        if (IsPaused)
+            return ValueTask.CompletedTask;
+
+        _logger.LogInformation("{SessionId} | Pause requested.", SessionId);
+        return new ValueTask(_stateMachine.FireAsync(ConversationTrigger.PauseRequested));
+    }
+
+    public ValueTask ResumeAsync(CancellationToken cancellationToken = default)
+    {
+        if (_isDisposed)
+            return ValueTask.CompletedTask;
+
+        if (!IsPaused)
+            return ValueTask.CompletedTask;
+
+        _logger.LogInformation("{SessionId} | Resume requested.", SessionId);
+        return new ValueTask(_stateMachine.FireAsync(ConversationTrigger.ResumeRequested));
+    }
+
+    /// <summary>
+    ///     Fires <see cref="ConversationTrigger.CancelRequested" /> on the FSM. The state
+    ///     machine is the single source of truth: only <see cref="ConversationState.ActiveTurn" />
+    ///     transitions to <see cref="ConversationState.Cancelled" />; every other state
+    ///     ignores the trigger as a benign no-op. No pre-state check here — any check would
+    ///     race with the FSM.
+    /// </summary>
+    public ValueTask CancelAsync(CancellationToken cancellationToken = default)
+    {
+        if (_isDisposed)
+            return ValueTask.CompletedTask;
+
+        _logger.LogInformation("{SessionId} | Cancel requested.", SessionId);
+        return new ValueTask(_stateMachine.FireAsync(ConversationTrigger.CancelRequested));
+    }
+
+    /// <summary>
+    ///     Fires <see cref="ConversationTrigger.RetryRequested" /> on the FSM. Only
+    ///     <see cref="ConversationState.Error" /> transitions to
+    ///     <see cref="ConversationState.Idle" />; every other state ignores the trigger as a
+    ///     benign no-op. No pre-state check here — any check would race with the FSM.
+    /// </summary>
+    public ValueTask RetryAsync(CancellationToken cancellationToken = default)
+    {
+        if (_isDisposed)
+            return ValueTask.CompletedTask;
+
+        _logger.LogInformation("{SessionId} | Retry requested.", SessionId);
+        return new ValueTask(_stateMachine.FireAsync(ConversationTrigger.RetryRequested));
     }
 }

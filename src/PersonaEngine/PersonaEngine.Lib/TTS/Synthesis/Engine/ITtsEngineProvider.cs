@@ -16,4 +16,10 @@ public interface ITtsEngineProvider
     ///     so the UI can populate engine selection and show relevant controls.
     /// </summary>
     IReadOnlyList<TtsEngineInfo> AvailableEngines { get; }
+
+    /// <summary>
+    ///     Returns the registered sentence synthesizer for the given engine id, independent of
+    ///     the currently active engine. Throws if the id is not registered.
+    /// </summary>
+    ISentenceSynthesizer Get(string engineId);
 }

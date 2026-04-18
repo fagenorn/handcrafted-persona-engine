@@ -15,6 +15,8 @@ public record TtsConfiguration
 
     public string EspeakPath { get; init; } = "espeak-ng";
 
+    public AuditionSampleOptions AuditionSample { get; init; } = new();
+
     public KokoroVoiceOptions Kokoro { get; init; } = new();
 
     public RVCFilterOptions Rvc { get; init; } = new();

@@ -1,0 +1,165 @@
+{
+  "voices": [
+    {
+      "engine": "kokoro",
+      "id": "af_heart",
+      "displayName": "Heart",
+      "gender": "female",
+      "description": "Polished, expressive American English."
+    },
+    {
+      "engine": "kokoro",
+      "id": "af_bella",
+      "displayName": "Bella",
+      "gender": "female",
+      "description": "Bold, energetic American English."
+    },
+    {
+      "engine": "kokoro",
+      "id": "af_maple",
+      "displayName": "Maple",
+      "gender": "female",
+      "description": "Airy American English (v1.1)."
+    },
+    {
+      "engine": "kokoro",
+      "id": "af_nicole",
+      "displayName": "Nicole",
+      "gender": "female",
+      "description": "Intimate, studio-quality American English."
+    },
+    {
+      "engine": "kokoro",
+      "id": "af_sol",
+      "displayName": "Sol",
+      "gender": "female",
+      "description": "Bright, clear American English (v1.1)."
+    },
+    {
+      "engine": "kokoro",
+      "id": "am_michael",
+      "displayName": "Michael",
+      "gender": "male",
+      "description": "Steady, grounded American English."
+    },
+    {
+      "engine": "kokoro",
+      "id": "bf_emma",
+      "displayName": "Emma",
+      "gender": "female",
+      "description": "Clear, articulate British English."
+    },
+    {
+      "engine": "kokoro",
+      "id": "bf_isabella",
+      "displayName": "Isabella",
+      "gender": "female",
+      "description": "Soft, understated British English."
+    },
+    {
+      "engine": "kokoro",
+      "id": "bf_vale",
+      "displayName": "Vale",
+      "gender": "female",
+      "description": "Mature British English (v1.1)."
+    },
+    {
+      "engine": "kokoro",
+      "id": "ff_siwis",
+      "displayName": "Siwis",
+      "gender": "female",
+      "description": "Clear, formal French."
+    },
+    {
+      "engine": "kokoro",
+      "id": "hf_alpha",
+      "displayName": "Alpha",
+      "gender": "female",
+      "description": "Primary Hindi voice."
+    },
+    {
+      "engine": "kokoro",
+      "id": "jf_alpha",
+      "displayName": "Alpha",
+      "gender": "female",
+      "description": "Natural Japanese with clean prosody."
+    },
+    {
+      "engine": "qwen3",
+      "id": "aiden",
+      "displayName": "Aiden",
+      "gender": "male",
+      "description": "Sunny American English, clear midrange."
+    },
+    {
+      "engine": "qwen3",
+      "id": "dylan",
+      "displayName": "Dylan",
+      "gender": "male",
+      "description": "Youthful Beijing Mandarin, natural timbre."
+    },
+    {
+      "engine": "qwen3",
+      "id": "eric",
+      "displayName": "Eric",
+      "gender": "male",
+      "description": "Lively Sichuan Mandarin, slightly husky."
+    },
+    {
+      "engine": "qwen3",
+      "id": "kasumiva",
+      "displayName": "Kasumi",
+      "gender": "female",
+      "description": "Custom-trained expressive English. Warm, anime-influenced delivery."
+    },
+    {
+      "engine": "qwen3",
+      "id": "ono_anna",
+      "displayName": "Ono Anna",
+      "gender": "female",
+      "description": "Playful Japanese, light and nimble."
+    },
+    {
+      "engine": "qwen3",
+      "id": "ryan",
+      "displayName": "Ryan",
+      "gender": "male",
+      "description": "Dynamic English with strong rhythmic drive."
+    },
+    {
+      "engine": "qwen3",
+      "id": "serena",
+      "displayName": "Serena",
+      "gender": "female",
+      "description": "Warm, gentle Mandarin."
+    },
+    {
+      "engine": "qwen3",
+      "id": "sohee",
+      "displayName": "Sohee",
+      "gender": "female",
+      "description": "Warm Korean with rich emotion."
+    },
+    {
+      "engine": "qwen3",
+      "id": "uncle_fu",
+      "displayName": "Uncle Fu",
+      "gender": "male",
+      "description": "Low, mellow Mandarin."
+    },
+    {
+      "engine": "qwen3",
+      "id": "vivian",
+      "displayName": "Vivian",
+      "gender": "female",
+      "description": "Bright, edgy young Mandarin."
+    },
+    {
+      "engine": "rvc",
+      "id": "KasumiVA",
+      "displayName": "Kasumi VA",
+      "gender": "female",
+      "description": "Voice-clone with Kasumi vocal characteristics."
+    }
+  ]
+}

@@ -691,13 +691,17 @@ Cargo.lock
 
 # End of https://www.toptal.com/developers/gitignore/api/rust,rider,visualstudiocode,visualstudio,csharp
 
+# App settings (contains API keys and local model paths)
+src/PersonaEngine/PersonaEngine.App/appsettings.json
+
 # Claude Code
 CLAUDE.md
 .claude/
 .mcp.json
 
 src/PersonaEngine/PersonaEngine.Lib/Resources/*
-!src/PersonaEngine/PersonaEngine.Lib/Resources/.gitkeep 
+!src/PersonaEngine/PersonaEngine.Lib/Resources/.gitkeep
+!src/PersonaEngine/PersonaEngine.Lib/Resources/voice_metadata.json
 
 # Native resources for PersonaEngine
 !src/PersonaEngine/PersonaEngine.Lib/Resources/native

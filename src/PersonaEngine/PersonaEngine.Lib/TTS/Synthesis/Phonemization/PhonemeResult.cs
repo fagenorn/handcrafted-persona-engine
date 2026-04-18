@@ -5,6 +5,12 @@
 /// </summary>
 public class PhonemeResult
 {
+    /// <summary>
+    ///     A placeholder empty result used when phonemization is not available or not required
+    ///     (e.g., voice audition before Task 19 wires in the real phonemizer, or Qwen3 which ignores phonemes).
+    /// </summary>
+    public static readonly PhonemeResult Empty = new(string.Empty, []);
+
     public PhonemeResult(string phonemes, Token[] tokens)
     {
         Phonemes = phonemes;

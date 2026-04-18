@@ -26,7 +26,7 @@ public class AudioProgressNotifier : IAudioProgressNotifier
             args.TurnId,
             args.Chunk.Id
         );
-        SafeInvoke(ChunkPlaybackStarted, sender, args);
+        SafeInvokeIsolated(ChunkPlaybackStarted, sender, args);
     }
 
     public void RaiseChunkEnded(object? sender, AudioChunkPlaybackEndedEvent args)
@@ -36,15 +36,35 @@ public class AudioProgressNotifier : IAudioProgressNotifier
             args.TurnId,
             args.Chunk.Id
         );
-        SafeInvoke(ChunkPlaybackEnded, sender, args);
+        SafeInvokeIsolated(ChunkPlaybackEnded, sender, args);
     }
 
     public void RaiseProgress(object? sender, AudioPlaybackProgressEvent args)
     {
-        SafeInvoke(PlaybackProgress, sender, args);
+        // Direct multi-cast invoke — the compiler emits a zero-allocation iteration over
+        // the multicast delegate chain. One outer try/catch; a throwing handler short-circuits
+        // the remainder of its tick but not subsequent ticks. Acceptable for a pure
+        // "tell me where you are" event fired at ~240 Hz during playback.
+        var handler = PlaybackProgress;
+        if (handler is null)
+            return;
+
+        try
+        {
+            handler(sender, args);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Exception in audio progress event handler (PlaybackProgress).");
+        }
     }
 
-    private void SafeInvoke<TEventArgs>(
+    /// <summary>
+    ///     Iterates the invocation list to isolate failures handler-by-handler. Incurs a
+    ///     <c>Delegate[]</c> allocation per call — acceptable for low-frequency state-change
+    ///     events, not for the per-tick progress stream.
+    /// </summary>
+    private void SafeInvokeIsolated<TEventArgs>(
         EventHandler<TEventArgs>? eventHandler,
         object? sender,
         TEventArgs args

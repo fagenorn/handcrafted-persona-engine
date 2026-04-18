@@ -3,8 +3,10 @@ using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Session;
 using PersonaEngine.Lib.UI;
 using PersonaEngine.Lib.UI.Common;
-using PersonaEngine.Lib.UI.GUI;
-using PersonaEngine.Lib.UI.Spout;
+using PersonaEngine.Lib.UI.ControlPanel;
+using PersonaEngine.Lib.UI.Host;
+using PersonaEngine.Lib.UI.Overlay;
+using PersonaEngine.Lib.UI.Rendering.Spout;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
@@ -32,21 +34,30 @@ public class AvatarApp : IDisposable
 
     private GL _gl;
 
+    private int _currentWidth;
+
+    private int _currentHeight;
+
     private ImGuiController _imGui;
 
     private IInputContext _inputContext;
 
     private SpoutRegistry _spoutRegistry;
 
+    private readonly OverlayHost _overlayHost;
+
     public AvatarApp(
         IOptions<AvatarAppConfig> config,
         IEnumerable<IRenderComponent> renderComponents,
         IEnumerable<IStartupTask> startupTasks,
-        IConversationOrchestrator conversationOrchestrator
+        IConversationOrchestrator conversationOrchestrator,
+        WindowManager windowManager,
+        OverlayHost overlayHost
     )
     {
         _config = config;
         _conversationOrchestrator = conversationOrchestrator;
+        _overlayHost = overlayHost;
 
         var allComponents = renderComponents.OrderByDescending(x => x.Priority).ToList();
 
@@ -66,10 +77,7 @@ public class AvatarApp : IDisposable
         }
 
         _windowConfig = _config.Value.Window;
-        _windowManager = new WindowManager(
-            new Vector2D<int>(_windowConfig.Width, _windowConfig.Height),
-            _windowConfig.Title
-        );
+        _windowManager = windowManager;
         _window = _windowManager.MainWindow;
 
         _windowManager.Load += OnLoad;
@@ -84,11 +92,7 @@ public class AvatarApp : IDisposable
     public void Dispose()
     {
         // Context is destroyed anyway when app closes.
-
-        return;
-
-        _spoutRegistry?.Dispose();
-        _imGui.Dispose();
+        _overlayHost.Dispose();
     }
 
     private void OnLoad()
@@ -101,6 +105,8 @@ public class AvatarApp : IDisposable
         }
 
         _gl = _windowManager.GL;
+        _currentWidth = _window.Size.X;
+        _currentHeight = _window.Size.Y;
 
         foreach (var task in _startupTasks)
         {
@@ -109,12 +115,16 @@ public class AvatarApp : IDisposable
 
         _spoutRegistry = new SpoutRegistry(_gl, _config.Value.SpoutConfigs);
 
+        // Overlay runs on its own thread with its own GL context and consumes
+        // the avatar via Spout's cross-context DX11 shared texture bridge.
+        _overlayHost.Start(_spoutRegistry);
+
         _imGui = new ImGuiController(
             _gl,
             _window,
             _inputContext,
-            Path.Combine(@"Resources\Fonts", @"Montserrat-Medium.ttf"),
-            Path.Combine(@"Resources\Fonts", @"seguiemj.ttf")
+            Path.Combine(@"Resources\Fonts", @"Montserrat.ttf"),
+            Path.Combine(@"Resources\Fonts", @"Seguiemj.ttf")
         );
 
         InitializeComponents(_regularComponents);
@@ -157,7 +167,7 @@ public class AvatarApp : IDisposable
     private void OnRender(double deltaTime)
     {
         _imGui.Update((float)deltaTime);
-        _gl.Viewport(0, 0, (uint)_windowConfig.Width, (uint)_windowConfig.Height);
+        _gl.Viewport(0, 0, (uint)_currentWidth, (uint)_currentHeight);
         _gl.Clear((uint)ClearBufferMask.ColorBufferBit);
 
         // Render regular components to the screen
@@ -189,7 +199,9 @@ public class AvatarApp : IDisposable
 
     private void OnResize(Vector2D<int> size)
     {
-        // Resize all components
+        _currentWidth = size.X;
+        _currentHeight = size.Y;
+
         ResizeComponents(_regularComponents);
     }
 

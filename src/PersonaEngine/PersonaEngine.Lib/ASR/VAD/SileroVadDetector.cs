@@ -17,6 +17,8 @@ internal class SileroVadDetector : IVadDetector
 
     private readonly float _threshold;
 
+    public event Action<float>? ProbabilityObserved;
+
     public SileroVadDetector(
         VadDetectorOptions vadDetectorOptions,
         SileroVadOptions sileroVadOptions
@@ -88,6 +90,7 @@ internal class SileroVadDetector : IVadDetector
                 }
 
                 var prob = _model.Call(slice, state);
+                ProbabilityObserved?.Invoke(prob);
                 if (!startingIndex.HasValue)
                 {
                     if (prob > _threshold)

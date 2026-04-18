@@ -143,6 +143,26 @@ public partial class ConversationSession
         _metricsTracker.Reset();
     }
 
+    private async Task HandleCancelledAsync()
+    {
+        _logger.LogInformation("{SessionId} | User cancel: tearing down active turn.", SessionId);
+        try
+        {
+            await CancelCurrentTurnProcessingAsync();
+        }
+        catch (Exception ex)
+        {
+            // Cancel is user-initiated; route back to Idle even if teardown misbehaves so
+            // the session never gets stuck in Cancelled. Bubbling to Error would punish the
+            // user for an internal pipeline fault on a path they asked to abort.
+            _logger.LogError(ex, "{SessionId} | Error during user cancel teardown.", SessionId);
+        }
+        finally
+        {
+            await _stateMachine.FireAsync(ConversationTrigger.CancelComplete);
+        }
+    }
+
     private void HandleInterruption()
     {
         var interruptedTurnId = _pipeline.CurrentTurnId;
@@ -248,7 +268,7 @@ public partial class ConversationSession
         }
     }
 
-    private async Task HandleErrorAsync(Exception error)
+    private Task HandleErrorAsync(Exception error)
     {
         _logger.LogError(
             error,
@@ -256,7 +276,14 @@ public partial class ConversationSession
             SessionId
         );
         _metrics.IncrementErrors(SessionId, _pipeline.CurrentTurnId, error);
-        await _stateMachine.FireAsync(ConversationTrigger.StopRequested);
+
+        // Do NOT auto-fire StopRequested here — Error is a durable state the user
+        // recovers from via the Retry card (RetryRequested → Idle, configured in
+        // ConfigureStateMachine). Firing StopRequested here collapsed Error → Ended
+        // atomically, so the session was removed from the orchestrator before the
+        // UI could ever enable the Retry button.
+        // Turn-state cleanup still runs via the Error state's OnEntryAsync hook.
+        return Task.CompletedTask;
     }
 
     private async Task CleanupSessionAsync()

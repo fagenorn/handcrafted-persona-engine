@@ -17,7 +17,8 @@ public class ConversationSessionFactory(
     ITtsEngine ttsEngine,
     IEnumerable<IInputAdapter> inputAdapters,
     IOutputAdapter outputAdapter,
-    ConversationMetrics metrics
+    ConversationMetrics metrics,
+    IConversationInputGate inputGate
 ) : IConversationSessionFactory
 {
     public IConversationSession CreateSession(
@@ -39,7 +40,8 @@ public class ConversationSessionFactory(
             sessionId ?? Guid.NewGuid(),
             options,
             context,
-            GetBargeInStrategy(options!)
+            GetBargeInStrategy(options!),
+            inputGate
         );
     }
 

@@ -1,3 +1,5 @@
+using PersonaEngine.Lib.Configuration;
+
 namespace PersonaEngine.Lib.TTS.Synthesis.LipSync.VBridger;
 
 /// <summary>
@@ -17,7 +19,7 @@ public sealed class VBridgerLipSyncProcessor : ILipSyncProcessor
     }
 
     /// <inheritdoc />
-    public string EngineId => "VBridger";
+    public LipSyncEngine EngineId => LipSyncEngine.VBridger;
 
     /// <inheritdoc />
     public LipSyncTimeline Process(AudioSegment segment)

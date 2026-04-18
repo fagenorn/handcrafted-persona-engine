@@ -11,7 +11,7 @@ namespace PersonaEngine.Lib.TTS.Synthesis.LipSync;
 /// </summary>
 internal sealed class LipSyncProcessorProvider : ILipSyncProcessorProvider, IDisposable
 {
-    private readonly IReadOnlyDictionary<string, ILipSyncProcessor> _processors;
+    private readonly IReadOnlyDictionary<LipSyncEngine, ILipSyncProcessor> _processors;
     private readonly ILogger<LipSyncProcessorProvider> _logger;
     private readonly IDisposable? _changeToken;
 
@@ -24,23 +24,13 @@ internal sealed class LipSyncProcessorProvider : ILipSyncProcessorProvider, IDis
     )
     {
         _logger = logger;
-        _processors = processors.ToDictionary(
-            p => p.EngineId,
-            p => p,
-            StringComparer.OrdinalIgnoreCase
-        );
+        _processors = processors.ToDictionary(p => p.EngineId, p => p);
 
         _current = Resolve(config.CurrentValue.Engine);
         _changeToken = config.OnChange(cfg =>
         {
             var newProcessor = Resolve(cfg.Engine);
-            if (
-                string.Equals(
-                    newProcessor.EngineId,
-                    _current.EngineId,
-                    StringComparison.OrdinalIgnoreCase
-                )
-            )
+            if (newProcessor.EngineId == _current.EngineId)
             {
                 return;
             }
@@ -61,7 +51,7 @@ internal sealed class LipSyncProcessorProvider : ILipSyncProcessorProvider, IDis
         _changeToken?.Dispose();
     }
 
-    private ILipSyncProcessor Resolve(string engineId)
+    private ILipSyncProcessor Resolve(LipSyncEngine engineId)
     {
         if (_processors.TryGetValue(engineId, out var processor))
         {

@@ -581,7 +581,7 @@ public class ConversationContext : IConversationContext
             var skChatHistory = new ChatHistory();
 
             // 1. Add System Prompt (from options)
-            if (!string.IsNullOrWhiteSpace(_options.SystemPrompt))
+            if (_options.UseCustomPrompt && !string.IsNullOrWhiteSpace(_options.SystemPrompt))
             {
                 skChatHistory.AddSystemMessage(_options.SystemPrompt);
             }

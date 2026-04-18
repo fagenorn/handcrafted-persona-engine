@@ -21,12 +21,15 @@ using PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Input;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Output;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Metrics;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Session;
+using PersonaEngine.Lib.Health;
+using PersonaEngine.Lib.Health.Probes;
 using PersonaEngine.Lib.IO;
 using PersonaEngine.Lib.Live2D;
 using PersonaEngine.Lib.Live2D.Behaviour;
 using PersonaEngine.Lib.Live2D.Behaviour.Emotion;
 using PersonaEngine.Lib.Live2D.Behaviour.LipSync;
 using PersonaEngine.Lib.LLM;
+using PersonaEngine.Lib.LLM.Connection;
 using PersonaEngine.Lib.Logging;
 using PersonaEngine.Lib.TTS.Audio;
 using PersonaEngine.Lib.TTS.Profanity;
@@ -43,13 +46,36 @@ using PersonaEngine.Lib.TTS.Synthesis.Qwen3;
 using PersonaEngine.Lib.TTS.Synthesis.TextProcessing;
 using PersonaEngine.Lib.UI;
 using PersonaEngine.Lib.UI.Common;
-using PersonaEngine.Lib.UI.GUI;
-using PersonaEngine.Lib.UI.RouletteWheel;
-using PersonaEngine.Lib.UI.Text.Subtitles;
+using PersonaEngine.Lib.UI.ControlPanel;
+using PersonaEngine.Lib.UI.ControlPanel.Layout;
+using PersonaEngine.Lib.UI.ControlPanel.Panels;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Avatar;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Avatar.Sections;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard.Sections;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Listening;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Listening.Sections;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.LlmConnection;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.LlmConnection.Sections;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Personality;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Personality.Sections;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Subtitles;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Subtitles.Sections;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Audition;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Models;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Sections;
+using PersonaEngine.Lib.UI.ControlPanel.Services;
+using PersonaEngine.Lib.UI.ControlPanel.Threading;
+using PersonaEngine.Lib.UI.ControlPanel.Visuals;
+using PersonaEngine.Lib.UI.Host;
+using PersonaEngine.Lib.UI.Overlay;
+using PersonaEngine.Lib.UI.Rendering.RouletteWheel;
+using PersonaEngine.Lib.UI.Rendering.Subtitles;
 using PersonaEngine.Lib.Vision;
 using Polly;
 using Polly.Retry;
 using Polly.Timeout;
+using Dashboard = PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard.Dashboard;
 using SentenceSegmenter = PersonaEngine.Lib.TTS.Synthesis.TextProcessing.SentenceSegmenter;
 
 namespace PersonaEngine.Lib;
@@ -107,6 +133,8 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IInputAdapter, MicrophoneInputAdapter>();
 
+        services.AddSingleton<IConversationInputGate, ConversationInputGate>();
+        services.AddSingleton<IMicMuteController, MicMuteController>();
         services.AddSingleton<IConversationSessionFactory, ConversationSessionFactory>();
         services.AddSingleton<IConversationOrchestrator, ConversationOrchestrator>();
 
@@ -174,6 +202,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMicrophone, MicrophoneInputNAudioSource>();
         services.AddSingleton<IAwaitableAudioSource>(sp => sp.GetRequiredService<IMicrophone>());
 
+        services.AddSingleton<IMicrophoneAmplitudeProvider, MicrophoneAmplitudeProvider>();
+        services.AddSingleton<IVadProbabilityProvider, VadProbabilityProvider>();
+
         return services;
     }
 
@@ -181,6 +212,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<IOutputAdapter, PortaudioOutputAdapter>();
         services.AddSingleton<IAudioProgressNotifier, AudioProgressNotifier>();
+        services.AddSingleton<IAudioAmplitudeProvider, AudioAmplitudeProvider>();
 
         return services;
     }
@@ -212,31 +244,29 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<LlmOptions>(configuration.GetSection("Config:Llm"));
 
-        services.AddSingleton(sp =>
-        {
-            var llmOptions = sp.GetRequiredService<IOptions<LlmOptions>>().Value;
-            var kernelBuilder = Kernel.CreateBuilder();
-
-            kernelBuilder.AddOpenAIChatCompletion(
-                llmOptions.TextModel,
-                new Uri(llmOptions.TextEndpoint),
-                llmOptions.TextApiKey,
-                serviceId: "text"
-            );
-            if (!string.IsNullOrWhiteSpace(llmOptions.VisionEndpoint))
-            {
-                kernelBuilder.AddOpenAIChatCompletion(
-                    llmOptions.VisionModel,
-                    new Uri(llmOptions.VisionEndpoint),
-                    llmOptions.VisionApiKey,
-                    serviceId: "vision"
-                );
-            }
-
-            configureKernel?.Invoke(kernelBuilder);
-
-            return kernelBuilder.Build();
-        });
+        // Named client so IHttpClientFactory pools/rotates the SocketsHttpHandler
+        // (default 2-minute lifetime) — avoids DNS pinning from a long-lived
+        // HttpClient singleton while keeping the 5-second probe timeout.
+        services.AddHttpClient(
+            LlmConnectionProbe.HttpClientName,
+            c => c.Timeout = TimeSpan.FromSeconds(5)
+        );
+        services.AddSingleton<ILlmConnectionProbe, LlmConnectionProbe>();
+        services.AddSingleton<IKernelReloadCoordinator, KernelReloadCoordinator>();
+        services.AddSingleton<ILlmKernelProvider>(sp => new LlmKernelProvider(
+            sp.GetRequiredService<IOptionsMonitor<LlmOptions>>(),
+            sp.GetRequiredService<IKernelReloadCoordinator>(),
+            configureKernel,
+            sp.GetRequiredService<ILogger<LlmKernelProvider>>()
+        ));
+        // Chat engines take a Lazy<ILlmKernelProvider> to break the singleton
+        // resolution cycle: LlmKernelProvider → IKernelReloadCoordinator →
+        // IConversationOrchestrator → IConversationSessionFactory → IChatEngine
+        // → ILlmKernelProvider. The Lazy defers resolution to first use, which
+        // happens after the DI graph is fully constructed.
+        services.AddSingleton<Lazy<ILlmKernelProvider>>(sp => new Lazy<ILlmKernelProvider>(
+            sp.GetRequiredService<ILlmKernelProvider>
+        ));
 
         services.AddSingleton<ITextFilter, NameTextFilter>();
 
@@ -348,10 +378,23 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRenderComponent, SubtitleRenderer>();
         services.AddSingleton<RouletteWheel>();
         services.AddSingleton<IRenderComponent>(x => x.GetRequiredService<RouletteWheel>());
-        services.AddConfigEditor();
+        services.AddSingleton<IUiThreadDispatcher, UiThreadDispatcher>();
+        services.AddControlPanel();
 
         services.AddSingleton<FontProvider>();
         services.AddSingleton<IStartupTask>(x => x.GetRequiredService<FontProvider>());
+
+        services.AddSingleton<WindowManager>(sp =>
+        {
+            var config = sp.GetRequiredService<IOptions<AvatarAppConfig>>().Value.Window;
+            return new WindowManager(
+                new Silk.NET.Maths.Vector2D<int>(config.Width, config.Height),
+                new Silk.NET.Maths.Vector2D<int>(config.MinWidth, config.MinHeight),
+                config.Title
+            );
+        });
+
+        services.AddSingleton<OverlayHost>();
 
         return services;
     }
@@ -371,22 +414,103 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddConfigEditor(this IServiceCollection services)
+    public static IServiceCollection AddControlPanel(this IServiceCollection services)
     {
-        services.AddSingleton<IUiConfigurationManager, UiConfigurationManager>();
-        services.AddSingleton<IEditorStateManager, EditorStateManager>();
-        services.AddSingleton<IConfigSectionRegistry, ConfigSectionRegistry>();
-        services.AddSingleton<IUiThemeManager, UiThemeManager>();
-        services.AddSingleton<INotificationService, NotificationService>();
+        // Config writer — discovers section paths from AvatarAppConfig type hierarchy
+        services.AddSingleton<IConfigWriter>(sp => new ConfigWriter(
+            Path.Combine(AppContext.BaseDirectory, "appsettings.json"),
+            logger: sp.GetRequiredService<ILogger<ConfigWriter>>()
+        ));
 
-        services.AddSingleton<IRenderComponent, ConfigEditorComponent>();
+        // Layout components
+        services.AddSingleton<PresenceOrb>();
+        services.AddSingleton<StatusBar>();
+        services.AddSingleton<ControlBar>();
+        services.AddSingleton<TitleBar>();
 
-        services.AddSingleton<TtsConfigEditor>();
-        services.AddSingleton<RouletteWheelEditor>();
-        services.AddSingleton<ChatEditor>();
-        services.AddSingleton<MicrophoneConfigEditor>();
+        // Persona state bridge for UI effects
+        services.AddSingleton<PersonaStateProvider>();
+        services.AddSingleton<AmbientRenderer>();
+        services.AddSingleton<WindowFrameGlow>();
+        services.AddSingleton<IUiSoundEmitter, NoOpUiSoundEmitter>();
 
-        services.AddSingleton<IStartupTask, ConfigSectionRegistrationTask>();
+        // Voice panel sections
+        services.AddSingleton<VoiceModeSelector>();
+        services.AddSingleton<VoiceCard>();
+        services.AddSingleton<VoiceGallery>();
+        services.AddSingleton<DeliverySection>();
+        services.AddSingleton<CloneLayerSection>();
+        services.AddSingleton<AdvancedSection>();
+
+        // Voice metadata
+        services.AddSingleton<VoiceMetadataCatalog>();
+
+        // Voice audition pipeline
+        services.AddSingleton<OneShotAudioPlayer>();
+        services.AddSingleton<IOneShotPlayer>(sp => sp.GetRequiredService<OneShotAudioPlayer>());
+        services.AddSingleton<IRvcAuditionProcessor, RvcAuditionProcessor>();
+        services.AddSingleton<IVoiceAuditionService, VoiceAuditionService>();
+
+        // Nav request bus — lets dashboard health cards + cross-panel hint
+        // links drive the active sidebar section.
+        services.AddSingleton<NavRequestBus>();
+        services.AddSingleton<INavRequestBus>(sp => sp.GetRequiredService<NavRequestBus>());
+
+        // Subsystem health probes — registration order defines dashboard card order.
+        services.AddSingleton<MicrophoneHealthProbe>();
+        services.AddSingleton<ISubsystemHealthProbe>(sp =>
+            sp.GetRequiredService<MicrophoneHealthProbe>()
+        );
+        services.AddSingleton<LlmHealthProbe>();
+        services.AddSingleton<ISubsystemHealthProbe>(sp => sp.GetRequiredService<LlmHealthProbe>());
+        services.AddSingleton<TtsHealthProbe>();
+        services.AddSingleton<ISubsystemHealthProbe>(sp => sp.GetRequiredService<TtsHealthProbe>());
+
+        // Dashboard panel sections + services
+        services.AddSingleton<SessionStatsCollector>();
+        services.AddSingleton<PresenceStripSection>();
+        services.AddSingleton<SystemHealthSection>();
+        services.AddSingleton<TranscriptSection>();
+        services.AddSingleton<ControlsSection>();
+        services.AddSingleton<SessionStatsSection>();
+
+        // Panels
+        services.AddSingleton<Dashboard>();
+        services.AddSingleton<VoicePanel>();
+        // Personality panel sections
+        services.AddSingleton<PromptSourceSection>();
+        services.AddSingleton<CurrentVibeSection>();
+        services.AddSingleton<TopicsSection>();
+        services.AddSingleton<PersonalityPanel>();
+        services.AddSingleton<MicrophoneDeviceSection>();
+        services.AddSingleton<SpeechDetectionSection>();
+        services.AddSingleton<RecognitionSection>();
+        services.AddSingleton<InterruptionSection>();
+        services.AddSingleton<LiveMeterWidget>();
+        services.AddSingleton<ListeningPanel>();
+        // Avatar panel sections
+        services.AddSingleton<ModelSection>();
+        services.AddSingleton<LipSyncSection>();
+        services.AddSingleton<AvatarPanel>();
+        // Subtitles panel sections
+        services.AddSingleton<SubtitlePreviewRenderer>();
+        services.AddSingleton<PreviewSection>();
+        services.AddSingleton<TextStyleSection>();
+        services.AddSingleton<ColorsSection>();
+        services.AddSingleton<PlacementSection>();
+        services.AddSingleton<CanvasSection>();
+        services.AddSingleton<SubtitlesPanel>();
+        services.AddSingleton<OverlayPanel>();
+        services.AddSingleton<RouletteWheelPanel>();
+        services.AddSingleton<ScreenAwareness>();
+        services.AddSingleton<Streaming>();
+        services.AddSingleton<TextLlmSection>();
+        services.AddSingleton<VisionLlmSection>();
+        services.AddSingleton<LlmConnectionPanel>();
+        services.AddSingleton<Application>();
+
+        // Shell — registered as IRenderComponent
+        services.AddSingleton<IRenderComponent, ControlPanelComponent>();
 
         return services;
     }
@@ -399,7 +523,8 @@ public static class ServiceCollectionExtensions
         services.Configure<RVCFilterOptions>(configuration.GetSection("Config:Tts:Rvc"));
 
         services.AddSingleton<IRVCVoiceProvider, RVCVoiceProvider>();
-        services.AddSingleton<IAudioFilter, RVCFilter>();
+        services.AddSingleton<RVCFilter>();
+        services.AddSingleton<IAudioFilter>(sp => sp.GetRequiredService<RVCFilter>());
 
         return services;
     }

@@ -44,7 +44,10 @@ internal sealed class KokoroSentenceSynthesizer : ISentenceSynthesizer
     public TtsEngineCapabilities Capabilities =>
         TtsEngineCapabilities.PhonemeControl | TtsEngineCapabilities.SpeedControl;
 
-    public ISynthesisSession CreateSession() => new KokoroSynthesisSession(this);
+    public ISynthesisSession CreateSession() => new KokoroSynthesisSession(this, null);
+
+    public ISynthesisSession CreateSession(string voiceName) =>
+        new KokoroSynthesisSession(this, voiceName);
 
     public async ValueTask DisposeAsync()
     {
@@ -58,6 +61,7 @@ internal sealed class KokoroSentenceSynthesizer : ISentenceSynthesizer
 
     internal async IAsyncEnumerable<AudioSegment> SynthesizeCoreAsync(
         PhonemeResult phonemeResult,
+        string? voiceOverride = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
@@ -68,7 +72,12 @@ internal sealed class KokoroSentenceSynthesizer : ISentenceSynthesizer
 
         await _throttle.WaitAsync(cancellationToken);
 
-        var currentOptions = _options.CurrentValue;
+        var currentOptions = voiceOverride is not null
+            ? _options.CurrentValue with
+            {
+                DefaultVoice = voiceOverride,
+            }
+            : _options.CurrentValue;
 
         try
         {
@@ -207,14 +216,17 @@ internal sealed class KokoroSentenceSynthesizer : ISentenceSynthesizer
     ///     Stateless session for Kokoro — <paramref name="isLastSegment" /> is ignored
     ///     since Kokoro has no cross-sentence decoder state.
     /// </summary>
-    private sealed class KokoroSynthesisSession(KokoroSentenceSynthesizer owner) : ISynthesisSession
+    private sealed class KokoroSynthesisSession(
+        KokoroSentenceSynthesizer owner,
+        string? voiceOverride
+    ) : ISynthesisSession
     {
         public IAsyncEnumerable<AudioSegment> SynthesizeAsync(
             string sentence,
             PhonemeResult phonemeResult,
             bool isLastSegment,
             CancellationToken cancellationToken = default
-        ) => owner.SynthesizeCoreAsync(phonemeResult, cancellationToken);
+        ) => owner.SynthesizeCoreAsync(phonemeResult, voiceOverride, cancellationToken);
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }

@@ -37,4 +37,10 @@ public enum ConversationTrigger
     AudioStreamEnded,
 
     ErrorOccurred,
+
+    CancelRequested,
+
+    CancelComplete,
+
+    RetryRequested,
 }

@@ -3,7 +3,7 @@
 public record RouletteWheelOptions
 {
     // Font and Text Settings
-    public string Font { get; set; } = "DynaPuff_Condensed-Bold.ttf";
+    public string Font { get; set; } = "DynaPuff.ttf";
 
     public int FontSize { get; set; } = 24;
 

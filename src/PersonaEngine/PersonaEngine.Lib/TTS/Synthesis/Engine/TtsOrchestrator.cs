@@ -20,6 +20,10 @@ public sealed class TtsOrchestrator : ITtsEngine
     private readonly ISentenceSegmenter _segmenter;
     private readonly ILogger<TtsOrchestrator> _logger;
 
+    private readonly object _readinessGate = new();
+    private bool _isReady = true;
+    private string? _lastInitError;
+
     public TtsOrchestrator(
         ITtsEngineProvider engineProvider,
         SentenceProcessor sentenceProcessor,
@@ -37,6 +41,30 @@ public sealed class TtsOrchestrator : ITtsEngine
             loggerFactory.CreateLogger<TtsOrchestrator>()
             ?? throw new ArgumentNullException(nameof(loggerFactory));
     }
+
+    public bool IsReady
+    {
+        get
+        {
+            lock (_readinessGate)
+            {
+                return _isReady;
+            }
+        }
+    }
+
+    public string? LastInitError
+    {
+        get
+        {
+            lock (_readinessGate)
+            {
+                return _lastInitError;
+            }
+        }
+    }
+
+    public event Action? ReadyChanged;
 
     public void Dispose() { }
 
@@ -61,7 +89,17 @@ public sealed class TtsOrchestrator : ITtsEngine
         ISynthesisSession? session = null;
         try
         {
-            session = synthesizer.CreateSession();
+            try
+            {
+                session = synthesizer.CreateSession();
+            }
+            catch (Exception ex)
+            {
+                UpdateReadiness(isReady: false, error: ex.Message);
+                throw;
+            }
+
+            UpdateReadiness(isReady: true, error: null);
 
             await foreach (
                 var (_, _, _, textChunk) in inputReader
@@ -144,5 +182,24 @@ public sealed class TtsOrchestrator : ITtsEngine
         );
 
         return emitter.CompletionReason;
+    }
+
+    private void UpdateReadiness(bool isReady, string? error)
+    {
+        bool changed;
+        lock (_readinessGate)
+        {
+            changed = _isReady != isReady || _lastInitError != error;
+            if (changed)
+            {
+                _isReady = isReady;
+                _lastInitError = error;
+            }
+        }
+
+        if (changed)
+        {
+            ReadyChanged?.Invoke();
+        }
     }
 }

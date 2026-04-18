@@ -6,6 +6,10 @@ public class WindowConfiguration
 
     public int Height { get; set; } = 1080;
 
+    public int MinWidth { get; set; } = 800;
+
+    public int MinHeight { get; set; } = 600;
+
     public string Title { get; set; } = "Avatar Application";
 
     public bool Fullscreen { get; set; } = false;

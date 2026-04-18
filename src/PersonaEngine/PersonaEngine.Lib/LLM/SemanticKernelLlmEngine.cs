@@ -7,6 +7,7 @@ using PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
 using PersonaEngine.Lib.Core.Conversation.Abstractions.Events;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Common;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Output;
+using PersonaEngine.Lib.LLM.Connection;
 using PersonaEngine.Lib.Logging;
 using Polly;
 using Polly.Registry;
@@ -15,7 +16,7 @@ namespace PersonaEngine.Lib.LLM;
 
 public class SemanticKernelChatEngine : IChatEngine
 {
-    private readonly IChatCompletionService _chatCompletionService;
+    private readonly Lazy<ILlmKernelProvider> _kernelProvider;
 
     private readonly ILogger<SemanticKernelChatEngine> _logger;
 
@@ -24,16 +25,16 @@ public class SemanticKernelChatEngine : IChatEngine
     private readonly SemaphoreSlim _semaphore = new(1, 1);
 
     public SemanticKernelChatEngine(
-        Kernel kernel,
+        Lazy<ILlmKernelProvider> kernelProvider,
         ILogger<SemanticKernelChatEngine> logger,
         ResiliencePipelineProvider<string> resiliencePipelineProvider
     )
     {
+        _kernelProvider = kernelProvider ?? throw new ArgumentNullException(nameof(kernelProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _resiliencePipeline = resiliencePipelineProvider.GetPipeline("semantickernel-chat");
-        _chatCompletionService = kernel.GetRequiredService<IChatCompletionService>("text");
 
-        _logger.LogInformation("SemanticKernelChatEngine initialized successfully");
+        _logger.LogInformation("SemanticKernelChatEngine initialized (provider-bound Kernel).");
     }
 
     public void Dispose()
@@ -67,6 +68,12 @@ public class SemanticKernelChatEngine : IChatEngine
 
         try
         {
+            // Captured once per call (outside the retry loop). Kernel swaps only
+            // happen on Idle transitions via IKernelReloadCoordinator, and an
+            // in-flight turn cannot be Idle — so every Polly retry of this call
+            // is guaranteed to target the same kernel snapshot.
+            var chatCompletionService =
+                _kernelProvider.Value.Current.GetRequiredService<IChatCompletionService>("text");
             var history = context.GetSemanticKernelChatHistory();
 
             var rc = ResilienceContextPool.Shared.Get(cancellationToken);
@@ -82,7 +89,7 @@ public class SemanticKernelChatEngine : IChatEngine
                         x.stopwatch.Restart();
 
                         var streamingResponse =
-                            _chatCompletionService.GetStreamingChatMessageContentsAsync(
+                            chatCompletionService.GetStreamingChatMessageContentsAsync(
                                 x.history,
                                 x.executionSettings,
                                 null,

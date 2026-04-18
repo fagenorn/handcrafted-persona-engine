@@ -7,35 +7,28 @@ using PersonaEngine.Lib.Core.Conversation.Implementations.Context;
 
 namespace PersonaEngine.Lib.Core.Conversation.Implementations.Session;
 
-public class ConversationOrchestrator : IConversationOrchestrator
+public class ConversationOrchestrator(
+    ILogger<ConversationOrchestrator> logger,
+    IConversationSessionFactory sessionFactory,
+    IOptions<ConversationOptions> conversationOptions,
+    IOptionsMonitor<ConversationContextOptions> conversationContextOptions
+) : IConversationOrchestrator
 {
     private readonly ConcurrentDictionary<
         Guid,
         (IConversationSession Session, ValueTask RunTask)
     > _activeSessions = new();
 
-    private readonly IOptionsMonitor<ConversationContextOptions> _conversationContextOptions;
+    private readonly IOptionsMonitor<ConversationContextOptions> _conversationContextOptions =
+        conversationContextOptions;
 
-    private readonly IOptions<ConversationOptions> _conversationOptions;
+    private readonly IOptions<ConversationOptions> _conversationOptions = conversationOptions;
 
-    private readonly ILogger<ConversationOrchestrator> _logger;
+    private readonly ILogger<ConversationOrchestrator> _logger = logger;
 
     private readonly CancellationTokenSource _orchestratorCts = new();
 
-    private readonly IConversationSessionFactory _sessionFactory;
-
-    public ConversationOrchestrator(
-        ILogger<ConversationOrchestrator> logger,
-        IConversationSessionFactory sessionFactory,
-        IOptions<ConversationOptions> conversationOptions,
-        IOptionsMonitor<ConversationContextOptions> conversationContextOptions
-    )
-    {
-        _logger = logger;
-        _sessionFactory = sessionFactory;
-        _conversationOptions = conversationOptions;
-        _conversationContextOptions = conversationContextOptions;
-    }
+    private readonly IConversationSessionFactory _sessionFactory = sessionFactory;
 
     public async ValueTask DisposeAsync()
     {
@@ -93,6 +86,10 @@ public class ConversationOrchestrator : IConversationOrchestrator
         var context = new ConversationContext([], _conversationContextOptions);
         var session = _sessionFactory.CreateSession(context, _conversationOptions.Value, sessionId);
 
+        // Subscribe BEFORE RunAsync so the initial Initializing → Idle transition on fast-init
+        // paths isn't missed. HandleSessionCompletionAsync.finally pairs this with -=.
+        session.StateChanged += OnAnySessionStateChanged;
+
         try
         {
             var runTask = session.RunAsync(_orchestratorCts.Token);
@@ -109,6 +106,7 @@ public class ConversationOrchestrator : IConversationOrchestrator
                 return session.SessionId;
             }
 
+            session.StateChanged -= OnAnySessionStateChanged;
             await session.StopAsync();
             await session.DisposeAsync();
 
@@ -122,6 +120,7 @@ public class ConversationOrchestrator : IConversationOrchestrator
                 "Starting session {SessionId} was cancelled before RunAsync could start.",
                 session.SessionId
             );
+            session.StateChanged -= OnAnySessionStateChanged;
             await session.DisposeAsync();
 
             throw;
@@ -133,6 +132,7 @@ public class ConversationOrchestrator : IConversationOrchestrator
                 "Failed to create or start session {SessionId}.",
                 session.SessionId
             );
+            session.StateChanged -= OnAnySessionStateChanged;
             await session.DisposeAsync();
 
             throw;
@@ -166,6 +166,31 @@ public class ConversationOrchestrator : IConversationOrchestrator
         return _activeSessions.Keys.ToList();
     }
 
+    public int ActiveSessionCount => _activeSessions.Count;
+
+    public bool TryGetFirstActiveSession(
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IConversationSession? session
+    )
+    {
+        // ConcurrentDictionary's struct enumerator is allocation-free and snapshots
+        // a valid point-in-time view (items are never torn). We take the first
+        // entry whose Session field has been populated — StartNewSessionAsync
+        // briefly inserts a placeholder (null!, CompletedTask) before swapping in
+        // the real tuple, so we must guard against the null sentinel here.
+        foreach (var kvp in _activeSessions)
+        {
+            var candidate = kvp.Value.Session;
+            if (candidate is not null)
+            {
+                session = candidate;
+                return true;
+            }
+        }
+
+        session = null;
+        return false;
+    }
+
     public async ValueTask StopAllSessionsAsync()
     {
         if (!_orchestratorCts.IsCancellationRequested)
@@ -197,7 +222,100 @@ public class ConversationOrchestrator : IConversationOrchestrator
         }
     }
 
+    public ValueTask PauseAllSessionsAsync(CancellationToken cancellationToken = default) =>
+        ForEachSessionAsync(
+            (s, ct) => s.PauseAsync(ct),
+            "Error pausing session {SessionId}.",
+            cancellationToken
+        );
+
+    public ValueTask ResumeAllSessionsAsync(CancellationToken cancellationToken = default) =>
+        ForEachSessionAsync(
+            (s, ct) => s.ResumeAsync(ct),
+            "Error resuming session {SessionId}.",
+            cancellationToken
+        );
+
+    public ValueTask CancelActiveTurnsAsync(CancellationToken cancellationToken = default) =>
+        ForEachSessionAsync(
+            (s, ct) => s.CancelAsync(ct),
+            "Error cancelling active turn on session {SessionId}.",
+            cancellationToken
+        );
+
+    public ValueTask RetryErroredSessionsAsync(CancellationToken cancellationToken = default) =>
+        ForEachSessionAsync(
+            (s, ct) => s.RetryAsync(ct),
+            "Error retrying session {SessionId}.",
+            cancellationToken
+        );
+
+    /// <summary>
+    ///     Fan out an independent per-session async operation across every active session and
+    ///     await all of them concurrently. Each session's failure is logged with
+    ///     <paramref name="errorMessageTemplate"/> (which must contain the <c>{SessionId}</c>
+    ///     placeholder) and does not prevent other sessions from completing.
+    /// </summary>
+    private async ValueTask ForEachSessionAsync(
+        Func<IConversationSession, CancellationToken, ValueTask> action,
+        string errorMessageTemplate,
+        CancellationToken cancellationToken
+    )
+    {
+        var snapshot = _activeSessions.ToArray();
+        if (snapshot.Length == 0)
+        {
+            return;
+        }
+
+        var tasks = new Task[snapshot.Length];
+        for (var i = 0; i < snapshot.Length; i++)
+        {
+            var sessionId = snapshot[i].Key;
+            var session = snapshot[i].Value.Session;
+            tasks[i] = InvokeAsync(
+                session,
+                sessionId,
+                action,
+                errorMessageTemplate,
+                cancellationToken
+            );
+        }
+
+        await Task.WhenAll(tasks).ConfigureAwait(false);
+    }
+
+    private async Task InvokeAsync(
+        IConversationSession? session,
+        Guid sessionId,
+        Func<IConversationSession, CancellationToken, ValueTask> action,
+        string errorMessageTemplate,
+        CancellationToken cancellationToken
+    )
+    {
+        // Guard against the placeholder slot inserted by StartNewSessionAsync before
+        // the real session tuple is swapped in.
+        if (session is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await action(session, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, errorMessageTemplate, sessionId);
+        }
+    }
+
     public event EventHandler? SessionsUpdated;
+
+    /// <inheritdoc />
+    public event Action<ConversationState>? StateChanged;
+
+    private void OnAnySessionStateChanged(ConversationState s) => StateChanged?.Invoke(s);
 
     private async ValueTask HandleSessionCompletionAsync(
         IConversationSession session,
@@ -240,6 +358,8 @@ public class ConversationOrchestrator : IConversationOrchestrator
                     session.SessionId
                 );
             }
+
+            session.StateChanged -= OnAnySessionStateChanged;
 
             try
             {

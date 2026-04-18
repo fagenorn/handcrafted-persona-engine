@@ -44,8 +44,14 @@ internal sealed class Qwen3SentenceSynthesizer : ISentenceSynthesizer
     public ISynthesisSession CreateSession()
     {
         var engine = EnsureInitialized();
-
         return new Qwen3SynthesisSession(engine, _options.CurrentValue);
+    }
+
+    public ISynthesisSession CreateSession(string voiceName)
+    {
+        var engine = EnsureInitialized();
+        var opts = _options.CurrentValue with { Speaker = voiceName };
+        return new Qwen3SynthesisSession(engine, opts);
     }
 
     public ValueTask DisposeAsync()

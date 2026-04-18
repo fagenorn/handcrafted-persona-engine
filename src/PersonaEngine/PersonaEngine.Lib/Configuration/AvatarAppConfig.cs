@@ -22,6 +22,8 @@ public record AvatarAppConfig
 
     public SpoutConfiguration[] SpoutConfigs { get; set; } = [];
 
+    public OverlayConfiguration Overlay { get; set; } = new();
+
     public VisionConfig Vision { get; set; } = new();
 
     public RouletteWheelOptions RouletteWheel { get; set; } = new();

@@ -2,7 +2,7 @@
 using FontStashSharp;
 using Microsoft.Extensions.Logging;
 using PersonaEngine.Lib.UI.Common;
-using PersonaEngine.Lib.UI.Text.Rendering;
+using PersonaEngine.Lib.UI.Rendering.Text;
 using Silk.NET.OpenGL;
 using StbImageSharp;
 using Texture = PersonaEngine.Lib.UI.Common.Texture;
@@ -39,6 +39,24 @@ public class FontProvider : IStartupTask
     public void Execute(GL gl)
     {
         _texture2DManager = new Texture2DManager(gl);
+    }
+
+    public IReadOnlyList<string> GetAvailableFonts()
+    {
+        if (!Directory.Exists(FONTS_DIR))
+        {
+            _logger.LogWarning("Fonts directory not found: {Path}", FONTS_DIR);
+            return [];
+        }
+
+        var fontFiles = Directory.GetFiles(FONTS_DIR, "*.ttf");
+        var fontNames = new string[fontFiles.Length];
+        for (var i = 0; i < fontFiles.Length; i++)
+        {
+            fontNames[i] = Path.GetFileName(fontFiles[i]);
+        }
+
+        return fontNames;
     }
 
     public Task<IReadOnlyList<string>> GetAvailableFontsAsync(

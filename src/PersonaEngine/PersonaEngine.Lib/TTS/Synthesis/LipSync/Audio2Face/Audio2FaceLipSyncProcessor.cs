@@ -150,7 +150,7 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
         );
     }
 
-    public string EngineId => "Audio2Face";
+    public LipSyncEngine EngineId => LipSyncEngine.Audio2Face;
 
     public LipSyncTimeline Process(AudioSegment segment)
     {
@@ -323,11 +323,11 @@ public sealed class Audio2FaceLipSyncProcessor : ILipSyncProcessor, IDisposable
         _inference.Dispose();
     }
 
-    private IBlendshapeSolver CreateSolver(string solverType)
+    private IBlendshapeSolver CreateSolver(LipSyncSolver solverType)
     {
         return solverType switch
         {
-            "PGD" => new PgdBlendshapeSolver(
+            LipSyncSolver.Pgd => new PgdBlendshapeSolver(
                 _data.DeltaMatrix,
                 _data.MaskedPositionCount,
                 _data.ActiveCount,
