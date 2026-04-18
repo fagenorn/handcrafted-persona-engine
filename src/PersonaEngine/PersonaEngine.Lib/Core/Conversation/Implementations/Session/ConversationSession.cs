@@ -255,4 +255,28 @@ public partial class ConversationSession : IConversationSession
         _logger.LogInformation("{SessionId} | Resume requested.", SessionId);
         return new ValueTask(_stateMachine.FireAsync(ConversationTrigger.ResumeRequested));
     }
+
+    public ValueTask CancelAsync(CancellationToken cancellationToken = default)
+    {
+        if (_isDisposed)
+            return ValueTask.CompletedTask;
+
+        if (!_stateMachine.IsInState(ConversationState.ActiveTurn))
+            return ValueTask.CompletedTask;
+
+        _logger.LogInformation("{SessionId} | Cancel requested.", SessionId);
+        return new ValueTask(_stateMachine.FireAsync(ConversationTrigger.CancelRequested));
+    }
+
+    public ValueTask RetryAsync(CancellationToken cancellationToken = default)
+    {
+        if (_isDisposed)
+            return ValueTask.CompletedTask;
+
+        if (_stateMachine.State != ConversationState.Error)
+            return ValueTask.CompletedTask;
+
+        _logger.LogInformation("{SessionId} | Retry requested.", SessionId);
+        return new ValueTask(_stateMachine.FireAsync(ConversationTrigger.RetryRequested));
+    }
 }
