@@ -93,6 +93,10 @@ public class ConversationOrchestrator : IConversationOrchestrator
         var context = new ConversationContext([], _conversationContextOptions);
         var session = _sessionFactory.CreateSession(context, _conversationOptions.Value, sessionId);
 
+        // Subscribe BEFORE RunAsync so the initial Initializing → Idle transition on fast-init
+        // paths isn't missed. HandleSessionCompletionAsync.finally pairs this with -=.
+        session.StateChanged += OnAnySessionStateChanged;
+
         try
         {
             var runTask = session.RunAsync(_orchestratorCts.Token);
@@ -104,13 +108,12 @@ public class ConversationOrchestrator : IConversationOrchestrator
                 var sessionJob = HandleSessionCompletionAsync(session, runTask);
                 _activeSessions[session.SessionId] = (session, sessionJob);
 
-                session.StateChanged += OnAnySessionStateChanged;
-
                 OnSessionsUpdated();
 
                 return session.SessionId;
             }
 
+            session.StateChanged -= OnAnySessionStateChanged;
             await session.StopAsync();
             await session.DisposeAsync();
 
@@ -124,6 +127,7 @@ public class ConversationOrchestrator : IConversationOrchestrator
                 "Starting session {SessionId} was cancelled before RunAsync could start.",
                 session.SessionId
             );
+            session.StateChanged -= OnAnySessionStateChanged;
             await session.DisposeAsync();
 
             throw;
@@ -135,6 +139,7 @@ public class ConversationOrchestrator : IConversationOrchestrator
                 "Failed to create or start session {SessionId}.",
                 session.SessionId
             );
+            session.StateChanged -= OnAnySessionStateChanged;
             await session.DisposeAsync();
 
             throw;
