@@ -199,7 +199,10 @@ public partial class ConversationSession
             .Ignore(ConversationTrigger.AudioStreamStarted)
             .Ignore(ConversationTrigger.LlmStreamEnded)
             .Ignore(ConversationTrigger.TtsStreamEnded)
-            .Ignore(ConversationTrigger.AudioStreamEnded);
+            .Ignore(ConversationTrigger.AudioStreamEnded)
+            .Ignore(ConversationTrigger.InputDetected)
+            .Ignore(ConversationTrigger.InputFinalized)
+            .Ignore(ConversationTrigger.CancelRequested);
 
         _stateMachine
             .Configure(ConversationState.Paused)
