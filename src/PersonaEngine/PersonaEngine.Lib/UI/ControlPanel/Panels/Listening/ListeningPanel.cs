@@ -15,8 +15,15 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Listening;
 ///         functional) but recognised-speech events are dropped before reaching the
 ///         conversation session, so the avatar does not react to calibration utterances.
 ///     </para>
+///     <para>
+///         All four child sections hold <c>IOptionsMonitor.OnChange</c> subscriptions,
+///         so <see cref="Dispose" /> forwards teardown to them to avoid handler leaks
+///         when the control panel is torn down. The activation-lifecycle gate scope in
+///         <see cref="OnActivated" /> / <see cref="OnDeactivated" /> is orthogonal to
+///         disposal and stays on the <see cref="IActivatablePanel" /> axis.
+///     </para>
 /// </summary>
-public sealed class ListeningPanel : IActivatablePanel
+public sealed class ListeningPanel : IActivatablePanel, IDisposable
 {
     private const string GateReason = "Listening panel active — calibration mode";
 
@@ -27,6 +34,7 @@ public sealed class ListeningPanel : IActivatablePanel
     private readonly IConversationInputGate _inputGate;
 
     private IDisposable? _gateScope;
+    private bool _disposed;
 
     public ListeningPanel(
         Sections.MicrophoneDeviceSection deviceSection,
@@ -56,6 +64,20 @@ public sealed class ListeningPanel : IActivatablePanel
     {
         _gateScope?.Dispose();
         _gateScope = null;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _deviceSection.Dispose();
+        _detectionSection.Dispose();
+        _recognitionSection.Dispose();
+        _interruptionSection.Dispose();
     }
 
     public void Render(float dt)
