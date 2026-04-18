@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Numerics;
 using Hexa.NET.ImGui;
 
@@ -156,22 +157,39 @@ public static class Theme
     /// </summary>
     public static bool TryParseHex(string? hex, out Vector4 color)
     {
-        if (!string.IsNullOrWhiteSpace(hex))
+        // "#RRGGBB" (alpha defaults to 255) or "#AARRGGBB" (alpha-first, matching
+        // ToHexString for round-trip). Span-based parsing — no allocations, no
+        // exception flow for malformed input.
+        if (hex is not null)
         {
-            try
+            var span = hex.AsSpan();
+            const NumberStyles style = NumberStyles.HexNumber;
+            var culture = CultureInfo.InvariantCulture;
+
+            if (span.Length == 7 && span[0] == '#')
             {
-                var parsed = System.Drawing.ColorTranslator.FromHtml(hex);
-                color = new Vector4(
-                    parsed.R / 255f,
-                    parsed.G / 255f,
-                    parsed.B / 255f,
-                    parsed.A / 255f
-                );
-                return true;
+                if (
+                    byte.TryParse(span.Slice(1, 2), style, culture, out var r)
+                    && byte.TryParse(span.Slice(3, 2), style, culture, out var g)
+                    && byte.TryParse(span.Slice(5, 2), style, culture, out var b)
+                )
+                {
+                    color = new Vector4(r / 255f, g / 255f, b / 255f, 1f);
+                    return true;
+                }
             }
-            catch
+            else if (span.Length == 9 && span[0] == '#')
             {
-                // Malformed input — fall through to the white default.
+                if (
+                    byte.TryParse(span.Slice(1, 2), style, culture, out var a)
+                    && byte.TryParse(span.Slice(3, 2), style, culture, out var r)
+                    && byte.TryParse(span.Slice(5, 2), style, culture, out var g)
+                    && byte.TryParse(span.Slice(7, 2), style, culture, out var b)
+                )
+                {
+                    color = new Vector4(r / 255f, g / 255f, b / 255f, a / 255f);
+                    return true;
+                }
             }
         }
 
