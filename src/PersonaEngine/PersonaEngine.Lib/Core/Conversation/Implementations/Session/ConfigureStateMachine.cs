@@ -93,7 +93,8 @@ public partial class ConversationSession
                 ConversationState.Interrupted,
                 ShouldAllowBargeIn,
                 "Barge-In"
-            );
+            )
+            .Permit(ConversationTrigger.CancelRequested, ConversationState.Cancelled);
 
         _stateMachine
             .Configure(ConversationState.ProcessingInput)
@@ -183,6 +184,22 @@ public partial class ConversationSession
             .Permit(ConversationTrigger.InputFinalized, ConversationState.ProcessingInput)
             .Permit(ConversationTrigger.StopRequested, ConversationState.Ended)
             .Permit(ConversationTrigger.ErrorOccurred, ConversationState.Error);
+
+        _stateMachine
+            .Configure(ConversationState.Cancelled)
+            .OnEntryAsync(HandleCancelledAsync, "User Cancel Teardown")
+            .Permit(ConversationTrigger.CancelComplete, ConversationState.Idle)
+            .Permit(ConversationTrigger.StopRequested, ConversationState.Ended)
+            .Permit(ConversationTrigger.ErrorOccurred, ConversationState.Error)
+            .Ignore(ConversationTrigger.LlmStreamChunkReceived)
+            .Ignore(ConversationTrigger.TtsStreamChunkReceived)
+            .Ignore(ConversationTrigger.LlmStreamStarted)
+            .Ignore(ConversationTrigger.TtsRequestSent)
+            .Ignore(ConversationTrigger.TtsStreamStarted)
+            .Ignore(ConversationTrigger.AudioStreamStarted)
+            .Ignore(ConversationTrigger.LlmStreamEnded)
+            .Ignore(ConversationTrigger.TtsStreamEnded)
+            .Ignore(ConversationTrigger.AudioStreamEnded);
 
         _stateMachine
             .Configure(ConversationState.Paused)
@@ -307,6 +324,7 @@ public partial class ConversationSession
             ConversationState.StreamingResponse => "😃",
             ConversationState.Speaking => "🗣️",
             ConversationState.Interrupted => "😵",
+            ConversationState.Cancelled => "🛑",
             ConversationState.Paused => "🤐",
             ConversationState.Error => "😱",
             ConversationState.Ended => "🙃",

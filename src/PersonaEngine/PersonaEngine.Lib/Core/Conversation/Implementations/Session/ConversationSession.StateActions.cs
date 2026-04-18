@@ -143,6 +143,13 @@ public partial class ConversationSession
         _metricsTracker.Reset();
     }
 
+    private async Task HandleCancelledAsync()
+    {
+        _logger.LogInformation("{SessionId} | User cancel: tearing down active turn.", SessionId);
+        await CancelCurrentTurnProcessingAsync();
+        await _stateMachine.FireAsync(ConversationTrigger.CancelComplete);
+    }
+
     private void HandleInterruption()
     {
         var interruptedTurnId = _pipeline.CurrentTurnId;

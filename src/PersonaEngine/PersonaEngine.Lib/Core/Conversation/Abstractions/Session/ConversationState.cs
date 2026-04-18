@@ -24,6 +24,8 @@ public enum ConversationState
 
     Interrupted,
 
+    Cancelled,
+
     Error,
 
     Ended,
