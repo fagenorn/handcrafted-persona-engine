@@ -3,16 +3,16 @@ using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.LLM.Connection;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.LlmConnection;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Shared;
 using PersonaEngine.Lib.UI.ControlPanel.Threading;
-using PersonaEngine.Lib.UI.Overlay;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels.LlmConnection.Sections;
 
 /// <summary>
 ///     Configure the primary text LLM. Endpoint + model + API key with live probe
-///     feedback via a broadcast-style <see cref="StatusPill" /> using an LLM-specific
-///     label, plus preset endpoint chips and an explicit "Test connection" button.
+///     feedback via a broadcast-style <see cref="SubsystemStatusChip" />, plus preset
+///     endpoint chips and an explicit "Test connection" button.
 /// </summary>
 public sealed class TextLlmSection : IDisposable
 {
@@ -114,20 +114,14 @@ public sealed class TextLlmSection : IDisposable
         ImGui.PopStyleColor();
 
         ImGui.SameLine();
-        var pillText = PillLabel(_probe.TextStatus.Status);
-        var pillStatus = MapToOverlay(_probe.TextStatus.Status);
-        var avail = ImGui.GetContentRegionAvail().X;
-        var pillWidth = ImGui.CalcTextSize(pillText).X + 32f;
-        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + Math.Max(0f, avail - pillWidth));
-        StatusPill.Render(
-            pillStatus,
-            (float)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds,
-            PillTransition.None,
-            0f,
-            _probe.TextStatus.DetailMessage,
-            StatusPillStyle.Broadcast,
-            pillText
+        var subsystemStatus = LlmProbeStatusAdapter.ToSubsystemStatus(
+            _probe.TextStatus.Status,
+            _probe.TextStatus.DetailMessage
         );
+        var avail = ImGui.GetContentRegionAvail().X;
+        var pillWidth = ImGui.CalcTextSize(subsystemStatus.Label).X + 32f;
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + Math.Max(0f, avail - pillWidth));
+        SubsystemStatusChip.Render(subsystemStatus);
 
         ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
         ImGui.TextUnformatted("The primary language model. Changes apply on the next turn.");
@@ -316,33 +310,6 @@ public sealed class TextLlmSection : IDisposable
 
         return $"{(int)ago.TotalHours}h ago";
     }
-
-    private static string PillLabel(LlmProbeStatus status) =>
-        status switch
-        {
-            LlmProbeStatus.Unknown => "Not tested yet",
-            LlmProbeStatus.Probing => "Testing\u2026",
-            LlmProbeStatus.Reachable => "Ready",
-            LlmProbeStatus.ModelMissing => "Model not found",
-            LlmProbeStatus.Unauthorized => "Auth failed",
-            LlmProbeStatus.Unreachable => "Unreachable",
-            LlmProbeStatus.InvalidUrl => "Invalid URL",
-            LlmProbeStatus.Disabled => "Off",
-            _ => "?",
-        };
-
-    private static OverlayStatus MapToOverlay(LlmProbeStatus status) =>
-        status switch
-        {
-            LlmProbeStatus.Reachable => OverlayStatus.Active,
-            LlmProbeStatus.Probing => OverlayStatus.Starting,
-            LlmProbeStatus.ModelMissing => OverlayStatus.Starting,
-            LlmProbeStatus.Unauthorized => OverlayStatus.Failed,
-            LlmProbeStatus.Unreachable => OverlayStatus.Failed,
-            LlmProbeStatus.InvalidUrl => OverlayStatus.Failed,
-            LlmProbeStatus.Disabled => OverlayStatus.Off,
-            _ => OverlayStatus.Off,
-        };
 
     private void OnOptionsChanged(LlmOptions updated, string? _)
     {

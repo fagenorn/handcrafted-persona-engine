@@ -3,9 +3,9 @@ using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.LLM.Connection;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.LlmConnection;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Shared;
 using PersonaEngine.Lib.UI.ControlPanel.Threading;
-using PersonaEngine.Lib.UI.Overlay;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels.LlmConnection.Sections;
 
@@ -13,7 +13,7 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels.LlmConnection.Sections;
 ///     Configure the optional vision LLM. A <see cref="ImGuiHelpers.ToggleSwitch" />
 ///     in the header controls <see cref="LlmOptions.VisionEnabled" />; when off, only
 ///     the header row renders. When on, exposes endpoint + model + API key with live
-///     probe feedback via a broadcast-style <see cref="StatusPill" />, plus
+///     probe feedback via a broadcast-style <see cref="SubsystemStatusChip" />, plus
 ///     <c>OpenAI · Custom</c> endpoint chips and an explicit "Test connection" button.
 /// </summary>
 public sealed class VisionLlmSection : IDisposable
@@ -117,11 +117,14 @@ public sealed class VisionLlmSection : IDisposable
 
         var visionOn = _snapshot.VisionEnabled;
 
-        // Reserve header right-side space: pill + toggle when on, toggle only when off.
+        // Reserve header right-side space: chip + toggle when on, toggle only when off.
         var avail = ImGui.GetContentRegionAvail().X;
         var toggleW = 40f;
-        var pillText = PillLabel(_probe.VisionStatus.Status);
-        var pillWidth = ImGui.CalcTextSize(pillText).X + 32f;
+        var visionChipStatus = LlmProbeStatusAdapter.ToSubsystemStatus(
+            _probe.VisionStatus.Status,
+            _probe.VisionStatus.DetailMessage
+        );
+        var pillWidth = ImGui.CalcTextSize(visionChipStatus.Label).X + 32f;
         var rightW = visionOn ? pillWidth + 8f + toggleW : toggleW;
 
         ImGui.SameLine();
@@ -129,16 +132,7 @@ public sealed class VisionLlmSection : IDisposable
 
         if (visionOn)
         {
-            var pillStatus = MapToOverlay(_probe.VisionStatus.Status);
-            StatusPill.Render(
-                pillStatus,
-                (float)(DateTime.UtcNow - DateTime.UnixEpoch).TotalSeconds,
-                PillTransition.None,
-                0f,
-                _probe.VisionStatus.DetailMessage,
-                StatusPillStyle.Broadcast,
-                pillText
-            );
+            SubsystemStatusChip.Render(visionChipStatus);
             ImGui.SameLine(0f, 8f);
         }
 
@@ -329,33 +323,6 @@ public sealed class VisionLlmSection : IDisposable
 
         return $"{(int)ago.TotalHours}h ago";
     }
-
-    private static string PillLabel(LlmProbeStatus status) =>
-        status switch
-        {
-            LlmProbeStatus.Unknown => "Not tested yet",
-            LlmProbeStatus.Probing => "Testing\u2026",
-            LlmProbeStatus.Reachable => "Ready",
-            LlmProbeStatus.ModelMissing => "Model not found",
-            LlmProbeStatus.Unauthorized => "Auth failed",
-            LlmProbeStatus.Unreachable => "Unreachable",
-            LlmProbeStatus.InvalidUrl => "Invalid URL",
-            LlmProbeStatus.Disabled => "Off",
-            _ => "?",
-        };
-
-    private static OverlayStatus MapToOverlay(LlmProbeStatus status) =>
-        status switch
-        {
-            LlmProbeStatus.Reachable => OverlayStatus.Active,
-            LlmProbeStatus.Probing => OverlayStatus.Starting,
-            LlmProbeStatus.ModelMissing => OverlayStatus.Starting,
-            LlmProbeStatus.Unauthorized => OverlayStatus.Failed,
-            LlmProbeStatus.Unreachable => OverlayStatus.Failed,
-            LlmProbeStatus.InvalidUrl => OverlayStatus.Failed,
-            LlmProbeStatus.Disabled => OverlayStatus.Off,
-            _ => OverlayStatus.Off,
-        };
 
     private void OnOptionsChanged(LlmOptions updated, string? _)
     {
