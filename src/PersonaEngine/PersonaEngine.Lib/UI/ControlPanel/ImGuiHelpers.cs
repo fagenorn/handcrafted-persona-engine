@@ -35,51 +35,6 @@ public static partial class ImGuiHelpers
     }
 
     /// <summary>
-    ///     Renders a visually distinct section header with an accent-colored label
-    ///     and a soft gradient divider.
-    /// </summary>
-    public static void SectionHeader(string label)
-    {
-        ImGui.PushStyleColor(ImGuiCol.Text, Theme.AccentPrimary);
-        ImGui.TextUnformatted(label);
-        ImGui.PopStyleColor();
-
-        // Gradient divider: fades from transparent → accent → transparent
-        var cursor = ImGui.GetCursorScreenPos();
-        var drawList = ImGui.GetWindowDrawList();
-        var availW = ImGui.GetContentRegionAvail().X;
-        var dividerW = availW * 0.6f;
-        var startX = cursor.X + (availW - dividerW) * 0.5f;
-        var centerX = startX + dividerW * 0.5f;
-        var y = cursor.Y;
-
-        var transparent = ImGui.ColorConvertFloat4ToU32(Theme.AccentPrimary with { W = 0f });
-        var accent = ImGui.ColorConvertFloat4ToU32(Theme.AccentPrimary with { W = 0.15f });
-
-        ImGui.AddRectFilledMultiColor(
-            drawList,
-            new Vector2(startX, y),
-            new Vector2(centerX, y + 1f),
-            transparent,
-            accent,
-            accent,
-            transparent
-        );
-
-        ImGui.AddRectFilledMultiColor(
-            drawList,
-            new Vector2(centerX, y),
-            new Vector2(startX + dividerW, y + 1f),
-            accent,
-            transparent,
-            transparent,
-            accent
-        );
-
-        ImGui.Dummy(new Vector2(0f, 2f));
-    }
-
-    /// <summary>
     ///     Persistent state for an animated collapsible section.
     /// </summary>
     public sealed class CollapsibleState
@@ -206,30 +161,6 @@ public static partial class ImGuiHelpers
         }
     }
 
-    /// <summary>
-    ///     Draws a filled colored circle and advances the layout cursor.
-    /// </summary>
-    public static void StatusDot(Vector4 color, float radius = 5f, float glowAlpha = 0f)
-    {
-        const float glowScale = 2.4f;
-
-        var drawList = ImGui.GetWindowDrawList();
-        var cursor = ImGui.GetCursorScreenPos();
-        var textH = ImGui.GetTextLineHeight();
-        var center = new Vector2(cursor.X + radius, cursor.Y + textH * 0.5f);
-
-        if (glowAlpha > 0f)
-        {
-            var glowColor = color with { W = glowAlpha };
-            var glowCol = ImGui.ColorConvertFloat4ToU32(glowColor);
-            ImGui.AddCircleFilled(drawList, center, radius * glowScale, glowCol);
-        }
-
-        var col = ImGui.ColorConvertFloat4ToU32(color);
-        ImGui.AddCircleFilled(drawList, center, radius, col);
-        ImGui.Dummy(new Vector2(radius * 2f, textH));
-    }
-
     public static float SettingRowHeight => ImGui.GetFrameHeight() + ImGui.GetStyle().ItemSpacing.Y;
 
     public static void SettingLabel(string label, string? tooltip, float? labelWidth = null)
@@ -258,80 +189,6 @@ public static partial class ImGuiHelpers
         var minHeight = SettingRowHeight;
         if (elapsed < minHeight)
             ImGui.Dummy(new Vector2(0f, minHeight - elapsed));
-    }
-
-    public static void SliderGlow(float dt = 0f)
-    {
-        if (!ImGui.IsItemHovered() && !ImGui.IsItemActive())
-            return;
-
-        var min = ImGui.GetItemRectMin();
-        var max = ImGui.GetItemRectMax();
-        var glowColor = Theme.AccentPrimary with { W = 0.12f };
-        var col = ImGui.ColorConvertFloat4ToU32(glowColor);
-        var drawList = ImGui.GetWindowDrawList();
-        ImGui.AddRectFilled(drawList, min, max, col, ImGui.GetStyle().FrameRounding);
-    }
-
-    public static bool LabeledSlider(
-        string id,
-        ref float value,
-        float min,
-        float max,
-        string leftLabel,
-        string rightLabel,
-        string format = "%.2f",
-        float dt = 0f
-    )
-    {
-        var avail = ImGui.GetContentRegionAvail();
-
-        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
-        ImGui.TextUnformatted(leftLabel);
-        ImGui.PopStyleColor();
-        ImGui.SameLine();
-
-        var sliderWidth = Math.Max(100f, avail.X - ImGui.CalcTextSize(leftLabel).X - 140f);
-        ImGui.SetNextItemWidth(sliderWidth);
-        var changed = ImGui.SliderFloat(id, ref value, min, max, format);
-        SliderGlow(dt);
-        ImGui.SameLine();
-
-        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
-        ImGui.TextUnformatted(rightLabel);
-        ImGui.PopStyleColor();
-
-        return changed;
-    }
-
-    public static bool LabeledSlider(
-        string id,
-        ref int value,
-        int min,
-        int max,
-        string leftLabel,
-        string rightLabel,
-        float dt = 0f
-    )
-    {
-        var avail = ImGui.GetContentRegionAvail();
-
-        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
-        ImGui.TextUnformatted(leftLabel);
-        ImGui.PopStyleColor();
-        ImGui.SameLine();
-
-        var sliderWidth = Math.Max(100f, avail.X - ImGui.CalcTextSize(leftLabel).X - 140f);
-        ImGui.SetNextItemWidth(sliderWidth);
-        var changed = ImGui.SliderInt(id, ref value, min, max);
-        SliderGlow(dt);
-        ImGui.SameLine();
-
-        ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);
-        ImGui.TextUnformatted(rightLabel);
-        ImGui.PopStyleColor();
-
-        return changed;
     }
 
     internal static bool ScannedCombo(
