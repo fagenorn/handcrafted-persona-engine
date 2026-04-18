@@ -3,6 +3,7 @@ using System.Collections.Frozen;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using PersonaEngine.Lib.Configuration;
 
@@ -10,9 +11,13 @@ namespace PersonaEngine.Lib.UI.ControlPanel;
 
 public sealed class ConfigWriter : IConfigWriter
 {
+    // Enums are persisted as their string names so appsettings.json stays
+    // human-editable and round-trips with Microsoft.Extensions.Configuration's
+    // case-insensitive string→enum binding.
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         WriteIndented = true,
+        Converters = { new JsonStringEnumConverter() },
     };
 
     private readonly string _configFilePath;

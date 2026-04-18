@@ -19,10 +19,6 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Avatar.Sections;
 /// </summary>
 public sealed class LipSyncSection : IDisposable
 {
-    private const string EngineSimple = "VBridger";
-    private const string EngineRealistic = "Audio2Face";
-    private const string SolverAccurate = "BVLS";
-    private const string SolverFast = "PGD";
     private const float ChipGap = 6f;
 
     private readonly IConfigWriter _configWriter;
@@ -72,7 +68,7 @@ public sealed class LipSyncSection : IDisposable
 
             RenderStyleRow();
 
-            if (string.Equals(_lipSync.Engine, EngineRealistic, StringComparison.OrdinalIgnoreCase))
+            if (_lipSync.Engine == LipSyncEngine.Audio2Face)
             {
                 RenderQualityRow();
                 RenderUseGpuRow(dt);
@@ -91,21 +87,13 @@ public sealed class LipSyncSection : IDisposable
             "Simple is fast and works everywhere. Realistic uses a neural model for richer mouth shapes."
         );
 
-        var isSimple = string.Equals(
-            _lipSync.Engine,
-            EngineSimple,
-            StringComparison.OrdinalIgnoreCase
-        );
-        var isRealistic = string.Equals(
-            _lipSync.Engine,
-            EngineRealistic,
-            StringComparison.OrdinalIgnoreCase
-        );
+        var isSimple = _lipSync.Engine == LipSyncEngine.VBridger;
+        var isRealistic = _lipSync.Engine == LipSyncEngine.Audio2Face;
 
         if (ImGuiHelpers.Chip("Simple", isSimple))
         {
             if (!isSimple)
-                WriteEngine(EngineSimple);
+                WriteEngine(LipSyncEngine.VBridger);
         }
 
         ImGui.SameLine(0f, ChipGap);
@@ -113,13 +101,13 @@ public sealed class LipSyncSection : IDisposable
         if (ImGuiHelpers.Chip("Realistic", isRealistic))
         {
             if (!isRealistic)
-                WriteEngine(EngineRealistic);
+                WriteEngine(LipSyncEngine.Audio2Face);
         }
 
         ImGuiHelpers.SettingEndRow(rowY);
     }
 
-    private void WriteEngine(string engine)
+    private void WriteEngine(LipSyncEngine engine)
     {
         _lipSync = _lipSync with { Engine = engine };
         _configWriter.Write(_lipSync);
@@ -158,13 +146,13 @@ public sealed class LipSyncSection : IDisposable
         );
 
         var solver = _lipSync.Audio2Face.SolverType;
-        var isAccurate = string.Equals(solver, SolverAccurate, StringComparison.OrdinalIgnoreCase);
-        var isFast = string.Equals(solver, SolverFast, StringComparison.OrdinalIgnoreCase);
+        var isAccurate = solver == LipSyncSolver.Bvls;
+        var isFast = solver == LipSyncSolver.Pgd;
 
         if (ImGuiHelpers.Chip("Fast", isFast))
         {
             if (!isFast)
-                WriteSolver(SolverFast);
+                WriteSolver(LipSyncSolver.Pgd);
         }
 
         ImGui.SameLine(0f, ChipGap);
@@ -172,13 +160,13 @@ public sealed class LipSyncSection : IDisposable
         if (ImGuiHelpers.Chip("Accurate", isAccurate))
         {
             if (!isAccurate)
-                WriteSolver(SolverAccurate);
+                WriteSolver(LipSyncSolver.Bvls);
         }
 
         ImGuiHelpers.SettingEndRow(rowY);
     }
 
-    private void WriteSolver(string solver)
+    private void WriteSolver(LipSyncSolver solver)
     {
         _lipSync = _lipSync with { Audio2Face = _lipSync.Audio2Face with { SolverType = solver } };
         _configWriter.Write(_lipSync);

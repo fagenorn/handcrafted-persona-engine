@@ -1,15 +1,39 @@
 namespace PersonaEngine.Lib.Configuration;
 
 /// <summary>
+///     Lip-sync engine backing the avatar's mouth animation.
+/// </summary>
+public enum LipSyncEngine
+{
+    /// <summary>Phoneme-based VBridger engine — fast, runs everywhere.</summary>
+    VBridger,
+
+    /// <summary>Neural Audio2Face engine — higher fidelity, heavier.</summary>
+    Audio2Face,
+}
+
+/// <summary>
+///     Blendshape solver used by the Audio2Face engine.
+/// </summary>
+public enum LipSyncSolver
+{
+    /// <summary>Bounded Variable Least Squares — slower, higher quality.</summary>
+    Bvls,
+
+    /// <summary>Projected Gradient Descent — faster, lower latency.</summary>
+    Pgd,
+}
+
+/// <summary>
 ///     Configuration for the lip-sync subsystem.
 /// </summary>
 public record LipSyncOptions
 {
     /// <summary>
-    ///     Which lip-sync engine to use. Must match an <see cref="PersonaEngine.Lib.TTS.Synthesis.LipSync.ILipSyncProcessor.EngineId" />.
-    ///     Hot-reloadable via <c>IOptionsMonitor</c> — changing this swaps the active processor at runtime.
+    ///     Which lip-sync engine to use. Hot-reloadable via <c>IOptionsMonitor</c> —
+    ///     changing this swaps the active processor at runtime.
     /// </summary>
-    public string Engine { get; set; } = "VBridger";
+    public LipSyncEngine Engine { get; set; } = LipSyncEngine.VBridger;
 
     public Audio2FaceOptions Audio2Face { get; set; } = new();
 }
@@ -30,7 +54,7 @@ public record Audio2FaceOptions
     public bool UseGpu { get; set; }
 
     /// <summary>
-    ///     Which blendshape solver to use. Valid values: "BVLS" (default), "PGD".
+    ///     Which blendshape solver to use.
     /// </summary>
-    public string SolverType { get; set; } = "BVLS";
+    public LipSyncSolver SolverType { get; set; } = LipSyncSolver.Bvls;
 }

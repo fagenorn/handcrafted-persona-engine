@@ -1,3 +1,4 @@
+using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.TTS.Synthesis;
 
 namespace PersonaEngine.Lib.TTS.Synthesis.LipSync;
@@ -8,9 +9,10 @@ namespace PersonaEngine.Lib.TTS.Synthesis.LipSync;
 public interface ILipSyncProcessor
 {
     /// <summary>
-    ///     Unique identifier for this processor. Used to match against <c>LipSyncOptions.Engine</c>.
+    ///     Which engine this processor implements. Matched against
+    ///     <see cref="LipSyncOptions.Engine" /> when selecting the active processor.
     /// </summary>
-    string EngineId { get; }
+    LipSyncEngine EngineId { get; }
 
     /// <summary>
     ///     Processes the given <paramref name="segment" /> and returns the computed timeline.
