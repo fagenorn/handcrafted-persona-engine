@@ -66,7 +66,7 @@ public sealed class LlmHealthProbe : ISubsystemHealthProbe, IDisposable
             }
 
             var next = Compute();
-            if (next.Equals(_current))
+            if (SameSurface(next, _current))
             {
                 return;
             }
@@ -80,6 +80,14 @@ public sealed class LlmHealthProbe : ISubsystemHealthProbe, IDisposable
             StatusChanged?.Invoke(status);
         }
     }
+
+    // Dashboard cards render dot colour (Health) and short label (Label). Detail
+    // feeds a tooltip and can carry probe-local information (timings, endpoint
+    // echoes) that varies between probes without changing what the user sees —
+    // gating on it would storm StatusChanged. Keep SubsystemStatus.Equals
+    // (record-struct full equality) intact for callers that want it.
+    private static bool SameSurface(SubsystemStatus a, SubsystemStatus b) =>
+        a.Health == b.Health && a.Label == b.Label;
 
     private SubsystemStatus Compute()
     {

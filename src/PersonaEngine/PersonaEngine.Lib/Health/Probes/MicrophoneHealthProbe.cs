@@ -66,9 +66,22 @@ public sealed class MicrophoneHealthProbe : ISubsystemHealthProbe, IDisposable
             _disposed = true;
         }
 
+        // Stop new timer firings, then block until any in-flight callback has
+        // returned before tearing down its inputs. The _muteController
+        // unsubscribe in particular must come AFTER the drain: a callback
+        // already running Refresh() would otherwise read a stale muteController.
+        _timer.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        using (var done = new ManualResetEvent(false))
+        {
+            // Timer.Dispose(WaitHandle) signals `done` once no callback is in flight.
+            if (_timer.Dispose(done))
+            {
+                done.WaitOne();
+            }
+        }
+
         _muteController.MutedChanged -= OnMuteChanged;
         _onChangeSub?.Dispose();
-        _timer.Dispose();
     }
 
     private void OnMuteChanged(bool _) => Refresh();
