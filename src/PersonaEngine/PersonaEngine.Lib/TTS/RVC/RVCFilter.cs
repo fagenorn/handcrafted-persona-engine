@@ -51,8 +51,9 @@ public class RVCFilter : IBufferedAudioFilter, IDisposable
     // keep the last few auditioned voices alive to make A/B previewing snappy.
     // Access to the cache is serialized by _auditionCacheLock since eviction needs a
     // coherent view of (entries, lru order).
-    private readonly Dictionary<string, AuditionCacheEntry> _auditionCache =
-        new(StringComparer.Ordinal);
+    private readonly Dictionary<string, AuditionCacheEntry> _auditionCache = new(
+        StringComparer.Ordinal
+    );
 
     private readonly LinkedList<string> _auditionCacheLru = new();
     private readonly Lock _auditionCacheLock = new();
@@ -243,10 +244,7 @@ public class RVCFilter : IBufferedAudioFilter, IDisposable
     {
         lock (_auditionCacheLock)
         {
-            if (
-                _auditionCache.TryGetValue(voice, out var existing)
-                && existing.HopSize == hopSize
-            )
+            if (_auditionCache.TryGetValue(voice, out var existing) && existing.HopSize == hopSize)
             {
                 // Promote to most-recently-used.
                 _auditionCacheLru.Remove(existing.LruNode);

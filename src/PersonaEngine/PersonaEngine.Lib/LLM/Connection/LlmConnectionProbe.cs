@@ -222,8 +222,7 @@ public sealed class LlmConnectionProbe : ILlmConnectionProbe, IDisposable
         try
         {
             var http = _httpFactory.CreateClient(HttpClientName);
-            using var resp = await http
-                .SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct)
+            using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct)
                 .ConfigureAwait(false);
 
             if (resp.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
