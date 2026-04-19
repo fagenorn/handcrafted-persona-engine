@@ -30,6 +30,10 @@ public sealed class NoOpBootstrapUserInterface : IBootstrapUserInterface
             {
                 await executeOne(item, noopProgress, ct).ConfigureAwait(false);
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch
             {
                 allOk = false;

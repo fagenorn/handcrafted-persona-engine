@@ -84,6 +84,10 @@ public sealed class SpectreBootstrapUserInterface : IBootstrapUserInterface
                         await executeOne(item, progress, ct).ConfigureAwait(false);
                         task.Value = item.Entry.SizeBytes;
                     }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
                     catch (Exception ex)
                     {
                         allOk = false;

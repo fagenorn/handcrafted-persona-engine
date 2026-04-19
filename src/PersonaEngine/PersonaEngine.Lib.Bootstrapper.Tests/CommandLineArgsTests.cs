@@ -51,7 +51,7 @@ public sealed class CommandLineArgsTests
     {
         var parsed = CommandLineArgs.Parse(new[] { "--other", "value", "--reinstall" });
         parsed.Bootstrap.Mode.Should().Be(BootstrapMode.Reinstall);
-        parsed.PassThrough.Should().BeEquivalentTo(new[] { "--other", "value" });
+        parsed.PassThrough.Should().Equal("--other", "value");
     }
 
     [Fact]
