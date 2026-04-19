@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Platforms>x64</Platforms>
+    <Platform>x64</Platform>
+    <RootNamespace>PersonaEngine.Lib.Bootstrapper</RootNamespace>
+    <AssemblyName>PersonaEngine.Lib.Bootstrapper</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PersonaEngine.Lib.Bootstrapper.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.4" />
+    <PackageReference Include="Polly" Version="8.5.2" />
+    <PackageReference Include="Spectre.Console" Version="0.49.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PersonaEngine.Lib\PersonaEngine.Lib.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="install-manifest.json" />
+  </ItemGroup>
+</Project>
