@@ -15,7 +15,6 @@ public sealed class CommandLineArgsTests
         parsed.Bootstrap.Mode.Should().Be(BootstrapMode.AutoIfMissing);
         parsed.Bootstrap.PreselectedProfile.Should().BeNull();
         parsed.NonInteractive.Should().BeFalse();
-        parsed.PassThrough.Should().BeEmpty();
     }
 
     [Theory]
@@ -47,11 +46,14 @@ public sealed class CommandLineArgsTests
     }
 
     [Fact]
-    public void Unknown_args_are_passed_through()
+    public void Unknown_args_are_ignored_without_failing_known_flags()
     {
+        // Unknown args were originally captured into a PassThrough list; that
+        // list was unused by Program.Main and has been dropped. The parser
+        // now silently ignores unknowns so adding new flags downstream stays
+        // backward-compatible.
         var parsed = CommandLineArgs.Parse(new[] { "--other", "value", "--reinstall" });
         parsed.Bootstrap.Mode.Should().Be(BootstrapMode.Reinstall);
-        parsed.PassThrough.Should().Equal("--other", "value");
     }
 
     [Fact]

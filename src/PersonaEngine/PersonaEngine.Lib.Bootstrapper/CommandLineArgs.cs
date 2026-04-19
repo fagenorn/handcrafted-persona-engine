@@ -6,14 +6,12 @@ public sealed record CommandLineArgs
 {
     public required BootstrapOptions Bootstrap { get; init; }
     public required bool NonInteractive { get; init; }
-    public required IReadOnlyList<string> PassThrough { get; init; }
 
     public static CommandLineArgs Parse(IReadOnlyList<string> args)
     {
         var mode = BootstrapMode.AutoIfMissing;
         ProfileTier? profile = null;
         var nonInteractive = false;
-        var passThrough = new List<string>();
 
         foreach (var arg in args)
         {
@@ -38,7 +36,10 @@ public sealed record CommandLineArgs
                     profile = ParseProfile(s.Substring("--profile=".Length));
                     break;
                 default:
-                    passThrough.Add(arg);
+                    // Unknown args are silently ignored — the bootstrapper has
+                    // no callees that need them. If a future subsystem needs
+                    // pass-through args, restore an explicit PassThrough list
+                    // and forward it from Program.Main.
                     break;
             }
         }
@@ -47,7 +48,6 @@ public sealed record CommandLineArgs
         {
             Bootstrap = new BootstrapOptions { Mode = mode, PreselectedProfile = profile },
             NonInteractive = nonInteractive,
-            PassThrough = passThrough,
         };
     }
 

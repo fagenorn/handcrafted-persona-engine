@@ -92,7 +92,7 @@ public sealed class SpectreBootstrapUserInterface : IBootstrapUserInterface
                     {
                         allOk = false;
                         _console.MarkupLineInterpolated(
-                            $"[red]✗ {item.Entry.DisplayName} failed:[/] {ex.Message}"
+                            $"[red][[FAIL]] {item.Entry.DisplayName} failed:[/] {ex.Message}"
                         );
                     }
                 }
@@ -107,12 +107,12 @@ public sealed class SpectreBootstrapUserInterface : IBootstrapUserInterface
         if (result.Success)
         {
             _console.MarkupLine(
-                $"[bold green]✓ Setup complete[/] — active profile: [bold]{result.ActiveProfile}[/]"
+                $"[bold green][[OK]] Setup complete[/] — active profile: [bold]{result.ActiveProfile}[/]"
             );
         }
         else
         {
-            _console.MarkupLine($"[bold red]✗ Setup failed:[/] {result.ErrorMessage}");
+            _console.MarkupLine($"[bold red][[FAIL]] Setup failed:[/] {result.ErrorMessage}");
         }
     }
 
