@@ -50,17 +50,46 @@ public class ManifestValidationTests
         dupes.Should().BeEmpty("two assets cannot install to the same path");
     }
 
+    /// <summary>
+    /// Each non-NativeRuntime asset must carry a real, populated sha256.
+    /// <para>
+    /// During pre-release the manifest ships placeholder all-zero hashes because
+    /// real hashes can only be computed once the HuggingFace assets are uploaded.
+    /// To keep daily builds green while still gating the release, we skip the
+    /// assertion when <c>PERSONA_ALLOW_PLACEHOLDER_HASHES=1</c> is set in the
+    /// environment. The release workflow (.github/workflows/release.yml) does
+    /// NOT set that variable AND has a separate fail-fast PowerShell step, so
+    /// a tag push fails until <c>scripts/hash-manifest.ps1</c> has been run.
+    /// </para>
+    /// </summary>
     [Fact]
+    [Trait("Category", "ReleaseGate")]
     public void Every_asset_has_sha256_or_is_NativeRuntime()
     {
+        var allowPlaceholders = string.Equals(
+            Environment.GetEnvironmentVariable("PERSONA_ALLOW_PLACEHOLDER_HASHES"),
+            "1",
+            StringComparison.Ordinal
+        );
+
         foreach (var asset in Manifest.Assets)
         {
             if (asset.Kind == AssetKind.NativeRuntime)
                 continue; // sha lives on the NVIDIA archive
+
+            asset.Sha256.Should().NotBeNullOrWhiteSpace($"asset '{asset.Id}' is missing sha256");
+            asset.Sha256.Length.Should().Be(64, $"asset '{asset.Id}' sha256 should be hex-64");
+
+            if (allowPlaceholders)
+                continue;
+
             asset
                 .Sha256.Should()
-                .NotBeNullOrWhiteSpace($"asset '{asset.Id}' is missing sha256");
-            asset.Sha256.Length.Should().Be(64, $"asset '{asset.Id}' sha256 should be hex-64");
+                .NotMatchRegex(
+                    "^0+$",
+                    $"asset '{asset.Id}' has placeholder all-zero sha256 — run scripts/hash-manifest.ps1 before tagging a release "
+                        + "(set PERSONA_ALLOW_PLACEHOLDER_HASHES=1 to suppress locally during pre-release dev)"
+                );
         }
     }
 

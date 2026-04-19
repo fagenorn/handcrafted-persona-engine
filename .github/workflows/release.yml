@@ -26,6 +26,23 @@ jobs:
         working-directory: src/PersonaEngine
         run: dotnet csharpier check .
 
+      - name: Verify manifest hashes are populated
+        # The unit test suite skips the all-zero placeholder check when
+        # PERSONA_ALLOW_PLACEHOLDER_HASHES=1 is set; the release workflow does
+        # NOT set that env var, but we also fail-fast here so a missing
+        # scripts/hash-manifest.ps1 run blocks the release before any compile.
+        shell: pwsh
+        run: |
+          $manifestPath = 'src/PersonaEngine/PersonaEngine.Lib/Assets/Manifest/install-manifest.json'
+          $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+          $placeholders = $manifest.assets | Where-Object {
+            $_.sha256 -and ($_.sha256 -match '^0+$')
+          }
+          if ($placeholders) {
+            $ids = ($placeholders | ForEach-Object { $_.id }) -join ', '
+            throw "Cannot release: placeholder hashes in manifest for: $ids. Run scripts/hash-manifest.ps1."
+          }
+
       - name: Run tests
         # Solution includes both PersonaEngine.Lib.Tests and
         # PersonaEngine.Lib.Bootstrapper.Tests, so a single invocation runs both.
