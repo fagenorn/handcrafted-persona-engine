@@ -1,0 +1,26 @@
+{
+  "release_date": "2024-09-30",
+  "release_label": "12.6.2",
+  "cuda_cudart": {
+    "name": "CUDA Runtime (cudart)",
+    "license": "CUDA Toolkit",
+    "version": "12.6.77",
+    "windows-x86_64": {
+      "relative_path": "cuda_cudart/windows-x86_64/cuda_cudart-windows-x86_64-12.6.77-archive.zip",
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "md5": "00000000000000000000000000000000",
+      "size": "5612345"
+    }
+  },
+  "libcublas": {
+    "name": "cuBLAS",
+    "license": "CUDA Toolkit",
+    "version": "12.6.3.3",
+    "windows-x86_64": {
+      "relative_path": "libcublas/windows-x86_64/libcublas-windows-x86_64-12.6.3.3-archive.zip",
+      "sha256": "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+      "md5": "00000000000000000000000000000000",
+      "size": "412345678"
+    }
+  }
+}
