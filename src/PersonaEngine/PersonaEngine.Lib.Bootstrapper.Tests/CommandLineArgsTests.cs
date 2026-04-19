@@ -1,4 +1,5 @@
 using FluentAssertions;
+using PersonaEngine.Lib.Bootstrapper;
 using PersonaEngine.Lib.Bootstrapper.Manifest;
 using Xunit;
 
@@ -9,57 +10,54 @@ public sealed class CommandLineArgsTests
     [Fact]
     public void Empty_args_yields_AutoIfMissing()
     {
-        var (opts, nonInteractive) = CommandLineArgs.Parse(Array.Empty<string>());
+        var parsed = CommandLineArgs.Parse(Array.Empty<string>());
 
-        opts.Mode.Should().Be(BootstrapMode.AutoIfMissing);
-        opts.PreselectedProfile.Should().BeNull();
-        nonInteractive.Should().BeFalse();
+        parsed.Bootstrap.Mode.Should().Be(BootstrapMode.AutoIfMissing);
+        parsed.Bootstrap.PreselectedProfile.Should().BeNull();
+        parsed.NonInteractive.Should().BeFalse();
+        parsed.PassThrough.Should().BeEmpty();
     }
 
     [Theory]
-    [InlineData("--install", BootstrapMode.Reinstall)]
-    [InlineData("--verify", BootstrapMode.Verify)]
+    [InlineData("--reinstall", BootstrapMode.Reinstall)]
     [InlineData("--repair", BootstrapMode.Repair)]
+    [InlineData("--verify", BootstrapMode.Verify)]
     [InlineData("--offline", BootstrapMode.Offline)]
     public void Mode_flags_map_to_BootstrapMode(string flag, BootstrapMode expected)
     {
-        var (opts, _) = CommandLineArgs.Parse(new[] { flag });
-
-        opts.Mode.Should().Be(expected);
+        var parsed = CommandLineArgs.Parse(new[] { flag });
+        parsed.Bootstrap.Mode.Should().Be(expected);
     }
 
     [Theory]
-    [InlineData("try-it-out", ProfileTier.TryItOut)]
-    [InlineData("stream-with-it", ProfileTier.StreamWithIt)]
-    [InlineData("build-with-it", ProfileTier.BuildWithIt)]
+    [InlineData("try", ProfileTier.TryItOut)]
+    [InlineData("stream", ProfileTier.StreamWithIt)]
+    [InlineData("build", ProfileTier.BuildWithIt)]
     public void Profile_flag_preselects_profile(string slug, ProfileTier expected)
     {
-        var (opts, _) = CommandLineArgs.Parse(new[] { "--profile", slug });
-
-        opts.PreselectedProfile.Should().Be(expected);
+        var parsed = CommandLineArgs.Parse(new[] { $"--profile={slug}" });
+        parsed.Bootstrap.PreselectedProfile.Should().Be(expected);
     }
 
     [Fact]
     public void NonInteractive_flag_is_recognized()
     {
-        var (_, nonInteractive) = CommandLineArgs.Parse(new[] { "--non-interactive" });
-
-        nonInteractive.Should().BeTrue();
+        var parsed = CommandLineArgs.Parse(new[] { "--non-interactive" });
+        parsed.NonInteractive.Should().BeTrue();
     }
 
     [Fact]
     public void Unknown_args_are_passed_through()
     {
-        var act = () => CommandLineArgs.Parse(new[] { "--some-future-flag", "value" });
-
-        act.Should().NotThrow();
+        var parsed = CommandLineArgs.Parse(new[] { "--other", "value", "--reinstall" });
+        parsed.Bootstrap.Mode.Should().Be(BootstrapMode.Reinstall);
+        parsed.PassThrough.Should().BeEquivalentTo(new[] { "--other", "value" });
     }
 
     [Fact]
     public void Unknown_profile_slug_throws()
     {
-        var act = () => CommandLineArgs.Parse(new[] { "--profile", "not-a-profile" });
-
-        act.Should().Throw<ArgumentException>().WithMessage("*not-a-profile*");
+        var act = () => CommandLineArgs.Parse(new[] { "--profile=ultimate" });
+        act.Should().Throw<ArgumentException>().WithMessage("*ultimate*");
     }
 }

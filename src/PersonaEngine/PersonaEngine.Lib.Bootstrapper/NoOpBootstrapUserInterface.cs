@@ -3,32 +3,19 @@ using PersonaEngine.Lib.Bootstrapper.Planner;
 
 namespace PersonaEngine.Lib.Bootstrapper;
 
-/// <summary>
-/// <see cref="IBootstrapUserInterface"/> for <c>--non-interactive</c> mode.
-/// Picker calls throw immediately; download progress runs silently.
-/// </summary>
+/// <summary>UI implementation for --non-interactive mode. Picker call throws; progress runs silently.</summary>
 public sealed class NoOpBootstrapUserInterface : IBootstrapUserInterface
 {
-    /// <inheritdoc/>
-    /// <exception cref="InvalidOperationException">
-    /// Always thrown — the picker must not be called in non-interactive mode.
-    /// Callers should supply a <see cref="BootstrapOptions.PreselectedProfile"/> instead.
-    /// </exception>
     public Task<ProfileTier> PickProfileAsync(
         IReadOnlyList<ProfileChoice> choices,
         CancellationToken ct
     ) =>
         throw new InvalidOperationException(
-            "Cannot prompt for a profile in non-interactive mode. Pass --profile <slug> to pre-select one."
+            "Cannot prompt for profile in --non-interactive mode. Pass --profile=<try|stream|build>."
         );
 
-    /// <inheritdoc/>
-    public void ShowPlanSummary(AssetPlan plan)
-    {
-        // Silent in non-interactive mode — no console output.
-    }
+    public void ShowPlanSummary(AssetPlan plan) { }
 
-    /// <inheritdoc/>
     public async Task<bool> RunWithProgressAsync(
         IReadOnlyList<AssetPlanItem> items,
         Func<AssetPlanItem, IProgress<long>, CancellationToken, Task> executeOne,
@@ -36,29 +23,20 @@ public sealed class NoOpBootstrapUserInterface : IBootstrapUserInterface
     )
     {
         var allOk = true;
-
+        var noopProgress = new Progress<long>(_ => { });
         foreach (var item in items)
         {
             try
             {
-                await executeOne(item, new Progress<long>(), ct);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
+                await executeOne(item, noopProgress, ct).ConfigureAwait(false);
             }
             catch
             {
                 allOk = false;
             }
         }
-
         return allOk;
     }
 
-    /// <inheritdoc/>
-    public void ShowResult(BootstrapResult result)
-    {
-        // Silent in non-interactive mode — no console output.
-    }
+    public void ShowResult(BootstrapResult result) { }
 }
