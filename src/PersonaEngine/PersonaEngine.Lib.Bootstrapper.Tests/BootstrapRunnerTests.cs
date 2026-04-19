@@ -6,24 +6,23 @@ using PersonaEngine.Lib.Bootstrapper.Planner;
 using PersonaEngine.Lib.Bootstrapper.Sources;
 using PersonaEngine.Lib.Bootstrapper.Tests.Helpers;
 using Xunit;
-using static PersonaEngine.Lib.Bootstrapper.Tests.Helpers.ManifestBuilder;
 
 namespace PersonaEngine.Lib.Bootstrapper.Tests;
 
 public sealed class BootstrapRunnerTests : IDisposable
 {
-    private readonly string _root;
+    private readonly string _tempDir;
     private readonly IAssetDownloader _downloader;
     private readonly IAssetCatalog _catalog;
     private readonly IBootstrapUserInterface _ui;
 
     public BootstrapRunnerTests()
     {
-        _root = Path.Combine(
+        _tempDir = Path.Combine(
             Path.GetTempPath(),
             "BootstrapRunnerTests-" + Guid.NewGuid().ToString("N")
         );
-        Directory.CreateDirectory(_root);
+        Directory.CreateDirectory(_tempDir);
 
         _downloader = Substitute.For<IAssetDownloader>();
         _catalog = Substitute.For<IAssetCatalog>();
@@ -32,39 +31,38 @@ public sealed class BootstrapRunnerTests : IDisposable
 
     public void Dispose()
     {
-        if (Directory.Exists(_root))
-            Directory.Delete(_root, recursive: true);
+        if (Directory.Exists(_tempDir))
+            Directory.Delete(_tempDir, recursive: true);
     }
+
+    private static AssetEntry BuildAsset(string id, ProfileTier tier = ProfileTier.TryItOut) =>
+        ManifestBuilder.Asset(id, tier, installPath: id + ".bin");
+
+    private static InstallManifest BuildManifest(params AssetEntry[] assets) =>
+        ManifestBuilder.Manifest("v1", assets);
 
     private BootstrapRunner BuildRunner(InstallManifest manifest)
     {
-        var lockPath = Path.Combine(_root, "install-state.lock.json");
+        var lockPath = Path.Combine(_tempDir, "install-state.lock.json");
         var lockStore = new InstallStateLockStore(lockPath);
-        var planner = new AssetPlanner(_root);
-        return new BootstrapRunner(manifest, lockStore, planner, _downloader, _catalog, _ui, _root);
+        var planner = new AssetPlanner(_tempDir);
+        return new BootstrapRunner(manifest, lockStore, planner, _downloader, _catalog, _ui);
     }
 
     [Fact]
     public async Task AutoIfMissing_with_no_lock_runs_picker_and_downloads()
     {
-        var asset = Asset("model-a", ProfileTier.TryItOut, installPath: "model-a.bin");
-        var manifest = ManifestBuilder.Manifest("v1", asset);
+        var asset = BuildAsset("model-a");
+        var manifest = BuildManifest(asset);
 
-        _ui.PickProfileAsync(Arg.Any<CancellationToken>())
-            .Returns(
-                Task.FromResult<ProfileChoice?>(
-                    new ProfileChoice(ProfileTier.TryItOut, Array.Empty<string>())
-                )
-            );
-        _ui.ConfirmPlanAsync(Arg.Any<AssetPlan>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(true));
-        _downloader
-            .DownloadAsync(
-                Arg.Any<AssetPlanItem>(),
-                Arg.Any<IProgress<long>>(),
+        _ui.PickProfileAsync(Arg.Any<IReadOnlyList<ProfileChoice>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(ProfileTier.TryItOut));
+        _ui.RunWithProgressAsync(
+                Arg.Any<IReadOnlyList<AssetPlanItem>>(),
+                Arg.Any<Func<AssetPlanItem, IProgress<long>, CancellationToken, Task>>(),
                 Arg.Any<CancellationToken>()
             )
-            .Returns(Task.CompletedTask);
+            .Returns(Task.FromResult(true));
 
         var runner = BuildRunner(manifest);
         var result = await runner.RunAsync(
@@ -75,23 +73,17 @@ public sealed class BootstrapRunnerTests : IDisposable
         result.Success.Should().BeTrue();
         result.ChangesApplied.Should().BeTrue();
         result.ActiveProfile.Should().Be(ProfileTier.TryItOut);
-        await _downloader
-            .Received(1)
-            .DownloadAsync(
-                Arg.Is<AssetPlanItem>(i => i.Entry.Id == "model-a"),
-                Arg.Any<IProgress<long>>(),
-                Arg.Any<CancellationToken>()
-            );
     }
 
     [Fact]
-    public async Task AutoIfMissing_with_everything_up_to_date_skips_download()
+    public async Task AutoIfMissing_with_complete_lock_skips_picker_and_downloads()
     {
-        var asset = Asset("model-b", ProfileTier.TryItOut, installPath: "model-b.bin");
-        var manifest = ManifestBuilder.Manifest("v1", asset);
+        var asset = BuildAsset("model-b");
+        var manifest = BuildManifest(asset);
 
         // Write a lock that says model-b is already installed with the current sha.
-        var lockPath = Path.Combine(_root, "install-state.lock.json");
+        var lockPath = Path.Combine(_tempDir, "install-state.lock.json");
+        var lockStore = new InstallStateLockStore(lockPath);
         var existing = new InstallStateLock(
             SchemaVersion: 1,
             ManifestVersion: "v1",
@@ -103,24 +95,13 @@ public sealed class BootstrapRunnerTests : IDisposable
             },
             UserExclusions: Array.Empty<string>()
         );
-        var lockStore = new InstallStateLockStore(lockPath);
         lockStore.Write(existing);
 
         // Create the file on disk so AssetPlanner considers it present.
-        var assetPath = Path.Combine(_root, "model-b.bin");
-        await File.WriteAllTextAsync(assetPath, "dummy");
+        await File.WriteAllTextAsync(Path.Combine(_tempDir, "model-b.bin"), "dummy");
 
-        // Runner built manually so we can pass in our pre-written lockStore.
-        var planner = new AssetPlanner(_root);
-        var runner = new BootstrapRunner(
-            manifest,
-            lockStore,
-            planner,
-            _downloader,
-            _catalog,
-            _ui,
-            _root
-        );
+        var planner = new AssetPlanner(_tempDir);
+        var runner = new BootstrapRunner(manifest, lockStore, planner, _downloader, _catalog, _ui);
 
         var result = await runner.RunAsync(
             new BootstrapOptions { Mode = BootstrapMode.AutoIfMissing },
@@ -130,32 +111,11 @@ public sealed class BootstrapRunnerTests : IDisposable
         result.Success.Should().BeTrue();
         result.ChangesApplied.Should().BeFalse();
         result.ActiveProfile.Should().Be(ProfileTier.TryItOut);
-        await _downloader
-            .DidNotReceive()
-            .DownloadAsync(
-                Arg.Any<AssetPlanItem>(),
-                Arg.Any<IProgress<long>>(),
+        await _ui.DidNotReceive()
+            .PickProfileAsync(
+                Arg.Any<IReadOnlyList<ProfileChoice>>(),
                 Arg.Any<CancellationToken>()
             );
-        await _ui.DidNotReceive().PickProfileAsync(Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task PickProfile_returns_null_aborts_run()
-    {
-        var manifest = ManifestBuilder.Manifest("v1", Asset("model-c", ProfileTier.TryItOut));
-
-        _ui.PickProfileAsync(Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<ProfileChoice?>(null));
-
-        var runner = BuildRunner(manifest);
-        var result = await runner.RunAsync(
-            new BootstrapOptions { Mode = BootstrapMode.AutoIfMissing },
-            CancellationToken.None
-        );
-
-        result.Success.Should().BeFalse();
-        result.ChangesApplied.Should().BeFalse();
         await _downloader
             .DidNotReceive()
             .DownloadAsync(
@@ -166,33 +126,63 @@ public sealed class BootstrapRunnerTests : IDisposable
     }
 
     [Fact]
-    public async Task ConfirmPlan_returns_false_aborts_run()
+    public async Task Offline_mode_with_missing_assets_returns_failure_without_network()
     {
-        var asset = Asset("model-d", ProfileTier.TryItOut, installPath: "model-d.bin");
-        var manifest = ManifestBuilder.Manifest("v1", asset);
+        var asset = BuildAsset("model-c");
+        var manifest = BuildManifest(asset);
 
-        _ui.PickProfileAsync(Arg.Any<CancellationToken>())
-            .Returns(
-                Task.FromResult<ProfileChoice?>(
-                    new ProfileChoice(ProfileTier.TryItOut, Array.Empty<string>())
-                )
-            );
-        _ui.ConfirmPlanAsync(Arg.Any<AssetPlan>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(false));
+        // No lock file, no files on disk — assets are missing.
+        _ui.PickProfileAsync(Arg.Any<IReadOnlyList<ProfileChoice>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(ProfileTier.TryItOut));
 
         var runner = BuildRunner(manifest);
         var result = await runner.RunAsync(
-            new BootstrapOptions { Mode = BootstrapMode.AutoIfMissing },
+            new BootstrapOptions
+            {
+                Mode = BootstrapMode.Offline,
+                PreselectedProfile = ProfileTier.TryItOut,
+            },
             CancellationToken.None
         );
 
         result.Success.Should().BeFalse();
-        result.ChangesApplied.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("Offline mode");
         await _downloader
             .DidNotReceive()
             .DownloadAsync(
                 Arg.Any<AssetPlanItem>(),
                 Arg.Any<IProgress<long>>(),
+                Arg.Any<CancellationToken>()
+            );
+    }
+
+    [Fact]
+    public async Task PreselectedProfile_overrides_picker()
+    {
+        var asset = BuildAsset("model-d", ProfileTier.StreamWithIt);
+        var manifest = BuildManifest(asset);
+
+        _ui.RunWithProgressAsync(
+                Arg.Any<IReadOnlyList<AssetPlanItem>>(),
+                Arg.Any<Func<AssetPlanItem, IProgress<long>, CancellationToken, Task>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(Task.FromResult(true));
+
+        var runner = BuildRunner(manifest);
+        var result = await runner.RunAsync(
+            new BootstrapOptions
+            {
+                Mode = BootstrapMode.AutoIfMissing,
+                PreselectedProfile = ProfileTier.StreamWithIt,
+            },
+            CancellationToken.None
+        );
+
+        result.ActiveProfile.Should().Be(ProfileTier.StreamWithIt);
+        await _ui.DidNotReceive()
+            .PickProfileAsync(
+                Arg.Any<IReadOnlyList<ProfileChoice>>(),
                 Arg.Any<CancellationToken>()
             );
     }

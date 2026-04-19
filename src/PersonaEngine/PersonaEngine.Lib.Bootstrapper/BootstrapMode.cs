@@ -2,18 +2,18 @@ namespace PersonaEngine.Lib.Bootstrapper;
 
 public enum BootstrapMode
 {
-    /// <summary>Download only assets that are absent or hash-mismatched (default).</summary>
+    /// <summary>If lock missing or any required asset missing, run picker. Otherwise skip.</summary>
     AutoIfMissing,
 
-    /// <summary>Force a full re-download regardless of local state.</summary>
+    /// <summary>Force picker; treat all assets as needing fresh download.</summary>
     Reinstall,
 
-    /// <summary>Hash-check every asset and report without downloading.</summary>
+    /// <summary>Re-hash everything in lock file; flag mismatches as Repair actions.</summary>
     Verify,
 
-    /// <summary>Re-download only assets that fail their hash check.</summary>
+    /// <summary>Re-download anything Verify flagged.</summary>
     Repair,
 
-    /// <summary>Skip all network activity; use whatever is already on disk.</summary>
+    /// <summary>Don't touch network. Fail fast if anything is missing.</summary>
     Offline,
 }

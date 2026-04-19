@@ -4,30 +4,34 @@ using PersonaEngine.Lib.Bootstrapper.Planner;
 namespace PersonaEngine.Lib.Bootstrapper;
 
 /// <summary>
-/// The profile the user chose together with optional per-asset exclusions they ticked off.
-/// </summary>
-public sealed record ProfileChoice(ProfileTier Tier, IReadOnlyList<string> ExcludedAssetIds);
-
-/// <summary>
-/// Abstraction over the installer UI (CLI wizard, GUI, or headless auto-select).
-/// All methods are called by <see cref="BootstrapRunner"/> on the host's thread.
+/// Abstraction over the user-facing chrome (picker, progress, prompts) so the runner can be tested
+/// without Spectre.Console and so headless modes can plug in a no-op implementation.
 /// </summary>
 public interface IBootstrapUserInterface
 {
-    /// <summary>
-    /// Ask the user to pick a profile tier.  Returns null if the user cancels.
-    /// </summary>
-    Task<ProfileChoice?> PickProfileAsync(CancellationToken ct);
+    /// <summary>Prompt the user to pick an install profile; called only when no lock exists or Reinstall mode.</summary>
+    Task<ProfileTier> PickProfileAsync(IReadOnlyList<ProfileChoice> choices, CancellationToken ct);
 
-    /// <summary>
-    /// Show the computed download plan and ask for confirmation.
-    /// Return <c>true</c> to proceed, <c>false</c> to abort.
-    /// </summary>
-    Task<bool> ConfirmPlanAsync(AssetPlan plan, CancellationToken ct);
+    /// <summary>Show one-line summary banner before downloads start (e.g. "Installing 'Stream with it' — 8.0 GB").</summary>
+    void ShowPlanSummary(AssetPlan plan);
 
-    /// <summary>Report per-asset download progress (called on each progress tick).</summary>
-    void ReportProgress(AssetPlanItem item, long bytesDownloaded, long totalBytes);
+    /// <summary>Run the download/verify loop, reporting per-asset progress. Implementations decide rendering.</summary>
+    Task<bool> RunWithProgressAsync(
+        IReadOnlyList<AssetPlanItem> items,
+        Func<AssetPlanItem, IProgress<long>, CancellationToken, Task> executeOne,
+        CancellationToken ct
+    );
 
-    /// <summary>Show the final outcome to the user.</summary>
-    Task ShowResultAsync(BootstrapResult result, CancellationToken ct);
+    /// <summary>Show final outcome line(s).</summary>
+    void ShowResult(BootstrapResult result);
+}
+
+/// <summary>Display data for one profile choice, ready to render in the picker.</summary>
+public sealed record ProfileChoice
+{
+    public required ProfileTier Profile { get; init; }
+    public required string Title { get; init; }
+    public required string SizeLabel { get; init; }
+    public required string Tagline { get; init; }
+    public required IReadOnlyList<string> Bullets { get; init; }
 }

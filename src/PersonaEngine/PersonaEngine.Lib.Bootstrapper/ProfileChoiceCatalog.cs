@@ -2,64 +2,52 @@ using PersonaEngine.Lib.Bootstrapper.Manifest;
 
 namespace PersonaEngine.Lib.Bootstrapper;
 
-/// <summary>UI copy for a single profile tier shown in the installer picker.</summary>
-public sealed record ProfileChoiceEntry(
-    ProfileTier Tier,
-    string Title,
-    string SizeLabel,
-    string Tagline,
-    IReadOnlyList<string> Bullets
-);
-
-/// <summary>
-/// Static catalog of profile picker copy. Source of truth for titles, size labels,
-/// taglines, and feature bullet points shown to the user during first-run setup.
-/// </summary>
+/// <summary>Static profile picker copy. Mirrors the design spec verbatim — change here = change in spec.</summary>
 public static class ProfileChoiceCatalog
 {
-    public static IReadOnlyList<ProfileChoiceEntry> All { get; } =
-        new ProfileChoiceEntry[]
+    public static IReadOnlyList<ProfileChoice> All { get; } =
+        new ProfileChoice[]
         {
-            new(
-                Tier: ProfileTier.TryItOut,
-                Title: "Try It Out",
-                SizeLabel: "~2 GB",
-                Tagline: "Spin up a talking avatar in minutes — no GPU required for the basics.",
-                Bullets: new[]
+            new()
+            {
+                Profile = ProfileTier.TryItOut,
+                Title = "Try it out",
+                SizeLabel = "~3.1 GB",
+                Tagline = "I just want to see this thing talk back to me.",
+                Bullets = new[]
                 {
-                    "Core TTS voice (Kokoro)",
-                    "Default Live2D avatar",
-                    "Text chat via any OpenAI-compatible endpoint",
-                    "Subtitle rendering",
-                }
-            ),
-            new(
-                Tier: ProfileTier.StreamWithIt,
-                Title: "Stream With It",
-                SizeLabel: "~6 GB",
-                Tagline: "Everything in Try It Out plus real-time voice cloning and OBS output.",
-                Bullets: new[]
+                    "Voice-in / voice-out conversation with the default persona",
+                    "Default Live2D avatar with lip-sync and idle animation",
+                    "Subtitle + ImGui control panel",
+                },
+            },
+            new()
+            {
+                Profile = ProfileTier.StreamWithIt,
+                Title = "Stream with it",
+                SizeLabel = "~8.0 GB",
+                Tagline = "I want my Live2D persona on stream tonight.",
+                Bullets = new[]
                 {
-                    "Everything in Try It Out",
-                    "RVC voice cloning (HuBERT + CREPE)",
-                    "Spout2 → OBS integration",
-                    "Microphone input with VAD + Whisper ASR",
-                    "Emotion-driven avatar animation",
-                }
-            ),
-            new(
-                Tier: ProfileTier.BuildWithIt,
-                Title: "Build With It",
-                SizeLabel: "~12 GB",
-                Tagline: "Full developer setup with all models, music separation, and vision support.",
-                Bullets: new[]
+                    "Everything in Try it out, plus:",
+                    "RVC voice cloning for custom voice timbres",
+                    "Spout output to OBS",
+                    "Profanity beep filter",
+                },
+            },
+            new()
+            {
+                Profile = ProfileTier.BuildWithIt,
+                Title = "Build with it",
+                SizeLabel = "~15.8 GB",
+                Tagline = "I'm wiring this into my own pipeline.",
+                Bullets = new[]
                 {
-                    "Everything in Stream With It",
-                    "Music source separation (MDX + MelBandRoformer)",
-                    "Screen-capture vision LLM captions",
-                    "Qwen3-TTS alternative voice engine",
-                    "All optional ONNX models",
-                }
-            ),
+                    "Everything in Stream with it, plus:",
+                    "Vision LLM for screen-aware responses",
+                    "Audio2Face streaming lip-sync solver",
+                    "High-accuracy Whisper Turbo v3 transcription",
+                },
+            },
         };
 }

@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using PersonaEngine.Lib.Assets;
 using PersonaEngine.Lib.Bootstrapper.Manifest;
 using PersonaEngine.Lib.Bootstrapper.Planner;
@@ -7,10 +6,6 @@ using PersonaEngine.Lib.Bootstrapper.Sources;
 
 namespace PersonaEngine.Lib.Bootstrapper;
 
-/// <summary>
-/// Orchestrates a full bootstrap run: load lock → pick profile → compute plan →
-/// confirm with user → download assets → write updated lock → return result.
-/// </summary>
 public sealed class BootstrapRunner
 {
     private readonly InstallManifest _manifest;
@@ -19,8 +14,7 @@ public sealed class BootstrapRunner
     private readonly IAssetDownloader _downloader;
     private readonly IAssetCatalog _catalog;
     private readonly IBootstrapUserInterface _ui;
-    private readonly string _resourceRoot;
-    private readonly ILogger<BootstrapRunner> _log;
+    private readonly ILogger<BootstrapRunner>? _log;
 
     public BootstrapRunner(
         InstallManifest manifest,
@@ -29,7 +23,6 @@ public sealed class BootstrapRunner
         IAssetDownloader downloader,
         IAssetCatalog catalog,
         IBootstrapUserInterface ui,
-        string resourceRoot,
         ILogger<BootstrapRunner>? log = null
     )
     {
@@ -39,188 +32,145 @@ public sealed class BootstrapRunner
         _downloader = downloader;
         _catalog = catalog;
         _ui = ui;
-        _resourceRoot = resourceRoot;
-        _log = log ?? NullLogger<BootstrapRunner>.Instance;
+        _log = log;
     }
 
     public async Task<BootstrapResult> RunAsync(BootstrapOptions options, CancellationToken ct)
     {
-        _log.LogInformation("Bootstrap run starting. Mode={Mode}", options.Mode);
+        try
+        {
+            var existingLock = _lockStore.Read(_manifest.ManifestVersion);
+            var profile = await ResolveProfileAsync(options, existingLock, ct)
+                .ConfigureAwait(false);
 
-        // 1. Load current install lock (empty if first run).
-        var lockState = _lockStore.Read(_manifest.ManifestVersion);
+            var plan = _planner.Compute(_manifest, existingLock, profile, options.Mode);
 
-        // 2. Determine profile tier.
-        ProfileTier profile;
-        if (options.PreselectedProfile.HasValue)
-        {
-            // Caller (CLI) pre-selected a profile — no picker needed.
-            profile = options.PreselectedProfile.Value;
-        }
-        else if (lockState.Assets.Count > 0)
-        {
-            // An existing installation: use the previously-chosen profile.
-            profile = lockState.SelectedProfile;
-        }
-        else
-        {
-            // First-time run: ask the user to choose.
-            var choice = await _ui.PickProfileAsync(ct).ConfigureAwait(false);
-            if (choice is null)
+            if (plan.IsEmpty)
             {
-                _log.LogInformation("User cancelled profile selection. Aborting bootstrap.");
                 return new BootstrapResult
                 {
-                    Success = false,
-                    ActiveProfile = ProfileTier.TryItOut,
+                    Success = true,
+                    ActiveProfile = profile,
                     ChangesApplied = false,
-                    ErrorMessage = "Profile selection cancelled by user.",
                 };
             }
 
-            profile = choice.Tier;
-
-            // Merge user exclusions into the lock so the planner honours them.
-            lockState = lockState with
+            if (options.Mode == BootstrapMode.Offline)
             {
-                SelectedProfile = profile,
-                UserExclusions = choice.ExcludedAssetIds,
-            };
-        }
+                var missing = string.Join(", ", plan.Items.Select(i => i.Entry.Id));
+                return new BootstrapResult
+                {
+                    Success = false,
+                    ActiveProfile = profile,
+                    ChangesApplied = false,
+                    ErrorMessage = $"Offline mode: required assets are not installed ({missing}).",
+                };
+            }
 
-        // 3. Compute plan.
-        var plan = _planner.Compute(_manifest, lockState, profile, options.Mode);
+            _ui.ShowPlanSummary(plan);
 
-        if (plan.IsEmpty)
-        {
-            _log.LogInformation("All assets up-to-date. Nothing to do.");
-            await _ui.ShowResultAsync(
-                    new BootstrapResult
-                    {
-                        Success = true,
-                        ActiveProfile = profile,
-                        ChangesApplied = false,
-                    },
+            var allOk = await _ui.RunWithProgressAsync(
+                    plan.Items,
+                    (item, progress, innerCt) => _downloader.DownloadAsync(item, progress, innerCt),
                     ct
                 )
                 .ConfigureAwait(false);
-            return new BootstrapResult
+
+            if (!allOk)
+            {
+                return new BootstrapResult
+                {
+                    Success = false,
+                    ActiveProfile = profile,
+                    ChangesApplied = true,
+                    ErrorMessage = "One or more assets failed to download. See log for details.",
+                };
+            }
+
+            var newLock = BuildUpdatedLock(_manifest, existingLock, plan, profile);
+            _lockStore.Write(newLock);
+
+            // NOTE: IAssetCatalog has no RefreshAsync — it auto-refreshes via FileSystemWatcher.
+
+            var result = new BootstrapResult
             {
                 Success = true,
                 ActiveProfile = profile,
-                ChangesApplied = false,
+                ChangesApplied = true,
             };
+            _ui.ShowResult(result);
+            return result;
         }
-
-        // 4. Confirm plan with user.
-        var confirmed = await _ui.ConfirmPlanAsync(plan, ct).ConfigureAwait(false);
-        if (!confirmed)
+        catch (OperationCanceledException)
         {
-            _log.LogInformation("User declined the download plan. Aborting bootstrap.");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _log?.LogError(ex, "Bootstrap failed");
             return new BootstrapResult
             {
                 Success = false,
-                ActiveProfile = profile,
+                ActiveProfile = options.PreselectedProfile ?? ProfileTier.TryItOut,
                 ChangesApplied = false,
-                ErrorMessage = "Download plan rejected by user.",
+                ErrorMessage = ex.Message,
             };
         }
+    }
 
-        // 5. Execute downloads.
-        var warnings = new List<string>();
-        var installedAssets = new Dictionary<string, InstalledAssetRecord>(
-            lockState.Assets,
+    private async Task<ProfileTier> ResolveProfileAsync(
+        BootstrapOptions options,
+        InstallStateLock existingLock,
+        CancellationToken ct
+    )
+    {
+        if (options.PreselectedProfile is { } pre)
+        {
+            return pre;
+        }
+
+        var lockExists = existingLock.Assets.Count > 0;
+        var needsPicker =
+            options.Mode == BootstrapMode.Reinstall
+            || (options.Mode == BootstrapMode.AutoIfMissing && !lockExists);
+
+        if (needsPicker)
+        {
+            return await _ui.PickProfileAsync(ProfileChoiceCatalog.All, ct).ConfigureAwait(false);
+        }
+
+        return existingLock.SelectedProfile;
+    }
+
+    private static InstallStateLock BuildUpdatedLock(
+        InstallManifest manifest,
+        InstallStateLock existingLock,
+        AssetPlan plan,
+        ProfileTier profile
+    )
+    {
+        var installed = existingLock.Assets.ToDictionary(
+            kvp => kvp.Key,
+            kvp => kvp.Value,
             StringComparer.Ordinal
         );
 
         foreach (var item in plan.Items)
         {
-            ct.ThrowIfCancellationRequested();
-
-            if (item.Action is AssetAction.Skip)
-                continue;
-
-            if (item.Action is AssetAction.Remove)
-            {
-                var assetPath = Path.Combine(_resourceRoot, item.Entry.InstallPath);
-                try
-                {
-                    if (File.Exists(assetPath))
-                        File.Delete(assetPath);
-                    else if (Directory.Exists(assetPath))
-                        Directory.Delete(assetPath, recursive: true);
-
-                    installedAssets.Remove(item.Entry.Id);
-                    _log.LogDebug("Removed asset '{AssetId}'", item.Entry.Id);
-                }
-                catch (Exception ex)
-                {
-                    _log.LogWarning(ex, "Failed to remove asset '{AssetId}'", item.Entry.Id);
-                    warnings.Add($"Could not remove '{item.Entry.Id}': {ex.Message}");
-                }
-                continue;
-            }
-
-            // Download or Redownload or Reverify.
-            _log.LogInformation(
-                "Processing asset '{AssetId}' (action={Action})",
-                item.Entry.Id,
-                item.Action
+            installed[item.Entry.Id] = new InstalledAssetRecord(
+                Version: item.Entry.Source.SourceVersion,
+                Sha256: item.Entry.Sha256,
+                VerifiedAt: DateTimeOffset.UtcNow
             );
-
-            try
-            {
-                var progressReporter = new Progress<long>(bytes =>
-                    _ui.ReportProgress(item, bytes, item.Entry.SizeBytes)
-                );
-
-                await _downloader.DownloadAsync(item, progressReporter, ct).ConfigureAwait(false);
-
-                installedAssets[item.Entry.Id] = new InstalledAssetRecord(
-                    item.Entry.Source.SourceVersion,
-                    item.Entry.Sha256,
-                    DateTimeOffset.UtcNow
-                );
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _log.LogError(ex, "Failed to process asset '{AssetId}'", item.Entry.Id);
-                var result = new BootstrapResult
-                {
-                    Success = false,
-                    ActiveProfile = profile,
-                    ChangesApplied = installedAssets.Count > lockState.Assets.Count,
-                    ErrorMessage = $"Failed to process '{item.Entry.Id}': {ex.Message}",
-                    Warnings = warnings,
-                };
-                await _ui.ShowResultAsync(result, ct).ConfigureAwait(false);
-                return result;
-            }
         }
 
-        // 6. Persist updated lock.
-        var updatedLock = lockState with
-        {
-            ManifestVersion = _manifest.ManifestVersion,
-            InstalledAt = DateTimeOffset.UtcNow,
-            SelectedProfile = profile,
-            Assets = installedAssets,
-        };
-        _lockStore.Write(updatedLock);
-        _log.LogInformation("Install lock updated. Profile={Profile}", profile);
-
-        var successResult = new BootstrapResult
-        {
-            Success = true,
-            ActiveProfile = profile,
-            ChangesApplied = true,
-            Warnings = warnings,
-        };
-        await _ui.ShowResultAsync(successResult, ct).ConfigureAwait(false);
-        return successResult;
+        return new InstallStateLock(
+            SchemaVersion: 1,
+            ManifestVersion: manifest.ManifestVersion,
+            InstalledAt: DateTimeOffset.UtcNow,
+            SelectedProfile: profile,
+            Assets: installed,
+            UserExclusions: existingLock.UserExclusions
+        );
     }
 }

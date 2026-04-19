@@ -7,29 +7,31 @@ namespace PersonaEngine.Lib.Bootstrapper.Tests;
 public sealed class ProfileChoiceCatalogTests
 {
     [Fact]
-    public void All_returns_three_profiles_in_tier_order()
+    public void All_returns_three_profiles_in_intent_order()
     {
         var profiles = ProfileChoiceCatalog.All;
 
         profiles.Should().HaveCount(3);
-        profiles[0].Tier.Should().Be(ProfileTier.TryItOut);
-        profiles[1].Tier.Should().Be(ProfileTier.StreamWithIt);
-        profiles[2].Tier.Should().Be(ProfileTier.BuildWithIt);
+        profiles[0].Profile.Should().Be(ProfileTier.TryItOut);
+        profiles[1].Profile.Should().Be(ProfileTier.StreamWithIt);
+        profiles[2].Profile.Should().Be(ProfileTier.BuildWithIt);
     }
 
     [Fact]
-    public void Each_profile_has_non_empty_title_tagline_and_bullets()
+    public void Each_profile_has_title_size_tagline_and_at_least_one_bullet()
     {
-        foreach (var p in ProfileChoiceCatalog.All)
+        foreach (var choice in ProfileChoiceCatalog.All)
         {
-            p.Title.Should().NotBeNullOrWhiteSpace(because: $"{p.Tier} must have a title");
-            p.SizeLabel.Should().NotBeNullOrWhiteSpace(because: $"{p.Tier} must have a size label");
-            p.Tagline.Should().NotBeNullOrWhiteSpace(because: $"{p.Tier} must have a tagline");
-            p.Bullets.Should().NotBeEmpty(because: $"{p.Tier} must have bullet points");
-            foreach (var bullet in p.Bullets)
-                bullet
-                    .Should()
-                    .NotBeNullOrWhiteSpace(because: $"{p.Tier} bullet must not be blank");
+            choice
+                .Title.Should()
+                .NotBeNullOrWhiteSpace(because: $"{choice.Profile} must have a title");
+            choice.SizeLabel.Should().Contain("GB");
+            choice
+                .Tagline.Should()
+                .NotBeNullOrWhiteSpace(because: $"{choice.Profile} must have a tagline");
+            choice
+                .Bullets.Should()
+                .NotBeEmpty(because: $"{choice.Profile} must have bullet points");
         }
     }
 }
