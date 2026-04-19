@@ -4,7 +4,7 @@ public record Live2DOptions
 {
     public string ModelPath { get; set; } = "Resources/live2d";
 
-    public string ModelName { get; set; } = "angel";
+    public string ModelName { get; set; } = "aria";
 
     public int Width { get; set; } = 1920;
 
