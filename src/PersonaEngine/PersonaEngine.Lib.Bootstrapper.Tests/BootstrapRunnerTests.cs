@@ -1,7 +1,7 @@
 using FluentAssertions;
 using NSubstitute;
 using PersonaEngine.Lib.Assets;
-using PersonaEngine.Lib.Bootstrapper.Manifest;
+using PersonaEngine.Lib.Assets.Manifest;
 using PersonaEngine.Lib.Bootstrapper.Planner;
 using PersonaEngine.Lib.Bootstrapper.Sources;
 using PersonaEngine.Lib.Bootstrapper.Tests.Helpers;

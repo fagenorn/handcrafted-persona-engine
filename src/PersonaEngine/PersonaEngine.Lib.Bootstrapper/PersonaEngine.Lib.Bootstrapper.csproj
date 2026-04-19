@@ -26,7 +26,4 @@
   <ItemGroup>
     <ProjectReference Include="..\PersonaEngine.Lib\PersonaEngine.Lib.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="install-manifest.json" />
-  </ItemGroup>
 </Project>

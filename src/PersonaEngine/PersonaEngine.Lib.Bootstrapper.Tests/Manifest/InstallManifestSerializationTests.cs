@@ -1,6 +1,6 @@
 using System.Text.Json;
 using FluentAssertions;
-using PersonaEngine.Lib.Bootstrapper.Manifest;
+using PersonaEngine.Lib.Assets.Manifest;
 using Xunit;
 
 namespace PersonaEngine.Lib.Bootstrapper.Tests.Manifest;

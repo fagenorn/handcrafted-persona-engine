@@ -1,5 +1,5 @@
 using System.Text;
-using PersonaEngine.Lib.Bootstrapper.Manifest;
+using PersonaEngine.Lib.Assets.Manifest;
 using PersonaEngine.Lib.Bootstrapper.Planner;
 using Spectre.Console;
 

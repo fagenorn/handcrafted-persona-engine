@@ -1,6 +1,6 @@
 using FluentAssertions;
+using PersonaEngine.Lib.Assets.Manifest;
 using PersonaEngine.Lib.Bootstrapper;
-using PersonaEngine.Lib.Bootstrapper.Manifest;
 using Xunit;
 
 namespace PersonaEngine.Lib.Bootstrapper.Tests;

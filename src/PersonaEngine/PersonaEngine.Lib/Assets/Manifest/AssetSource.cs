@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace PersonaEngine.Lib.Bootstrapper.Manifest;
+namespace PersonaEngine.Lib.Assets.Manifest;
 
 [JsonConverter(typeof(AssetSourceJsonConverter))]
 public abstract record AssetSource(SourceType Type)

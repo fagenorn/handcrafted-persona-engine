@@ -145,5 +145,6 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources\voice_metadata.json" />
+    <EmbeddedResource Include="Assets\Manifest\install-manifest.json" />
   </ItemGroup>
 </Project>

@@ -2,7 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace PersonaEngine.Lib.Bootstrapper.Manifest;
+namespace PersonaEngine.Lib.Assets.Manifest;
 
 public sealed class InstallStateLockStore
 {

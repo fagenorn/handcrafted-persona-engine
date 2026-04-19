@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace PersonaEngine.Lib.Bootstrapper.Manifest;
+namespace PersonaEngine.Lib.Assets.Manifest;
 
 public sealed class AssetSourceJsonConverter : JsonConverter<AssetSource>
 {

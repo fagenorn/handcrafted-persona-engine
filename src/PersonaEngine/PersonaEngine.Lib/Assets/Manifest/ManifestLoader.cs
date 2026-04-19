@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace PersonaEngine.Lib.Bootstrapper.Manifest;
+namespace PersonaEngine.Lib.Assets.Manifest;
 
 public static class ManifestLoader
 {

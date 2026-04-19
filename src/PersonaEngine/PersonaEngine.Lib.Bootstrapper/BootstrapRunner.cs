@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 using PersonaEngine.Lib.Assets;
-using PersonaEngine.Lib.Bootstrapper.Manifest;
+using PersonaEngine.Lib.Assets.Manifest;
 using PersonaEngine.Lib.Bootstrapper.Planner;
 using PersonaEngine.Lib.Bootstrapper.Sources;
 

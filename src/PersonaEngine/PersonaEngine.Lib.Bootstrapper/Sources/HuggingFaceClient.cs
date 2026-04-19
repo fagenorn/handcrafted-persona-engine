@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Logging;
-using PersonaEngine.Lib.Bootstrapper.Manifest;
+using PersonaEngine.Lib.Assets.Manifest;
 
 namespace PersonaEngine.Lib.Bootstrapper.Sources;
 

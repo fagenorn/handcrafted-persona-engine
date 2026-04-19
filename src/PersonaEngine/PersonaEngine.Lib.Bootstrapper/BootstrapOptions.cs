@@ -1,4 +1,4 @@
-using PersonaEngine.Lib.Bootstrapper.Manifest;
+using PersonaEngine.Lib.Assets.Manifest;
 
 namespace PersonaEngine.Lib.Bootstrapper;
 

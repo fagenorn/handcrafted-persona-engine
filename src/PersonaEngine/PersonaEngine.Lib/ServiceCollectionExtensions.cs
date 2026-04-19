@@ -11,6 +11,8 @@ using Microsoft.ML.OnnxRuntime;
 using Microsoft.SemanticKernel;
 using PersonaEngine.Lib.ASR.Transcriber;
 using PersonaEngine.Lib.ASR.VAD;
+using PersonaEngine.Lib.Assets;
+using PersonaEngine.Lib.Assets.Manifest;
 using PersonaEngine.Lib.Audio;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.Core;
@@ -89,6 +91,13 @@ public static class ServiceCollectionExtensions
     )
     {
         services.Configure<AvatarAppConfig>(configuration.GetSection("Config"));
+
+        // IAssetCatalog must be registered before AddConversation so subsystem gates
+        // (RVC, Vision, Audio2Face) can probe IsFeatureEnabled during DI registration.
+        services.AddSingleton<InstallManifest>(_ => ManifestLoader.LoadEmbedded());
+        services.AddSingleton<IAssetCatalog>(sp =>
+            AssetCatalogFactory.Build(sp.GetRequiredService<InstallManifest>())
+        );
 
         services.AddConversation(configuration, configureKernel);
         services.AddUI(configuration);

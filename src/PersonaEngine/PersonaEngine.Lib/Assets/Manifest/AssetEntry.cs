@@ -1,6 +1,4 @@
-using PersonaEngine.Lib.Assets;
-
-namespace PersonaEngine.Lib.Bootstrapper.Manifest;
+namespace PersonaEngine.Lib.Assets.Manifest;
 
 public sealed record AssetEntry(
     string Id,

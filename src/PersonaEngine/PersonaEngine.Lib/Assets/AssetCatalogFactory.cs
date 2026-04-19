@@ -1,7 +1,6 @@
-using PersonaEngine.Lib.Assets;
-using PersonaEngine.Lib.Bootstrapper.Manifest;
+using PersonaEngine.Lib.Assets.Manifest;
 
-namespace PersonaEngine.Lib.Bootstrapper;
+namespace PersonaEngine.Lib.Assets;
 
 /// <summary>
 ///     Builds an <see cref="AssetCatalog" /> from a loaded <see cref="InstallManifest" />:
@@ -9,7 +8,7 @@ namespace PersonaEngine.Lib.Bootstrapper;
 ///     per-<see cref="UserAssetType" /> roots from <see cref="AppContext.BaseDirectory" />,
 ///     and collects the shipped-default asset ids.
 /// </summary>
-internal static class AssetCatalogFactory
+public static class AssetCatalogFactory
 {
     public static AssetCatalog Build(InstallManifest manifest)
     {
