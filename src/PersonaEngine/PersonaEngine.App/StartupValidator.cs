@@ -8,17 +8,16 @@ namespace PersonaEngine.App;
 
 /// <summary>
 ///     Runs environment checks before the DI container is built.
-///     Catches missing CUDA, models, and config issues early with actionable messages
+///     Catches missing CUDA, espeak-ng, and config issues early with actionable messages
 ///     instead of cryptic native-loader exceptions deep in service resolution.
+///     Model-existence probes (Whisper, Kokoro, Silero, OpenNLP, Live2D avatars) are
+///     intentionally absent: <see cref="PersonaEngine.Lib.Assets.IAssetCatalog" /> is the
+///     single source of truth for what is installed, and the bootstrapper that runs
+///     before this validator already provisions every required asset before the host
+///     reaches DI construction.
 /// </summary>
 internal static class StartupValidator
 {
-    private static readonly string ModelsDir = Path.Combine(
-        Directory.GetCurrentDirectory(),
-        "Resources",
-        "Models"
-    );
-
     /// <returns>true if no errors were found and startup can proceed.</returns>
     public static bool Run(IConfiguration config)
     {
@@ -31,9 +30,7 @@ internal static class StartupValidator
 
         CheckGpu(log, ref errors);
         CheckCuda(log, ref errors);
-        CheckModels(log, ref errors);
         CheckEspeakNg(log, config, ref errors);
-        CheckLive2D(log, config, ref warnings);
         CheckPrompt(log, config, ref warnings);
 
         if (errors > 0)
@@ -128,50 +125,6 @@ internal static class StartupValidator
         }
     }
 
-    private static void CheckModels(ILogger log, ref int errors)
-    {
-        var required = new (string RelativePath, string Name)[]
-        {
-            ("ggml-large-v3-turbo.bin", "Whisper Turbo v3"),
-            ("ggml-tiny.en.bin", "Whisper Tiny"),
-            ("silero_vad_v5.onnx", "Silero VAD"),
-            ("kokoro/model_slim.onnx", "Kokoro TTS"),
-            ("kokoro/phoneme_to_id.txt", "Kokoro phoneme map"),
-            ("opennlp", "OpenNLP"),
-        };
-
-        var missing = new List<string>();
-
-        foreach (var (relativePath, name) in required)
-        {
-            var fullPath = Path.Combine(ModelsDir, relativePath);
-            if (!Path.Exists(fullPath))
-            {
-                missing.Add(name);
-            }
-        }
-
-        // Kokoro voices directory must exist and contain at least one voice file
-        var voicesDir = Path.Combine(ModelsDir, "kokoro", "voices");
-        if (!Directory.Exists(voicesDir) || !Directory.EnumerateFiles(voicesDir).Any())
-        {
-            missing.Add("Kokoro voices");
-        }
-
-        if (missing.Count == 0)
-        {
-            log.Information("Models: All {Count} required models found", required.Length + 1);
-        }
-        else
-        {
-            log.Error(
-                "Models: Missing {Missing}. Download and place in Resources/Models/. See INSTALLATION.md section 4",
-                string.Join(", ", missing)
-            );
-            errors++;
-        }
-    }
-
     private static void CheckEspeakNg(ILogger log, IConfiguration config, ref int errors)
     {
         var espeakPath = config["Config:Tts:EspeakPath"] ?? "espeak-ng";
@@ -221,27 +174,6 @@ internal static class StartupValidator
                 espeakPath
             );
             errors++;
-        }
-    }
-
-    private static void CheckLive2D(ILogger log, IConfiguration config, ref int warnings)
-    {
-        var modelPath = config["Config:Live2D:ModelPath"] ?? "Resources/Live2D/Avatars";
-        var modelName = config["Config:Live2D:ModelName"] ?? "aria";
-        var fullPath = Path.Combine(Directory.GetCurrentDirectory(), modelPath, modelName);
-
-        if (Directory.Exists(fullPath))
-        {
-            log.Information("Live2D: Avatar '{ModelName}' found", modelName);
-        }
-        else
-        {
-            log.Warning(
-                "Live2D: Avatar directory not found at {Path}/{ModelName}. Place your Live2D model in the correct directory. See Live2D.md",
-                modelPath,
-                modelName
-            );
-            warnings++;
         }
     }
 
