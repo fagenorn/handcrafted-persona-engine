@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.ML.OnnxRuntime;
 using PersonaEngine.Lib;
+using PersonaEngine.Lib.Bootstrapper;
 using PersonaEngine.Lib.Core;
 using Serilog;
 using Serilog.Events;
@@ -21,7 +22,7 @@ internal static class Program
 
     private const uint LoadWithAlteredSearchPath = 0x00000008;
 
-    private static async Task Main()
+    private static async Task<int> Main(string[] args)
     {
         var nativeDir = Path.Combine(AppContext.BaseDirectory, "native");
         if (Directory.Exists(nativeDir))
@@ -127,6 +128,32 @@ internal static class Program
         // Suppress ONNX Runtime warnings globally before any sessions are created
         OrtEnv.Instance().EnvLogLevel = OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR;
 
+        // ── Bootstrap ────────────────────────────────────────────────────────────
+        // Run the asset bootstrapper before any subsystem that depends on models
+        // or native runtimes. On failure we exit with a non-zero code so launchers
+        // can surface the error; on success we continue into the main DI graph.
+        var parsedArgs = CommandLineArgs.Parse(args);
+
+        var bootstrapServices = new ServiceCollection();
+        bootstrapServices.AddBootstrapper(parsedArgs.NonInteractive);
+
+        await using (var bootstrapProvider = bootstrapServices.BuildServiceProvider())
+        {
+            var runner = bootstrapProvider.GetRequiredService<BootstrapRunner>();
+            var bootstrapResult = await runner.RunAsync(
+                parsedArgs.Bootstrap,
+                CancellationToken.None
+            );
+
+            if (!bootstrapResult.Success)
+            {
+                Log.Fatal("Bootstrap failed: {Reason}", bootstrapResult.ErrorMessage);
+                await Log.CloseAndFlushAsync();
+                Console.Error.WriteLine($"Bootstrap failed: {bootstrapResult.ErrorMessage}");
+                return 1;
+            }
+        }
+
         var builder = new ConfigurationBuilder()
             .SetBasePath(Directory.GetCurrentDirectory())
             .AddJsonFile("appsettings.json", false, true);
@@ -139,7 +166,7 @@ internal static class Program
             Console.WriteLine();
             Console.WriteLine("Press any key to exit...");
             Console.ReadKey(true);
-            return;
+            return 1;
         }
 
         var services = new ServiceCollection();
@@ -158,6 +185,7 @@ internal static class Program
         window.Run();
 
         await serviceProvider.DisposeAsync();
+        return 0;
     }
 
     private static void CreateLogger()
