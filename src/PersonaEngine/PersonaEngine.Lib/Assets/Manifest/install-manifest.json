@@ -17,7 +17,7 @@
         "platform": "windows-x86_64",
         "extractFiles": []
       },
-      "installPath": "runtime/cuda/cudart",
+      "installPath": "cuda/cudart",
       "sha256": "FROM_NVIDIA_MANIFEST",
       "sizeBytes": 0,
       "gates": [],
@@ -38,7 +38,7 @@
         "platform": "windows-x86_64",
         "extractFiles": []
       },
-      "installPath": "runtime/cuda/cublas",
+      "installPath": "cuda/cublas",
       "sha256": "FROM_NVIDIA_MANIFEST",
       "sizeBytes": 0,
       "gates": [],
@@ -59,7 +59,7 @@
         "platform": "windows-x86_64",
         "extractFiles": []
       },
-      "installPath": "runtime/cuda/cufft",
+      "installPath": "cuda/cufft",
       "sha256": "FROM_NVIDIA_MANIFEST",
       "sizeBytes": 0,
       "gates": [],
@@ -80,16 +80,35 @@
         "platform": "windows-x86_64",
         "extractFiles": []
       },
-      "installPath": "runtime/cudnn",
+      "installPath": "cudnn",
       "sha256": "FROM_NVIDIA_MANIFEST",
       "sizeBytes": 0,
       "gates": [],
       "extractArchive": false
     },
     {
-      "id": "whisper-tiny",
+      "id": "silero-vad",
       "kind": "Model",
-      "displayName": "Whisper Tiny (barge-in)",
+      "displayName": "Silero VAD v5",
+      "capability": { "name": "Voice activity detection", "description": "Silero ONNX VAD used by both ASR tiers" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "silero-vad/silero_vad_v5.onnx"
+      },
+      "installPath": "silero-vad/silero_vad_v5.onnx",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "sizeBytes": 0,
+      "gates": ["Asr.WhisperTiny", "Asr.WhisperTurbo"],
+      "extractArchive": false
+    },
+    {
+      "id": "whisper-tiny-en",
+      "kind": "Model",
+      "displayName": "Whisper Tiny EN (barge-in)",
       "capability": { "name": "Speech recognition (barge-in)", "description": "Low-latency Whisper model used for interruption detection" },
       "profileTier": "TryItOut",
       "required": true,
@@ -97,16 +116,16 @@
         "type": "HuggingFace",
         "repo": "fagenorn/persona-engine-assets",
         "revision": "v1.0.0",
-        "path": "whisper/ggml-tiny.bin"
+        "path": "whisper/ggml-tiny.en.bin"
       },
-      "installPath": "models/whisper/ggml-tiny.bin",
+      "installPath": "whisper/ggml-tiny.en.bin",
       "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "sizeBytes": 0,
       "gates": ["Asr.WhisperTiny"],
       "extractArchive": false
     },
     {
-      "id": "whisper-turbo-v3",
+      "id": "whisper-large-v3-turbo",
       "kind": "Model",
       "displayName": "Whisper Turbo v3 (high accuracy)",
       "capability": { "name": "Speech recognition (high accuracy)", "description": "Higher-quality Whisper model for the BuildWithIt profile" },
@@ -118,11 +137,49 @@
         "revision": "v1.0.0",
         "path": "whisper/ggml-large-v3-turbo.bin"
       },
-      "installPath": "models/whisper/ggml-large-v3-turbo.bin",
+      "installPath": "whisper/ggml-large-v3-turbo.bin",
       "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "sizeBytes": 0,
       "gates": ["Asr.WhisperTurbo"],
       "extractArchive": false
+    },
+    {
+      "id": "profanity-bundle",
+      "kind": "Model",
+      "displayName": "Profanity detection bundle",
+      "capability": { "name": "Profanity beep", "description": "TinyToxic ONNX detector + badword list + vocab" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "profanity/profanity.zip"
+      },
+      "installPath": "profanity",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "sizeBytes": 0,
+      "gates": ["Tts.ProfanityBeep"],
+      "extractArchive": true
+    },
+    {
+      "id": "opennlp-bundle",
+      "kind": "Model",
+      "displayName": "OpenNLP sentence + POS bundle",
+      "capability": { "name": "Sentence detection", "description": "OpenNLP models for sentence segmentation and POS tagging" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "opennlp/opennlp.zip"
+      },
+      "installPath": "opennlp",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "sizeBytes": 0,
+      "gates": ["Tts.Kokoro", "Tts.Qwen3"],
+      "extractArchive": true
     },
     {
       "id": "kokoro-model",
@@ -137,14 +194,14 @@
         "revision": "v1.0.0",
         "path": "kokoro/model_slim.onnx"
       },
-      "installPath": "models/kokoro/model_slim.onnx",
+      "installPath": "kokoro/model_slim.onnx",
       "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "sizeBytes": 0,
       "gates": ["Tts.Kokoro"],
       "extractArchive": false
     },
     {
-      "id": "kokoro-default-voices",
+      "id": "kokoro-voices",
       "kind": "UserContentDefault",
       "displayName": "Kokoro default voice pack",
       "capability": { "name": "Avatar voice (Kokoro)", "description": "Stock voices that ship with Kokoro" },
@@ -156,7 +213,7 @@
         "revision": "v1.0.0",
         "path": "kokoro/voices-default.zip"
       },
-      "installPath": "models/kokoro/voices",
+      "installPath": "kokoro/voices",
       "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "sizeBytes": 0,
       "gates": ["Tts.Kokoro"],
@@ -176,17 +233,36 @@
         "revision": "v1.0.0",
         "path": "kokoro/phoneme_to_id.txt"
       },
-      "installPath": "models/kokoro/phoneme_to_id.txt",
+      "installPath": "kokoro/phoneme_to_id.txt",
       "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "sizeBytes": 0,
       "gates": ["Tts.Kokoro"],
       "extractArchive": false
     },
     {
-      "id": "qwen3-tts",
+      "id": "kokoro-lexicons",
       "kind": "Model",
-      "displayName": "Qwen3 TTS model",
-      "capability": { "name": "Avatar voice (Qwen3)", "description": "Higher-fidelity TTS engine for the BuildWithIt profile" },
+      "displayName": "Kokoro phonemizer lexicons",
+      "capability": { "name": "Avatar voice (Kokoro)", "description": "US/GB gold and silver phoneme lexicons consumed by the G2P pipeline" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "kokoro/lexicons.zip"
+      },
+      "installPath": "kokoro/lexicons",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "sizeBytes": 0,
+      "gates": ["Tts.Kokoro"],
+      "extractArchive": true
+    },
+    {
+      "id": "qwen3-tts-bundle",
+      "kind": "Model",
+      "displayName": "Qwen3 TTS model bundle",
+      "capability": { "name": "Avatar voice (Qwen3)", "description": "Higher-fidelity TTS engine for the BuildWithIt profile (talker, predictor, decoder, embeddings, config, tokenizer, speakers)" },
       "profileTier": "BuildWithIt",
       "required": false,
       "source": {
@@ -195,7 +271,7 @@
         "revision": "v1.0.0",
         "path": "qwen3-tts/qwen3-tts.zip"
       },
-      "installPath": "models/qwen3-tts",
+      "installPath": "qwen3-tts",
       "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "sizeBytes": 0,
       "gates": ["Tts.Qwen3"],
@@ -214,14 +290,14 @@
         "revision": "v1.0.0",
         "path": "rvc/vec-768-layer-12.onnx"
       },
-      "installPath": "models/rvc/vec-768-layer-12.onnx",
+      "installPath": "rvc/vec-768-layer-12.onnx",
       "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "sizeBytes": 0,
       "gates": ["Tts.Rvc"],
       "extractArchive": false
     },
     {
-      "id": "rvc-crepe",
+      "id": "rvc-crepe-tiny",
       "kind": "Model",
       "displayName": "RVC CREPE pitch detector",
       "capability": { "name": "Voice cloning (RVC)", "description": "Pitch detector used by RVC" },
@@ -233,14 +309,33 @@
         "revision": "v1.0.0",
         "path": "rvc/crepe_tiny.onnx"
       },
-      "installPath": "models/rvc/crepe_tiny.onnx",
+      "installPath": "rvc/crepe_tiny.onnx",
       "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "sizeBytes": 0,
       "gates": ["Tts.Rvc"],
       "extractArchive": false
     },
     {
-      "id": "rvc-default-voices",
+      "id": "rvc-rmvpe",
+      "kind": "Model",
+      "displayName": "RVC RMVPE pitch estimator",
+      "capability": { "name": "Voice cloning (RVC)", "description": "RMVPE ONNX pitch estimator used by the RVC filter" },
+      "profileTier": "StreamWithIt",
+      "required": false,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "rvc/rmvpe.onnx"
+      },
+      "installPath": "rvc/rmvpe.onnx",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "sizeBytes": 0,
+      "gates": ["Tts.Rvc"],
+      "extractArchive": false
+    },
+    {
+      "id": "rvc-voices",
       "kind": "UserContentDefault",
       "displayName": "RVC default voice pack",
       "capability": { "name": "Voice cloning (RVC)", "description": "Stock voices for RVC voice conversion" },
@@ -252,7 +347,7 @@
         "revision": "v1.0.0",
         "path": "rvc/voices-default.zip"
       },
-      "installPath": "models/rvc/voices",
+      "installPath": "rvc/voices",
       "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "sizeBytes": 0,
       "gates": ["Tts.Rvc"],
@@ -260,65 +355,103 @@
       "userAssetCategory": "RvcVoice"
     },
     {
-      "id": "ctc-aligner",
+      "id": "wav2vec2-ctc-aligner",
       "kind": "Model",
-      "displayName": "CTC wav2vec2 forced aligner",
-      "capability": { "name": "Subtitle alignment", "description": "Word-level timing for subtitles via wav2vec2 CTC" },
-      "profileTier": "TryItOut",
-      "required": true,
-      "source": {
-        "type": "HuggingFace",
-        "repo": "fagenorn/persona-engine-assets",
-        "revision": "v1.0.0",
-        "path": "wav2vec2/wav2vec2.zip"
-      },
-      "installPath": "models/wav2vec2",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
-      "gates": ["Tts.Kokoro", "Tts.Qwen3"],
-      "extractArchive": true
-    },
-    {
-      "id": "live2d-default-avatar",
-      "kind": "UserContentDefault",
-      "displayName": "Live2D default avatar",
-      "capability": { "name": "Avatar (Live2D)", "description": "Default Live2D avatar bundled with the app" },
-      "profileTier": "TryItOut",
-      "required": true,
-      "source": {
-        "type": "HuggingFace",
-        "repo": "fagenorn/persona-engine-assets",
-        "revision": "v1.0.0",
-        "path": "live2d/default-avatar.zip"
-      },
-      "installPath": "live2d",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
-      "gates": [],
-      "extractArchive": true,
-      "userAssetCategory": "Live2DModel"
-    },
-    {
-      "id": "audio2face-solver",
-      "kind": "Model",
-      "displayName": "Audio2Face streaming solver",
-      "capability": { "name": "Lip-sync (Audio2Face)", "description": "NVIDIA Audio2Face lip-sync solver" },
+      "displayName": "wav2vec2 CTC forced aligner",
+      "capability": { "name": "Subtitle alignment", "description": "wav2vec2 CTC model + vocab used for word-level forced alignment" },
       "profileTier": "BuildWithIt",
       "required": false,
       "source": {
         "type": "HuggingFace",
         "repo": "fagenorn/persona-engine-assets",
         "revision": "v1.0.0",
-        "path": "audio2face/a2f.zip"
+        "path": "wav2vec2/wav2vec2.zip"
       },
-      "installPath": "models/audio2face",
+      "installPath": "wav2vec2",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "sizeBytes": 0,
+      "gates": ["Tts.Qwen3"],
+      "extractArchive": true
+    },
+    {
+      "id": "live2d-aria",
+      "kind": "UserContentDefault",
+      "displayName": "Live2D Aria avatar",
+      "capability": { "name": "Avatar (Live2D)", "description": "Default Aria Live2D avatar bundled with the app" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "live2d/aria.zip"
+      },
+      "installPath": "live2d/aria",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "sizeBytes": 0,
+      "gates": ["Live2D.Avatar"],
+      "extractArchive": true,
+      "userAssetCategory": "Live2DModel"
+    },
+    {
+      "id": "audio2face-bundle",
+      "kind": "Model",
+      "displayName": "Audio2Face streaming solver bundle",
+      "capability": { "name": "Lip-sync (Audio2Face)", "description": "NVIDIA Audio2Face network plus per-identity skin/model data (Claire, James, Mark)" },
+      "profileTier": "BuildWithIt",
+      "required": false,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "audio2face/audio2face.zip"
+      },
+      "installPath": "audio2face",
       "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "sizeBytes": 0,
       "gates": ["Tts.Audio2Face"],
       "extractArchive": true
     },
     {
-      "id": "vision-llm-stub",
+      "id": "mdx-bundle",
+      "kind": "Model",
+      "displayName": "MDX music source separation models",
+      "capability": { "name": "Music source separation (MDX)", "description": "ONNX UVR-MDX vocal/instrument/dereverb models" },
+      "profileTier": "BuildWithIt",
+      "required": false,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "mdx/mdx.zip"
+      },
+      "installPath": "mdx",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "sizeBytes": 0,
+      "gates": ["Music.SourceSeparation"],
+      "extractArchive": true
+    },
+    {
+      "id": "mel-band-roformer",
+      "kind": "Model",
+      "displayName": "Mel-band RoFormer separator",
+      "capability": { "name": "Music source separation (MelBandRoformer)", "description": "Streaming source separation ONNX model" },
+      "profileTier": "BuildWithIt",
+      "required": false,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "mel_band_roformer/melbandroformer_optimized.onnx"
+      },
+      "installPath": "mel_band_roformer/melbandroformer_optimized.onnx",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "sizeBytes": 0,
+      "gates": ["Music.SourceSeparation"],
+      "extractArchive": false
+    },
+    {
+      "id": "vision-llm-marker",
       "kind": "Resource",
       "displayName": "Vision feature gate (endpoint-driven, no model file)",
       "capability": { "name": "Vision LLM", "description": "Marker file enabling the vision pipeline" },
@@ -330,7 +463,7 @@
         "revision": "v1.0.0",
         "path": "vision/MARKER"
       },
-      "installPath": "models/vision/MARKER",
+      "installPath": "vision/MARKER",
       "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "sizeBytes": 0,
       "gates": ["Llm.Vision"],

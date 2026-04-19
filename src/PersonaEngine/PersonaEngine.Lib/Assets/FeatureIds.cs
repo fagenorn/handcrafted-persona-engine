@@ -12,6 +12,8 @@ public static class FeatureIds
     public static readonly FeatureId Audio2Face = new("Tts.Audio2Face");
     public static readonly FeatureId VisionCapture = new("Vision.ScreenCapture");
     public static readonly FeatureId ProfanityFilter = new("Tts.ProfanityBeep");
+    public static readonly FeatureId Live2DAvatar = new("Live2D.Avatar");
+    public static readonly FeatureId MusicSourceSeparation = new("Music.SourceSeparation");
 
     public static IEnumerable<FeatureId> All =>
         typeof(FeatureIds)
