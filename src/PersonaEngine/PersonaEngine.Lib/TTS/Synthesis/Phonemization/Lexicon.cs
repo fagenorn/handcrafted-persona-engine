@@ -115,11 +115,9 @@ public partial class Lexicon : ILexicon, IDisposable
 
             // Construct paths
             var lexiconPrefix = british ? "gb" : "us";
-            var primaryPath = Path.Combine(ttsConfig.ModelDirectory, $"{lexiconPrefix}_gold.json");
-            var secondaryPath = Path.Combine(
-                ttsConfig.ModelDirectory,
-                $"{lexiconPrefix}_silver.json"
-            );
+            var lexiconsRoot = Path.Combine(ttsConfig.ModelDirectory, "kokoro", "lexicons");
+            var primaryPath = Path.Combine(lexiconsRoot, $"{lexiconPrefix}_gold.json");
+            var secondaryPath = Path.Combine(lexiconsRoot, $"{lexiconPrefix}_silver.json");
 
             // Use JsonSerializer with custom options
             var options = new JsonSerializerOptions

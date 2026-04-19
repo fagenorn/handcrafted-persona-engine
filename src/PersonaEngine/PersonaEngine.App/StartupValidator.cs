@@ -180,12 +180,7 @@ internal static class StartupValidator
     private static void CheckPrompt(ILogger log, IConfiguration config, ref int warnings)
     {
         var promptFile = config["Config:ConversationContext:SystemPromptFile"] ?? "personality.txt";
-        var fullPath = Path.Combine(
-            Directory.GetCurrentDirectory(),
-            "Resources",
-            "Prompts",
-            promptFile
-        );
+        var fullPath = Path.Combine(AppContext.BaseDirectory, "Resources", "Prompts", promptFile);
 
         if (File.Exists(fullPath))
         {

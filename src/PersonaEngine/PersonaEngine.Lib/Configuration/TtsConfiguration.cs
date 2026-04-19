@@ -11,7 +11,7 @@ public record TtsConfiguration
     public string ActiveEngine { get; init; } = "kokoro";
 
     public string ModelDirectory { get; init; } =
-        Path.Combine(Directory.GetCurrentDirectory(), "Resources", "Models");
+        Path.Combine(AppContext.BaseDirectory, "Resources");
 
     public string EspeakPath { get; init; } = "espeak-ng";
 

@@ -2,7 +2,7 @@ namespace PersonaEngine.Lib.Configuration;
 
 public record Live2DOptions
 {
-    public string ModelPath { get; set; } = "Resources/Live2D/Avatars";
+    public string ModelPath { get; set; } = "Resources/live2d";
 
     public string ModelName { get; set; } = "angel";
 
