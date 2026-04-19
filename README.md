@@ -112,6 +112,14 @@ PersonaEngine.App.exe --reinstall
 | `--offline` | Refuse to touch the network — fail fast if assets are missing |
 | `--non-interactive` | Treat any prompt as a fatal error (use with `--profile=...`) |
 
+### Upgrading from a pre-installer build
+
+The asset directory layout changed when the in-app installer landed. Your
+existing `Resources/Models/` and `Resources/Live2D/Avatars/` files from older
+builds are ignored — the installer will re-download into the new locations on
+first launch. Free up ~16 GB before you start, and feel free to delete the old
+folders once the bootstrapper finishes.
+
 ### Manual / air-gapped install
 
 If you cannot use the in-app bootstrapper (offline machine, custom model
