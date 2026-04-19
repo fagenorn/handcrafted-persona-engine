@@ -18,5 +18,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\PersonaEngine.Lib\PersonaEngine.Lib.csproj" />
+    <ProjectReference Include="..\PersonaEngine.Lib.Bootstrapper\PersonaEngine.Lib.Bootstrapper.csproj" />
   </ItemGroup>
 </Project>
