@@ -1,5 +1,6 @@
 using Hexa.NET.ImGui;
 using Microsoft.Extensions.Options;
+using PersonaEngine.Lib.Assets;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Shared;
@@ -7,47 +8,63 @@ using PersonaEngine.Lib.UI.ControlPanel.Panels.Shared;
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Avatar.Sections;
 
 /// <summary>
-///     Live2D model picker card. Scans <see cref="Live2DOptions.ModelPath" /> for
-///     subdirectories containing any <c>*.model3.json</c> file and presents them as a
-///     combo via <see cref="ScannedNamePicker" />. The saved model is always shown
+///     Live2D model picker card. Sources the available characters from
+///     <see cref="IAssetCatalog.GetUserAssets" /> for <see cref="UserAssetType.Live2DModel" />,
+///     so bundled defaults and user-added models surface uniformly. Subscribes to
+///     <see cref="IAssetCatalog.Changed" /> to refresh the picker live when the user
+///     drops a new model into the live2d folder. The saved model is always shown
 ///     selected, even if it's not on disk — in that case a muted warning appears so
 ///     the user is never silently moved off their character.
 /// </summary>
 public sealed class ModelSection : IDisposable
 {
     private readonly IConfigWriter _configWriter;
+    private readonly IAssetCatalog _catalog;
     private readonly IDisposable? _changeSubscription;
     private readonly ScannedNamePicker _picker;
 
     private Live2DOptions _live2d;
     private bool _initialized;
 
-    public ModelSection(IOptionsMonitor<Live2DOptions> monitor, IConfigWriter configWriter)
+    public ModelSection(
+        IOptionsMonitor<Live2DOptions> monitor,
+        IConfigWriter configWriter,
+        IAssetCatalog catalog
+    )
     {
         _configWriter = configWriter;
+        _catalog = catalog;
         _live2d = monitor.CurrentValue;
-        _picker = new ScannedNamePicker(() => ScanModels(_live2d.ModelPath));
+        _picker = new ScannedNamePicker(ScanModels);
 
         _changeSubscription = monitor.OnChange(
             (updated, _) =>
             {
-                var folderChanged = !string.Equals(
-                    _live2d.ModelPath,
-                    updated.ModelPath,
-                    StringComparison.Ordinal
-                );
                 _live2d = updated;
                 if (!_initialized)
                     return;
-                if (folderChanged)
-                    _picker.Refresh(_live2d.ModelName);
-                else
-                    _picker.RecomputeMissing(_live2d.ModelName);
+                _picker.RecomputeMissing(_live2d.ModelName);
             }
         );
+
+        // Live refresh: catalog watches the live2d directory and fires Changed
+        // when content changes, so newly-dropped models surface without UI restart.
+        _catalog.Changed += OnCatalogChanged;
     }
 
-    public void Dispose() => _changeSubscription?.Dispose();
+    public void Dispose()
+    {
+        _catalog.Changed -= OnCatalogChanged;
+        _changeSubscription?.Dispose();
+    }
+
+    private void OnCatalogChanged(object? sender, AssetCatalogChangedEventArgs e)
+    {
+        if (_initialized)
+        {
+            _picker.Refresh(_live2d.ModelName);
+        }
+    }
 
     public void Render(float dt)
     {
@@ -126,17 +143,13 @@ public sealed class ModelSection : IDisposable
 
     // ── Scan ──────────────────────────────────────────────────────────────────
 
-    private static IEnumerable<string> ScanModels(string folder)
+    private IEnumerable<string> ScanModels()
     {
-        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
-            return [];
-
-        return Directory
-            .EnumerateDirectories(folder)
-            .Where(d => Directory.EnumerateFiles(d, "*.model3.json").Any())
-            .Select(d => Path.GetFileName(d)!)
-            .Where(n => !string.IsNullOrEmpty(n))
-            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        // Catalog already returns alphabetised entries scoped to the Live2D root,
+        // so no extra sort/filter needed here.
+        return _catalog
+            .GetUserAssets(UserAssetType.Live2DModel)
+            .Select(a => a.DisplayName)
+            .Where(n => !string.IsNullOrEmpty(n));
     }
 }
