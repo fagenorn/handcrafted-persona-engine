@@ -132,6 +132,9 @@ internal static class Program
         // Run the asset bootstrapper before any subsystem that depends on models
         // or native runtimes. On failure we exit with a non-zero code so launchers
         // can surface the error; on success we continue into the main DI graph.
+        // Bootstrap runs before IConfiguration is built, so it sees only CLI args
+        // and the embedded manifest — any future bootstrap setting must be a CLI
+        // flag, not an appsettings.json entry.
         var parsedArgs = CommandLineArgs.Parse(args);
 
         var bootstrapServices = new ServiceCollection();

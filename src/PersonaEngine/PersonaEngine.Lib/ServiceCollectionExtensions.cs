@@ -92,14 +92,17 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<AvatarAppConfig>(configuration.GetSection("Config"));
 
-        // IAssetCatalog must be registered before AddConversation so subsystem gates
-        // (RVC, Vision, Audio2Face) can probe IsFeatureEnabled during DI registration.
-        services.AddSingleton<InstallManifest>(_ => ManifestLoader.LoadEmbedded());
-        services.AddSingleton<IAssetCatalog>(sp =>
-            AssetCatalogFactory.Build(sp.GetRequiredService<InstallManifest>())
-        );
+        // Build the manifest + catalog eagerly so AddConversation can gate optional
+        // subsystems (RVC, Vision, Audio2Face) without spinning up a temporary
+        // ServiceProvider just to query IsFeatureEnabled. Registering pre-built
+        // instances also avoids double-construction (and double FileSystemWatcher
+        // allocation) that would otherwise occur when a probe provider is disposed.
+        var manifest = ManifestLoader.LoadEmbedded();
+        var catalog = AssetCatalogFactory.Build(manifest);
+        services.AddSingleton<InstallManifest>(manifest);
+        services.AddSingleton<IAssetCatalog>(catalog);
 
-        services.AddConversation(configuration, configureKernel);
+        services.AddConversation(configuration, catalog, configureKernel);
         services.AddUI(configuration);
         services.AddLive2D(configuration);
         services.AddSystemAudioPlayer();
@@ -115,41 +118,39 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddConversation(
         this IServiceCollection services,
         IConfiguration configuration,
+        IAssetCatalog catalog,
         Action<IKernelBuilder>? configureKernel = null
     )
     {
         services.AddASRSystem(configuration);
         services.AddTTSSystem(configuration);
 
-        // Probe IAssetCatalog (registered earlier in AddApp) to gate optional
-        // subsystems whose ONNX models / runtime DLLs are downloaded by the
-        // bootstrapper. Skipping registration here keeps startup clean when a
-        // tier was deselected — no missing-file exceptions, no half-wired DI.
-        // The probe provider is disposed before the real provider is built,
-        // so its singleton instances do not leak into the app graph.
-        using (var probe = services.BuildServiceProvider())
+        // Gate optional subsystems whose ONNX models / runtime DLLs are downloaded
+        // by the bootstrapper. Skipping registration here keeps startup clean when
+        // a tier was deselected — no missing-file exceptions, no half-wired DI.
+        //
+        // IsFeatureEnabled is evaluated once at DI build time. Adding a tier at
+        // runtime (post-startup install) requires an app restart to wire RVC /
+        // Vision / Audio2Face into the DI graph. UI-side asset enumeration via
+        // IAssetCatalog.Changed is live-refreshed; DI gating is not.
+        if (catalog.IsFeatureEnabled(FeatureIds.VoiceCloning))
         {
-            var catalog = probe.GetRequiredService<IAssetCatalog>();
+            services.AddRVC(configuration);
+        }
 
-            if (catalog.IsFeatureEnabled(FeatureIds.VoiceCloning))
-            {
-                services.AddRVC(configuration);
-            }
-
-            if (catalog.IsFeatureEnabled(FeatureIds.Audio2Face))
-            {
-                services.AddSingleton<ILipSyncProcessor, Audio2FaceLipSyncProcessor>();
-            }
+        if (catalog.IsFeatureEnabled(FeatureIds.Audio2Face))
+        {
+            services.AddSingleton<ILipSyncProcessor, Audio2FaceLipSyncProcessor>();
+        }
 
 #pragma warning disable SKEXP0010
-            services.AddLLM(configuration, configureKernel);
+        services.AddLLM(configuration, configureKernel);
 #pragma warning restore SKEXP0010
-            services.AddChatEngineSystem(configuration);
+        services.AddChatEngineSystem(configuration);
 
-            if (catalog.IsFeatureEnabled(FeatureIds.LlmVision))
-            {
-                services.AddVisualChatEngine(configuration);
-            }
+        if (catalog.IsFeatureEnabled(FeatureIds.LlmVision))
+        {
+            services.AddVisualChatEngine();
         }
 
         services.AddConversationPipeline(configuration);
@@ -273,10 +274,7 @@ public static class ServiceCollectionExtensions
     ///     ONNX-backed <see cref="WindowCaptureService" /> and the vision LLM client are
     ///     only wired when the bootstrapper installed the vision tier.
     /// </summary>
-    public static IServiceCollection AddVisualChatEngine(
-        this IServiceCollection services,
-        IConfiguration configuration
-    )
+    public static IServiceCollection AddVisualChatEngine(this IServiceCollection services)
     {
         services.AddSingleton<IVisualChatEngine, VisualQASemanticKernelChatEngine>();
         services.AddSingleton<IVisualQAService, VisualQAService>();

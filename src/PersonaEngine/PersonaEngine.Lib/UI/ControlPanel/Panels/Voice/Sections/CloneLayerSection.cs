@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Assets;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Audition;
+using PersonaEngine.Lib.UI.ControlPanel.Threading;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Sections;
 
@@ -21,6 +22,7 @@ public sealed class CloneLayerSection : IDisposable
     private readonly IAssetCatalog _catalog;
     private readonly IVoiceAuditionService _audition;
     private readonly IConfigWriter _configWriter;
+    private readonly IUiThreadDispatcher _uiDispatcher;
 
     private RVCFilterOptions _rvc;
     private readonly IDisposable? _changeSubscription;
@@ -48,13 +50,15 @@ public sealed class CloneLayerSection : IDisposable
         IOptionsMonitor<RVCFilterOptions> rvcOptions,
         IAssetCatalog catalog,
         IVoiceAuditionService audition,
-        IConfigWriter configWriter
+        IConfigWriter configWriter,
+        IUiThreadDispatcher uiDispatcher
     )
     {
         _ttsOptions = ttsOptions;
         _catalog = catalog;
         _audition = audition;
         _configWriter = configWriter;
+        _uiDispatcher = uiDispatcher;
 
         _rvc = rvcOptions.CurrentValue;
         _renderBodyAction = () => RenderBody(_bodyDt, _bodyMode);
@@ -70,7 +74,11 @@ public sealed class CloneLayerSection : IDisposable
     }
 
     private void OnCatalogChanged(object? sender, AssetCatalogChangedEventArgs e) =>
-        _rvcVoicesDirty = true;
+        // AssetCatalog.Changed fires from a thread-pool thread (UserContentWatcher
+        // debounce). Marshal the dirty-flag set onto the UI thread so the flag
+        // mutation, the render-time check, and the rebuild all happen on one
+        // thread — eliminates the lost-update race.
+        _uiDispatcher.Post(() => _rvcVoicesDirty = true);
 
     public void Render(float dt, VoiceMode mode)
     {

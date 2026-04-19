@@ -38,7 +38,7 @@ public static class ManifestLoader
                 .GetManifestResourceNames()
                 .FirstOrDefault(n => n.EndsWith("install-manifest.json", StringComparison.Ordinal))
             ?? throw new InvalidOperationException(
-                "Embedded resource install-manifest.json not found in PersonaEngine.Lib.Bootstrapper assembly."
+                "Embedded resource install-manifest.json not found in PersonaEngine.Lib assembly."
             );
 
         using var stream = assembly.GetManifestResourceStream(resourceName)!;

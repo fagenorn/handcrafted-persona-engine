@@ -4,6 +4,7 @@ using PersonaEngine.Lib.Assets;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Shared;
+using PersonaEngine.Lib.UI.ControlPanel.Threading;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Avatar.Sections;
 
@@ -20,6 +21,7 @@ public sealed class ModelSection : IDisposable
 {
     private readonly IConfigWriter _configWriter;
     private readonly IAssetCatalog _catalog;
+    private readonly IUiThreadDispatcher _uiDispatcher;
     private readonly IDisposable? _changeSubscription;
     private readonly ScannedNamePicker _picker;
 
@@ -29,11 +31,13 @@ public sealed class ModelSection : IDisposable
     public ModelSection(
         IOptionsMonitor<Live2DOptions> monitor,
         IConfigWriter configWriter,
-        IAssetCatalog catalog
+        IAssetCatalog catalog,
+        IUiThreadDispatcher uiDispatcher
     )
     {
         _configWriter = configWriter;
         _catalog = catalog;
+        _uiDispatcher = uiDispatcher;
         _live2d = monitor.CurrentValue;
         _picker = new ScannedNamePicker(ScanModels);
 
@@ -58,13 +62,17 @@ public sealed class ModelSection : IDisposable
         _changeSubscription?.Dispose();
     }
 
-    private void OnCatalogChanged(object? sender, AssetCatalogChangedEventArgs e)
-    {
-        if (_initialized)
+    private void OnCatalogChanged(object? sender, AssetCatalogChangedEventArgs e) =>
+        // AssetCatalog.Changed fires from a thread-pool thread (UserContentWatcher
+        // debounce). Marshal the picker refresh onto the UI thread so it doesn't
+        // race the ImGui render loop reading _picker state.
+        _uiDispatcher.Post(() =>
         {
-            _picker.Refresh(_live2d.ModelName);
-        }
-    }
+            if (_initialized)
+            {
+                _picker.Refresh(_live2d.ModelName);
+            }
+        });
 
     public void Render(float dt)
     {
