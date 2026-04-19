@@ -44,9 +44,31 @@ public class ZipExtractorTests : IDisposable
             CancellationToken.None
         );
 
-        File.Exists(Path.Combine(_tempDir, "cudart64_12.dll")).Should().BeTrue();
-        File.Exists(Path.Combine(_tempDir, "cublas64_12.dll")).Should().BeFalse();
-        File.Exists(Path.Combine(_tempDir, "README.md")).Should().BeFalse();
+        File.Exists(Path.Combine(_tempDir, "bin", "cudart64_12.dll")).Should().BeTrue();
+        File.Exists(Path.Combine(_tempDir, "bin", "cublas64_12.dll")).Should().BeFalse();
+        File.Exists(Path.Combine(_tempDir, "doc", "README.md")).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Extract_preserves_nested_directory_structure()
+    {
+        var zipBytes = BuildZip(
+            new()
+            {
+                ["embeddings/text_embedding_projected.npy"] = new byte[] { 0xAA, 0xBB },
+                ["speakers/ryan/voice.npy"] = new byte[] { 0xCC, 0xDD },
+                ["model_profile.json"] = new byte[] { 0xEE },
+            }
+        );
+
+        await using var zip = new MemoryStream(zipBytes);
+        await ZipExtractor.ExtractAsync(zip, wantedEntries: null, _tempDir, CancellationToken.None);
+
+        File.Exists(Path.Combine(_tempDir, "embeddings", "text_embedding_projected.npy"))
+            .Should()
+            .BeTrue();
+        File.Exists(Path.Combine(_tempDir, "speakers", "ryan", "voice.npy")).Should().BeTrue();
+        File.Exists(Path.Combine(_tempDir, "model_profile.json")).Should().BeTrue();
     }
 
     [Fact]

@@ -25,9 +25,14 @@ public static class ZipExtractor
             )
                 continue;
 
+            // Skip pure directory entries (Name is empty when FullName ends with '/').
+            if (string.IsNullOrEmpty(entry.Name))
+                continue;
+
             // Reject any raw entry path that contains path-traversal segments.
-            // We check FullName before stripping because Path.GetFileName would silently
-            // neutralise "../../evil.txt" → "evil.txt", hiding the malicious intent.
+            // We check FullName before resolving because the resolved path could
+            // happen to land inside fullTarget by coincidence even when the
+            // archive author was being malicious.
             var normalised = entry.FullName.Replace('\\', '/');
             foreach (var segment in normalised.Split('/'))
             {
@@ -37,14 +42,14 @@ public static class ZipExtractor
                     );
             }
 
-            // Strip directory prefix — write the file flat into targetDirectory.
-            var fileName = Path.GetFileName(entry.FullName);
-            if (string.IsNullOrEmpty(fileName))
-                continue; // pure directory entries
+            // Preserve the in-zip directory structure under fullTarget so bundles
+            // like qwen3-tts (embeddings/, speakers/) and wav2vec2 (onnx/) land
+            // at the paths their runtime consumers expect.
+            var dest = Path.GetFullPath(Path.Combine(fullTarget, entry.FullName));
 
-            var dest = Path.GetFullPath(Path.Combine(fullTarget, fileName));
-
-            // Secondary guard: resolved destination must still be inside the target directory.
+            // Secondary guard: resolved destination must still be inside the
+            // target directory. Catches any traversal we missed (e.g. archives
+            // that use absolute Windows paths or unusual separator combos).
             if (
                 !dest.StartsWith(fullTarget + Path.DirectorySeparatorChar, StringComparison.Ordinal)
                 && dest != fullTarget
@@ -52,6 +57,8 @@ public static class ZipExtractor
                 throw new InvalidOperationException(
                     $"Refusing to extract '{entry.FullName}': resolved path '{dest}' would escape target directory (path traversal / zip slip)."
                 );
+
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
 
             var partial = dest + ".partial";
             await using (var src = entry.Open())
