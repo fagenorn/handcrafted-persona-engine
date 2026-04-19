@@ -84,19 +84,41 @@ It integrates seamlessly into streaming software like OBS Studio using Spout for
 
 ## <a id="installation-guide"></a>🚀 Getting Started: Installation Guide
 
+> [!IMPORTANT]
+> **Requires an NVIDIA GPU with CUDA support (Windows x64).** ASR, TTS, and RVC
+> all run on CUDA via ONNX Runtime — CPU/AMD/Intel are not supported.
 
-➡️ **Please follow the detailed [Installation and Setup Guide](./INSTALLATION.md) to install prerequisites, download models, configure, and run the engine.** ⬅️
+1. Download the latest `PersonaEngine-<version>-win-x64.zip` from
+   [Releases](https://github.com/fagenorn/handcrafted-persona-engine/releases).
+2. Extract anywhere with at least 16 GB free disk space. Models will be
+   downloaded into a `Resources/` folder next to `PersonaEngine.App.exe`.
+3. Double-click `PersonaEngine.App.exe`.
+4. On first run, pick an install profile in the CLI prompt. Required models and
+   the NVIDIA runtime are downloaded, hash-verified, and installed automatically.
 
-**Key Requirements Covered:**
-* **System:** **Mandatory NVIDIA GPU with CUDA support is required** for core features (ASR, TTS, RVC).
-* **Software:** .NET Runtime, espeak-ng.
-* **AI Models:** Downloading Whisper ASR models.
-* **Live2D:** Setting up your Live2D model (using Aria or your own).
-* **(Optional) RVC:** Real-time Voice Cloning setup.
-* **LLM:** Configuring access to your chosen LLM (API keys, endpoints).
-* **Streaming:** Setting up Spout output for OBS/other software.
-* **Configuration:** Understanding `appsettings.json`.
-* **Troubleshooting:** Common issues and solutions.
+### Re-run the picker
+
+```bash
+PersonaEngine.App.exe --reinstall
+```
+
+### Other flags
+
+| Flag | Purpose |
+|------|---------|
+| `--profile=try\|stream\|build` | Skip the picker, use the named profile |
+| `--repair` | Re-download anything that fails verification |
+| `--verify` | Re-hash installed assets, report mismatches without re-downloading |
+| `--offline` | Refuse to touch the network — fail fast if assets are missing |
+| `--non-interactive` | Treat any prompt as a fatal error (use with `--profile=...`) |
+
+### Manual / air-gapped install
+
+If you cannot use the in-app bootstrapper (offline machine, custom model
+layout, building from source), the legacy
+[Installation and Setup Guide](./INSTALLATION.md) covers manual model downloads,
+CUDA/cuDNN setup, espeak-ng, LLM configuration, Spout, and `appsettings.json`.
+The bootstrapper is the recommended path for normal installs.
 
 ## <a id="features"></a>✨ Features Galore!
 
