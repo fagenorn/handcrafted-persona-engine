@@ -6,6 +6,17 @@
 <p>Let's get your Live2D avatar ready for Persona Engine!</p>
 </div>
 
+> [!WARNING]
+> **This guide is being deprecated.** Persona Engine now ships with an in-app
+> bootstrapper that downloads, verifies (SHA-256), and installs all required
+> models and native runtimes from the canonical asset manifest on first launch.
+> The manual model-download steps below are retained for reference and
+> air-gapped installs only — for a normal install you should run the released
+> binary and let the bootstrapper handle setup.
+>
+> If you hit a bootstrap problem, please open an issue with the bootstrap log
+> rather than working around it via the manual flow described here.
+
 > [!NOTE]
 > For an overview of the project, its features, and use cases, please see the main [README.md](./README.md).
 

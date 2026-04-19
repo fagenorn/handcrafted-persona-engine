@@ -29,10 +29,11 @@ if (-not (Test-Path -LiteralPath $AssetsRoot)) {
 
 $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json -Depth 32
 
-$hashed     = 0
-$updated    = 0
-$missing    = @()
-$totalBytes = [int64]0
+$hashed      = 0
+$updated     = 0
+$wouldUpdate = 0
+$missing     = @()
+$totalBytes  = [int64]0
 
 foreach ($asset in $manifest.assets) {
     if ($asset.source.type -ne 'HuggingFace') { continue }
@@ -52,8 +53,13 @@ foreach ($asset in $manifest.assets) {
         if ($PSCmdlet.ShouldProcess("$($asset.id) ($local)", "update sha256 + sizeBytes")) {
             $asset.sha256    = $hash
             $asset.sizeBytes = $size
+            $updated++
         }
-        $updated++
+        else {
+            # In -WhatIf mode ShouldProcess returns false; track preview count
+            # separately so the "Updated" tally only reflects real mutations.
+            $wouldUpdate++
+        }
     }
 }
 
@@ -74,7 +80,10 @@ if ($PSCmdlet.ShouldProcess($ManifestPath, "write updated manifest")) {
 $mb = [Math]::Round($totalBytes / 1MB, 2)
 Write-Host ""
 Write-Host "Hashed   : $hashed asset(s) ($mb MB total)" -ForegroundColor Green
-Write-Host "Updated  : $updated asset(s) in $ManifestPath" -ForegroundColor Green
 if ($WhatIfPreference) {
+    Write-Host "Would update : $wouldUpdate asset(s) in $ManifestPath" -ForegroundColor Cyan
     Write-Host "(WhatIf) No file was written." -ForegroundColor Cyan
+}
+else {
+    Write-Host "Updated  : $updated asset(s) in $ManifestPath" -ForegroundColor Green
 }
