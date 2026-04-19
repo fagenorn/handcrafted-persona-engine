@@ -120,11 +120,37 @@ public static class ServiceCollectionExtensions
     {
         services.AddASRSystem(configuration);
         services.AddTTSSystem(configuration);
-        services.AddRVC(configuration);
+
+        // Probe IAssetCatalog (registered earlier in AddApp) to gate optional
+        // subsystems whose ONNX models / runtime DLLs are downloaded by the
+        // bootstrapper. Skipping registration here keeps startup clean when a
+        // tier was deselected — no missing-file exceptions, no half-wired DI.
+        // The probe provider is disposed before the real provider is built,
+        // so its singleton instances do not leak into the app graph.
+        using (var probe = services.BuildServiceProvider())
+        {
+            var catalog = probe.GetRequiredService<IAssetCatalog>();
+
+            if (catalog.IsFeatureEnabled(FeatureIds.VoiceCloning))
+            {
+                services.AddRVC(configuration);
+            }
+
+            if (catalog.IsFeatureEnabled(FeatureIds.Audio2Face))
+            {
+                services.AddSingleton<ILipSyncProcessor, Audio2FaceLipSyncProcessor>();
+            }
+
 #pragma warning disable SKEXP0010
-        services.AddLLM(configuration, configureKernel);
+            services.AddLLM(configuration, configureKernel);
 #pragma warning restore SKEXP0010
-        services.AddChatEngineSystem(configuration);
+            services.AddChatEngineSystem(configuration);
+
+            if (catalog.IsFeatureEnabled(FeatureIds.LlmVision))
+            {
+                services.AddVisualChatEngine(configuration);
+            }
+        }
 
         services.AddConversationPipeline(configuration);
 
@@ -237,6 +263,21 @@ public static class ServiceCollectionExtensions
         );
 
         services.AddSingleton<IChatEngine, SemanticKernelChatEngine>();
+
+        return services;
+    }
+
+    /// <summary>
+    ///     Registers the optional vision/screen-capture services. Gated by
+    ///     <see cref="FeatureIds.LlmVision" /> in <see cref="AddConversation" /> so the
+    ///     ONNX-backed <see cref="WindowCaptureService" /> and the vision LLM client are
+    ///     only wired when the bootstrapper installed the vision tier.
+    /// </summary>
+    public static IServiceCollection AddVisualChatEngine(
+        this IServiceCollection services,
+        IConfiguration configuration
+    )
+    {
         services.AddSingleton<IVisualChatEngine, VisualQASemanticKernelChatEngine>();
         services.AddSingleton<IVisualQAService, VisualQAService>();
         services.AddSingleton<WindowCaptureService>();
@@ -370,7 +411,9 @@ public static class ServiceCollectionExtensions
             configuration.GetSection("Config:LipSync:Audio2Face")
         );
         services.AddSingleton<ILipSyncProcessor, VBridgerLipSyncProcessor>();
-        services.AddSingleton<ILipSyncProcessor, Audio2FaceLipSyncProcessor>();
+        // Audio2FaceLipSyncProcessor is registered conditionally in AddConversation
+        // via FeatureIds.Audio2Face — its NVIDIA Audio2Face runtime is an optional
+        // bootstrapper download.
         services.AddSingleton<ILipSyncProcessorProvider, LipSyncProcessorProvider>();
 
         return services;
