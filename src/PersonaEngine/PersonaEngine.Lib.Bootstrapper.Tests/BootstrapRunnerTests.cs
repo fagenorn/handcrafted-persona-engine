@@ -12,6 +12,7 @@ namespace PersonaEngine.Lib.Bootstrapper.Tests;
 public sealed class BootstrapRunnerTests : IDisposable
 {
     private readonly string _tempDir;
+    private readonly string _lockPath;
     private readonly IAssetDownloader _downloader;
     private readonly IAssetCatalog _catalog;
     private readonly IBootstrapUserInterface _ui;
@@ -23,6 +24,7 @@ public sealed class BootstrapRunnerTests : IDisposable
             "BootstrapRunnerTests-" + Guid.NewGuid().ToString("N")
         );
         Directory.CreateDirectory(_tempDir);
+        _lockPath = Path.Combine(_tempDir, "install-state.lock.json");
 
         _downloader = Substitute.For<IAssetDownloader>();
         _catalog = Substitute.For<IAssetCatalog>();
@@ -43,8 +45,7 @@ public sealed class BootstrapRunnerTests : IDisposable
 
     private BootstrapRunner BuildRunner(InstallManifest manifest)
     {
-        var lockPath = Path.Combine(_tempDir, "install-state.lock.json");
-        var lockStore = new InstallStateLockStore(lockPath);
+        var lockStore = new InstallStateLockStore(_lockPath);
         var planner = new AssetPlanner(_tempDir);
         return new BootstrapRunner(manifest, lockStore, planner, _downloader, _catalog, _ui);
     }
@@ -73,6 +74,9 @@ public sealed class BootstrapRunnerTests : IDisposable
         result.Success.Should().BeTrue();
         result.ChangesApplied.Should().BeTrue();
         result.ActiveProfile.Should().Be(ProfileTier.TryItOut);
+        File.Exists(_lockPath)
+            .Should()
+            .BeTrue("lock file should be written after a successful run");
     }
 
     [Fact]
@@ -82,8 +86,7 @@ public sealed class BootstrapRunnerTests : IDisposable
         var manifest = BuildManifest(asset);
 
         // Write a lock that says model-b is already installed with the current sha.
-        var lockPath = Path.Combine(_tempDir, "install-state.lock.json");
-        var lockStore = new InstallStateLockStore(lockPath);
+        var lockStore = new InstallStateLockStore(_lockPath);
         var existing = new InstallStateLock(
             SchemaVersion: 1,
             ManifestVersion: "v1",
@@ -123,6 +126,12 @@ public sealed class BootstrapRunnerTests : IDisposable
                 Arg.Any<IProgress<long>>(),
                 Arg.Any<CancellationToken>()
             );
+        await _ui.DidNotReceive()
+            .RunWithProgressAsync(
+                Arg.Any<IReadOnlyList<AssetPlanItem>>(),
+                Arg.Any<Func<AssetPlanItem, IProgress<long>, CancellationToken, Task>>(),
+                Arg.Any<CancellationToken>()
+            );
     }
 
     [Fact]
@@ -159,7 +168,7 @@ public sealed class BootstrapRunnerTests : IDisposable
     [Fact]
     public async Task PreselectedProfile_overrides_picker()
     {
-        var asset = BuildAsset("model-d", ProfileTier.StreamWithIt);
+        var asset = BuildAsset("model-d", ProfileTier.BuildWithIt);
         var manifest = BuildManifest(asset);
 
         _ui.RunWithProgressAsync(
@@ -174,12 +183,12 @@ public sealed class BootstrapRunnerTests : IDisposable
             new BootstrapOptions
             {
                 Mode = BootstrapMode.AutoIfMissing,
-                PreselectedProfile = ProfileTier.StreamWithIt,
+                PreselectedProfile = ProfileTier.BuildWithIt,
             },
             CancellationToken.None
         );
 
-        result.ActiveProfile.Should().Be(ProfileTier.StreamWithIt);
+        result.ActiveProfile.Should().Be(ProfileTier.BuildWithIt);
         await _ui.DidNotReceive()
             .PickProfileAsync(
                 Arg.Any<IReadOnlyList<ProfileChoice>>(),
