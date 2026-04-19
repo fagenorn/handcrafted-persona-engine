@@ -28,7 +28,11 @@ public sealed class HuggingFaceClient : IAssetSource
     public static string ResolveEndpoint() =>
         Environment.GetEnvironmentVariable(EndpointEnvVar) ?? DefaultEndpoint;
 
-    public Task<AssetDownload> ResolveAsync(AssetEntry asset, CancellationToken ct)
+    public Task<AssetDownload> ResolveAsync(
+        AssetEntry asset,
+        string resolvedInstallPath,
+        CancellationToken ct
+    )
     {
         var src = (HuggingFaceSource)asset.Source;
         if (string.Equals(src.Revision, "main", StringComparison.Ordinal))
@@ -41,9 +45,11 @@ public sealed class HuggingFaceClient : IAssetSource
         Func<Stream, CancellationToken, Task>? postProcess = null;
         if (asset.ExtractArchive)
         {
-            var installPath = asset.InstallPath;
+            // Use the caller-resolved absolute path (anchored at the resource
+            // root) so extraction is independent of the current working
+            // directory — see IAssetSource.ResolveAsync remarks.
             postProcess = (stream, c) =>
-                ZipExtractor.ExtractAsync(stream, wantedEntries: null, installPath, c);
+                ZipExtractor.ExtractAsync(stream, wantedEntries: null, resolvedInstallPath, c);
         }
 
         return Task.FromResult(

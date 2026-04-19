@@ -24,7 +24,11 @@ public sealed class NvidiaRedistClient : IAssetSource
         _logger = logger;
     }
 
-    public async Task<AssetDownload> ResolveAsync(AssetEntry asset, CancellationToken ct)
+    public async Task<AssetDownload> ResolveAsync(
+        AssetEntry asset,
+        string resolvedInstallPath,
+        CancellationToken ct
+    )
     {
         var src = (NvidiaRedistSource)asset.Source;
         var (manifestUrl, baseUrl) = src.Channel switch
@@ -51,14 +55,16 @@ public sealed class NvidiaRedistClient : IAssetSource
 
         var url = new Uri(new Uri(baseUrl), platform.RelativePath);
         var extractFiles = src.ExtractFiles;
-        var installPath = asset.InstallPath;
 
         return new AssetDownload(
             Url: url,
             ExpectedSize: platform.Size,
             ExpectedSha256: platform.Sha256,
+            // Use the caller-resolved absolute path (anchored at the resource
+            // root) so extraction is independent of the current working
+            // directory — see IAssetSource.ResolveAsync remarks.
             PostProcess: (stream, c) =>
-                ZipExtractor.ExtractAsync(stream, extractFiles, installPath, c)
+                ZipExtractor.ExtractAsync(stream, extractFiles, resolvedInstallPath, c)
         );
     }
 

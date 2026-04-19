@@ -52,8 +52,14 @@ public sealed class PlanItemAssetDownloader : IAssetDownloader
             item.Entry.Source.Type
         );
 
-        var download = await client.ResolveAsync(item.Entry, ct).ConfigureAwait(false);
+        // Resolve the install path once against the resource root and pass it
+        // to both the source client (for extraction targets) and the inner
+        // AssetDownloader (for non-archive file moves). This is the single
+        // source of truth for where the asset lands on disk.
         var destinationPath = Path.Combine(_resourceRoot, item.Entry.InstallPath);
+        var download = await client
+            .ResolveAsync(item.Entry, destinationPath, ct)
+            .ConfigureAwait(false);
         var wrappedProgress = new Progress<DownloadProgress>(p =>
             progress.Report(p.BytesDownloaded)
         );

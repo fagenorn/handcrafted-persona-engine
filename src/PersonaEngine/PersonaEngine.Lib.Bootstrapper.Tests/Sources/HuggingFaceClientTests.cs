@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using PersonaEngine.Lib.Assets.Manifest;
@@ -25,7 +26,11 @@ public class HuggingFaceClientTests
             )
         );
 
-        var result = await client.ResolveAsync(entry, CancellationToken.None);
+        var result = await client.ResolveAsync(
+            entry,
+            resolvedInstallPath: "/resources/kokoro",
+            CancellationToken.None
+        );
 
         result
             .Url.AbsoluteUri.Should()
@@ -48,7 +53,11 @@ public class HuggingFaceClientTests
 
         var entry = NewEntry(new HuggingFaceSource("repo", "tag", "file"));
 
-        var result = await client.ResolveAsync(entry, CancellationToken.None);
+        var result = await client.ResolveAsync(
+            entry,
+            resolvedInstallPath: "/resources/x",
+            CancellationToken.None
+        );
 
         result.Url.AbsoluteUri.Should().StartWith("https://hf.mirror.example.com/");
     }
@@ -64,7 +73,8 @@ public class HuggingFaceClientTests
 
         var entry = NewEntry(new HuggingFaceSource("repo", "main", "file"));
 
-        Func<Task> act = () => client.ResolveAsync(entry, CancellationToken.None);
+        Func<Task> act = () =>
+            client.ResolveAsync(entry, resolvedInstallPath: "/resources/x", CancellationToken.None);
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*pinned*");
     }
 
@@ -83,9 +93,76 @@ public class HuggingFaceClientTests
             installPath: "Resources/UserContent/Live2D/Aria/"
         );
 
-        var result = await client.ResolveAsync(entry, CancellationToken.None);
+        var result = await client.ResolveAsync(
+            entry,
+            resolvedInstallPath: "/resources/live2d/Aria",
+            CancellationToken.None
+        );
 
         result.PostProcess.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Resolve_extracts_to_caller_resolved_path_not_cwd()
+    {
+        // Anchor extraction at an absolute temp directory, then prove that the
+        // post-process honors that path even when the entry's relative
+        // InstallPath would otherwise resolve against Environment.CurrentDirectory.
+        var tempRoot = Path.Combine(
+            Path.GetTempPath(),
+            "HFClientTests-" + Guid.NewGuid().ToString("N")
+        );
+        var resolvedInstallPath = Path.Combine(tempRoot, "live2d", "Aria");
+        try
+        {
+            var client = new HuggingFaceClient(
+                new HttpClient(),
+                "https://huggingface.co",
+                NullLogger<HuggingFaceClient>.Instance
+            );
+
+            var entry = NewEntry(
+                new HuggingFaceSource("repo", "v1", "live2d/Aria.zip"),
+                extractArchive: true,
+                // Intentionally relative — must NOT be the path we extract into.
+                installPath: "Resources/UserContent/Live2D/Aria/"
+            );
+
+            var result = await client.ResolveAsync(
+                entry,
+                resolvedInstallPath,
+                CancellationToken.None
+            );
+
+            result.PostProcess.Should().NotBeNull();
+
+            await using var zip = new MemoryStream(
+                BuildZip(new Dictionary<string, byte[]> { ["model.json"] = new byte[] { 1, 2, 3 } })
+            );
+            await result.PostProcess!(zip, CancellationToken.None);
+
+            File.Exists(Path.Combine(resolvedInstallPath, "model.json")).Should().BeTrue();
+            // CWD-resolved fallback path must NOT receive the extraction.
+            File.Exists(Path.Combine(entry.InstallPath, "model.json")).Should().BeFalse();
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+                Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    private static byte[] BuildZip(Dictionary<string, byte[]> entries)
+    {
+        using var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+            foreach (var (name, content) in entries)
+            {
+                var e = zip.CreateEntry(name);
+                using var s = e.Open();
+                s.Write(content, 0, content.Length);
+            }
+        return ms.ToArray();
     }
 
     private static AssetEntry NewEntry(

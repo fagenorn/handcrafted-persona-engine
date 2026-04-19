@@ -35,7 +35,11 @@ public class NvidiaRedistClientTests
             )
         );
 
-        var result = await client.ResolveAsync(entry, CancellationToken.None);
+        var result = await client.ResolveAsync(
+            entry,
+            resolvedInstallPath: "/resources/runtimes/win-x64/native",
+            CancellationToken.None
+        );
 
         result
             .Url.AbsoluteUri.Should()
@@ -68,7 +72,12 @@ public class NvidiaRedistClientTests
             )
         );
 
-        Func<Task> act = () => client.ResolveAsync(entry, CancellationToken.None);
+        Func<Task> act = () =>
+            client.ResolveAsync(
+                entry,
+                resolvedInstallPath: "/resources/runtimes/win-x64/native",
+                CancellationToken.None
+            );
         await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*bogus*");
     }
 
@@ -99,8 +108,16 @@ public class NvidiaRedistClientTests
             )
         );
 
-        await client.ResolveAsync(entry, CancellationToken.None);
-        await client.ResolveAsync(entry, CancellationToken.None);
+        await client.ResolveAsync(
+            entry,
+            resolvedInstallPath: "/resources/runtimes/win-x64/native",
+            CancellationToken.None
+        );
+        await client.ResolveAsync(
+            entry,
+            resolvedInstallPath: "/resources/runtimes/win-x64/native",
+            CancellationToken.None
+        );
 
         fetchCount.Should().Be(1);
     }
