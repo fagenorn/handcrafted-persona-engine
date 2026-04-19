@@ -81,13 +81,13 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
-  <!-- CUDA/cuDNN Runtime (bundled for zero-install GPU support) -->
-  <ItemGroup>
-    <Content Include="Resources/native/cuda/windows/x86_64/*.dll">
-      <Link>native/%(Filename)%(Extension)</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
+  <!--
+    CUDA/cuDNN runtime is no longer bundled here. The bootstrapper installs
+    NVIDIA redistributables under Resources/cuda/{cudart,cublas,cufft} and
+    Resources/cudnn on first run, and Program.cs pre-loads those DLLs via
+    LoadLibraryEx so ONNX Runtime GPU and Whisper.net resolve their imports
+    against the bootstrapped copies.
+  -->
   <!-- Native Libs -->
   <ItemGroup>
     <!-- Windows x64 -->

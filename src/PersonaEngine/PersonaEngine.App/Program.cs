@@ -157,6 +157,20 @@ internal static class Program
             }
         }
 
+        // ── CUDA / cuDNN pre-load ────────────────────────────────────────────────
+        // The bootstrapper drops NVIDIA redistributables under Resources/cuda/<pkg>
+        // and Resources/cudnn (see Assets/Manifest/install-manifest.json). The
+        // single SetDllDirectory call above only covers <BaseDir>/native, so we
+        // pre-load every bootstrapped CUDA DLL here via LoadLibraryEx with
+        // LoadWithAlteredSearchPath. Once mapped, ONNX Runtime GPU and
+        // Whisper.net's CUDA backend resolve their imports against these copies
+        // regardless of the process DLL search path.
+        //
+        // Order matters: cudart must come first so cublas/cublasLt/cufft can
+        // resolve their cudart imports during their own load. cudnn last as it
+        // depends on cublas/cublasLt.
+        PreloadCudaRuntime();
+
         var builder = new ConfigurationBuilder()
             .SetBasePath(Directory.GetCurrentDirectory())
             .AddJsonFile("appsettings.json", false, true);
@@ -189,6 +203,40 @@ internal static class Program
 
         await serviceProvider.DisposeAsync();
         return 0;
+    }
+
+    private static void PreloadCudaRuntime()
+    {
+        // Ordered to satisfy CUDA's load-time dependency chain. Each entry is a
+        // path under <BaseDir>/Resources mirroring the manifest's installPath.
+        var loadOrder = new[] { "cuda/cudart", "cuda/cublas", "cuda/cufft", "cudnn" };
+
+        foreach (var relative in loadOrder)
+        {
+            var dir = Path.Combine(
+                AppContext.BaseDirectory,
+                "Resources",
+                relative.Replace('/', Path.DirectorySeparatorChar)
+            );
+            if (!Directory.Exists(dir))
+            {
+                Log.Debug("CUDA pre-load: skipping missing directory {Dir}", dir);
+                continue;
+            }
+
+            foreach (var dll in Directory.EnumerateFiles(dir, "*.dll", SearchOption.AllDirectories))
+            {
+                if (LoadLibraryEx(dll, IntPtr.Zero, LoadWithAlteredSearchPath) == IntPtr.Zero)
+                {
+                    var err = Marshal.GetLastWin32Error();
+                    Log.Warning(
+                        "CUDA pre-load: LoadLibraryEx failed for {Dll} (Win32 error {Err})",
+                        dll,
+                        err
+                    );
+                }
+            }
+        }
     }
 
     private static void CreateLogger()
