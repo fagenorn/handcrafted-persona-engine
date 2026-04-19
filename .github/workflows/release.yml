@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore tools
+        working-directory: src/PersonaEngine
+        run: dotnet tool restore
+
+      - name: Verify formatting
+        working-directory: src/PersonaEngine
+        run: dotnet csharpier check .
+
+      - name: Run tests
+        # Solution includes both PersonaEngine.Lib.Tests and
+        # PersonaEngine.Lib.Bootstrapper.Tests, so a single invocation runs both.
+        run: dotnet test src/PersonaEngine/PersonaEngine.sln --configuration Release
+
+      - name: Extract version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart('v')
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Build release zip
+        shell: pwsh
+        env:
+          # Use the runner's system dotnet instead of the script's local-dev default
+          # under %USERPROFILE%\.dotnet\dotnet.exe.
+          DOTNET_EXE: dotnet
+        run: ./scripts/build-release.ps1 -Version ${{ steps.version.outputs.version }}
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/PersonaEngine-${{ steps.version.outputs.version }}-win-x64.zip
+          generate_release_notes: true
