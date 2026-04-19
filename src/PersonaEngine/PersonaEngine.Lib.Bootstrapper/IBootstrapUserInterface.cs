@@ -15,7 +15,15 @@ public interface IBootstrapUserInterface
     /// <summary>Show one-line summary banner before downloads start (e.g. "Installing 'Stream with it' — 8.0 GB").</summary>
     void ShowPlanSummary(AssetPlan plan);
 
-    /// <summary>Run the download/verify loop, reporting per-asset progress. Implementations decide rendering.</summary>
+    /// <summary>
+    /// Run the download/verify loop, reporting per-asset progress. Implementations decide rendering.
+    /// <para>
+    /// <paramref name="items"/> contains only items that require network download
+    /// (<see cref="AssetAction.Download"/> or <see cref="AssetAction.Redownload"/>).
+    /// <see cref="BootstrapRunner"/> pre-filters the plan before calling this method, so
+    /// implementations may call <paramref name="executeOne"/> unconditionally for every item.
+    /// </para>
+    /// </summary>
     Task<bool> RunWithProgressAsync(
         IReadOnlyList<AssetPlanItem> items,
         Func<AssetPlanItem, IProgress<long>, CancellationToken, Task> executeOne,

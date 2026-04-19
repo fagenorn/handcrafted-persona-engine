@@ -6,12 +6,19 @@ using PersonaEngine.Lib.Bootstrapper.Sources;
 
 namespace PersonaEngine.Lib.Bootstrapper;
 
+/// <summary>
+/// Orchestrates a full bootstrap run: read lock → resolve profile → compute plan → download → write lock.
+/// Catches generic exceptions and reports them via <see cref="BootstrapResult"/>.
+/// </summary>
 public sealed class BootstrapRunner
 {
     private readonly InstallManifest _manifest;
     private readonly InstallStateLockStore _lockStore;
     private readonly AssetPlanner _planner;
     private readonly IAssetDownloader _downloader;
+
+    // Kept for DI shape and future use. IAssetCatalog auto-refreshes via FileSystemWatcher;
+    // no explicit refresh call is needed after a download run.
     private readonly IAssetCatalog _catalog;
     private readonly IBootstrapUserInterface _ui;
     private readonly ILogger<BootstrapRunner>? _log;
@@ -57,7 +64,11 @@ public sealed class BootstrapRunner
 
             if (options.Mode == BootstrapMode.Offline)
             {
-                var missing = string.Join(", ", plan.Items.Select(i => i.Entry.Id));
+                // Only report non-Skip items as missing — Skip means already installed.
+                var missing = string.Join(
+                    ", ",
+                    plan.Items.Where(i => i.Action != AssetAction.Skip).Select(i => i.Entry.Id)
+                );
                 return new BootstrapResult
                 {
                     Success = false,
@@ -67,10 +78,30 @@ public sealed class BootstrapRunner
                 };
             }
 
+            // Only items that require network work are dispatched to the UI/downloader.
+            // Reverify is a hash-only check (no download), so it is excluded here;
+            // it will be handled in Phase 9 wiring if a dedicated verify pass is added.
+            var actionable = plan
+                .Items.Where(i => i.Action is AssetAction.Download or AssetAction.Redownload)
+                .ToList();
+
+            if (actionable.Count == 0)
+            {
+                // Plan was non-empty (e.g. only Remove/Reverify items) — nothing to download.
+                var newLockNoDownload = BuildUpdatedLock(_manifest, existingLock, plan, profile);
+                _lockStore.Write(newLockNoDownload);
+                return new BootstrapResult
+                {
+                    Success = true,
+                    ActiveProfile = profile,
+                    ChangesApplied = false,
+                };
+            }
+
             _ui.ShowPlanSummary(plan);
 
             var allOk = await _ui.RunWithProgressAsync(
-                    plan.Items,
+                    actionable,
                     (item, progress, innerCt) => _downloader.DownloadAsync(item, progress, innerCt),
                     ct
                 )
@@ -89,8 +120,6 @@ public sealed class BootstrapRunner
 
             var newLock = BuildUpdatedLock(_manifest, existingLock, plan, profile);
             _lockStore.Write(newLock);
-
-            // NOTE: IAssetCatalog has no RefreshAsync — it auto-refreshes via FileSystemWatcher.
 
             var result = new BootstrapResult
             {
@@ -139,6 +168,8 @@ public sealed class BootstrapRunner
             return await _ui.PickProfileAsync(ProfileChoiceCatalog.All, ct).ConfigureAwait(false);
         }
 
+        // For Verify/Repair modes called before any install, existingLock.SelectedProfile will be
+        // the default (TryItOut). This is a deliberate fallback — no error is raised.
         return existingLock.SelectedProfile;
     }
 
@@ -157,11 +188,25 @@ public sealed class BootstrapRunner
 
         foreach (var item in plan.Items)
         {
-            installed[item.Entry.Id] = new InstalledAssetRecord(
-                Version: item.Entry.Source.SourceVersion,
-                Sha256: item.Entry.Sha256,
-                VerifiedAt: DateTimeOffset.UtcNow
-            );
+            switch (item.Action)
+            {
+                case AssetAction.Download:
+                case AssetAction.Redownload:
+                case AssetAction.Reverify:
+                    installed[item.Entry.Id] = new InstalledAssetRecord(
+                        Version: item.Entry.Source.SourceVersion,
+                        Sha256: item.Entry.Sha256,
+                        VerifiedAt: DateTimeOffset.UtcNow
+                    );
+                    break;
+                case AssetAction.Remove:
+                    // TODO Phase 9: delete the on-disk file when Action is Remove.
+                    installed.Remove(item.Entry.Id);
+                    break;
+                case AssetAction.Skip:
+                    // Leave existing entry untouched.
+                    break;
+            }
         }
 
         return new InstallStateLock(

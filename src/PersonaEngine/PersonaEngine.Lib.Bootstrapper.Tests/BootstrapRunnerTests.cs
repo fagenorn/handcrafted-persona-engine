@@ -77,6 +77,11 @@ public sealed class BootstrapRunnerTests : IDisposable
         File.Exists(_lockPath)
             .Should()
             .BeTrue("lock file should be written after a successful run");
+
+        // Regression: lock must record the downloaded asset and the chosen profile.
+        var writtenLock = new InstallStateLockStore(_lockPath).Read("v1");
+        writtenLock.SelectedProfile.Should().Be(ProfileTier.TryItOut);
+        writtenLock.Assets.Should().ContainKey("model-a");
     }
 
     [Fact]
@@ -194,5 +199,73 @@ public sealed class BootstrapRunnerTests : IDisposable
                 Arg.Any<IReadOnlyList<ProfileChoice>>(),
                 Arg.Any<CancellationToken>()
             );
+    }
+
+    [Fact]
+    public async Task BuildUpdatedLock_removes_out_of_profile_asset_and_writes_downloaded_asset()
+    {
+        // Arrange: two assets at different tiers.
+        // "keep-asset"   is TryItOut  — will be in profile, needs Download (not on disk).
+        // "remove-asset" is BuildWithIt — not in the selected profile (TryItOut), so planner
+        //                                produces Remove for an asset already in the lock.
+        var keepAsset = ManifestBuilder.Asset(
+            "keep-asset",
+            ProfileTier.TryItOut,
+            installPath: "keep-asset.bin"
+        );
+        var removeAsset = ManifestBuilder.Asset(
+            "remove-asset",
+            ProfileTier.BuildWithIt,
+            installPath: "remove-asset.bin"
+        );
+        var manifest = BuildManifest(keepAsset, removeAsset);
+
+        // Pre-write a lock that records "remove-asset" as already installed.
+        var lockStore = new InstallStateLockStore(_lockPath);
+        var existingLock = new InstallStateLock(
+            SchemaVersion: 1,
+            ManifestVersion: "v1",
+            InstalledAt: DateTimeOffset.UtcNow,
+            SelectedProfile: ProfileTier.TryItOut,
+            Assets: new Dictionary<string, InstalledAssetRecord>
+            {
+                ["remove-asset"] = ManifestBuilder.Record(),
+            },
+            UserExclusions: Array.Empty<string>()
+        );
+        lockStore.Write(existingLock);
+
+        _ui.PickProfileAsync(Arg.Any<IReadOnlyList<ProfileChoice>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(ProfileTier.TryItOut));
+        _ui.RunWithProgressAsync(
+                Arg.Any<IReadOnlyList<AssetPlanItem>>(),
+                Arg.Any<Func<AssetPlanItem, IProgress<long>, CancellationToken, Task>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(Task.FromResult(true));
+
+        var planner = new AssetPlanner(_tempDir);
+        var runner = new BootstrapRunner(manifest, lockStore, planner, _downloader, _catalog, _ui);
+
+        // Act
+        var result = await runner.RunAsync(
+            new BootstrapOptions
+            {
+                Mode = BootstrapMode.AutoIfMissing,
+                PreselectedProfile = ProfileTier.TryItOut,
+            },
+            CancellationToken.None
+        );
+
+        // Assert
+        result.Success.Should().BeTrue();
+
+        var writtenLock = lockStore.Read("v1");
+        writtenLock
+            .Assets.Should()
+            .ContainKey("keep-asset", "downloaded asset must appear in lock");
+        writtenLock
+            .Assets.Should()
+            .NotContainKey("remove-asset", "removed asset must be deleted from lock");
     }
 }

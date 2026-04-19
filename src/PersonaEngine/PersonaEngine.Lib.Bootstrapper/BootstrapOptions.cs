@@ -11,5 +11,10 @@ public sealed record BootstrapOptions
     public ProfileTier? PreselectedProfile { get; init; }
 
     /// <summary>Override resource root (defaults to AppContext.BaseDirectory + "Resources").</summary>
+    /// <remarks>
+    /// Consumed by host wiring (Phase 9), not by <see cref="BootstrapRunner"/> directly.
+    /// It will be passed to <c>PlanItemAssetDownloader</c> and <c>AssetCatalog</c> constructors
+    /// during app startup.
+    /// </remarks>
     public string? ResourceRootOverride { get; init; }
 }
