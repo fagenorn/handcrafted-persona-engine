@@ -39,6 +39,11 @@ public sealed class InstallStateLockStore
     public void Write(InstallStateLock state)
     {
         var json = JsonSerializer.Serialize(state, ManifestLoader.JsonOptions);
+        var dir = Path.GetDirectoryName(_path);
+        if (!string.IsNullOrEmpty(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
         var tmp = _path + ".tmp";
         File.WriteAllText(tmp, json);
         // Atomic rename — works across Windows + POSIX.

@@ -61,13 +61,33 @@ public static class ZipExtractor
             Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
 
             var partial = dest + ".partial";
-            await using (var src = entry.Open())
-            await using (var fs = File.Create(partial))
-                await src.CopyToAsync(fs, ct).ConfigureAwait(false);
+            try
+            {
+                await using (var src = entry.Open())
+                await using (var fs = File.Create(partial))
+                    await src.CopyToAsync(fs, ct).ConfigureAwait(false);
 
-            if (File.Exists(dest))
-                File.Delete(dest);
-            File.Move(partial, dest);
+                if (File.Exists(dest))
+                    File.Delete(dest);
+                File.Move(partial, dest);
+            }
+            catch
+            {
+                // Clean up the half-written .partial on cancellation OR I/O
+                // failure so a retry doesn't see stale bytes. Best effort —
+                // if delete itself fails (e.g. file locked), let the original
+                // exception surface.
+                try
+                {
+                    if (File.Exists(partial))
+                        File.Delete(partial);
+                }
+                catch
+                {
+                    // Swallow — original exception is more informative.
+                }
+                throw;
+            }
         }
     }
 }
