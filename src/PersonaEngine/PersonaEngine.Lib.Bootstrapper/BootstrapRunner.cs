@@ -21,6 +21,7 @@ public sealed class BootstrapRunner
     // no explicit refresh call is needed after a download run.
     private readonly IAssetCatalog _catalog;
     private readonly IBootstrapUserInterface _ui;
+    private readonly string _resourceRoot;
     private readonly ILogger<BootstrapRunner>? _log;
 
     public BootstrapRunner(
@@ -30,6 +31,7 @@ public sealed class BootstrapRunner
         IAssetDownloader downloader,
         IAssetCatalog catalog,
         IBootstrapUserInterface ui,
+        string resourceRoot,
         ILogger<BootstrapRunner>? log = null
     )
     {
@@ -39,6 +41,7 @@ public sealed class BootstrapRunner
         _downloader = downloader;
         _catalog = catalog;
         _ui = ui;
+        _resourceRoot = resourceRoot;
         _log = log;
     }
 
@@ -88,13 +91,14 @@ public sealed class BootstrapRunner
             if (actionable.Count == 0)
             {
                 // Plan was non-empty (e.g. only Remove/Reverify items) — nothing to download.
+                ApplyRemovals(plan);
                 var newLockNoDownload = BuildUpdatedLock(_manifest, existingLock, plan, profile);
                 _lockStore.Write(newLockNoDownload);
                 return new BootstrapResult
                 {
                     Success = true,
                     ActiveProfile = profile,
-                    ChangesApplied = false,
+                    ChangesApplied = plan.Items.Any(i => i.Action == AssetAction.Remove),
                 };
             }
 
@@ -118,6 +122,7 @@ public sealed class BootstrapRunner
                 };
             }
 
+            ApplyRemovals(plan);
             var newLock = BuildUpdatedLock(_manifest, existingLock, plan, profile);
             _lockStore.Write(newLock);
 
@@ -173,6 +178,82 @@ public sealed class BootstrapRunner
         return existingLock.SelectedProfile;
     }
 
+    /// <summary>
+    /// Deletes the on-disk file or directory for every plan item with action
+    /// <see cref="AssetAction.Remove" />. The install path is interpreted
+    /// relative to <see cref="_resourceRoot" />; absolute paths and any path
+    /// that escapes the resource root via <c>..</c> are rejected.
+    /// </summary>
+    private void ApplyRemovals(AssetPlan plan)
+    {
+        var fullRoot = Path.GetFullPath(_resourceRoot);
+
+        foreach (var item in plan.Items)
+        {
+            if (item.Action != AssetAction.Remove)
+                continue;
+
+            var installPath = item.Entry.InstallPath;
+            if (Path.IsPathRooted(installPath))
+            {
+                _log?.LogWarning(
+                    "Refusing to remove asset '{AssetId}': installPath '{Path}' is absolute",
+                    item.Entry.Id,
+                    installPath
+                );
+                continue;
+            }
+
+            var target = Path.GetFullPath(Path.Combine(fullRoot, installPath));
+            if (
+                !target.StartsWith(fullRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                && target != fullRoot
+            )
+            {
+                _log?.LogWarning(
+                    "Refusing to remove asset '{AssetId}': resolved path '{Path}' would escape resource root",
+                    item.Entry.Id,
+                    target
+                );
+                continue;
+            }
+
+            try
+            {
+                if (File.Exists(target))
+                {
+                    File.Delete(target);
+                    _log?.LogInformation(
+                        "Removed obsolete asset file '{AssetId}' at '{Path}'",
+                        item.Entry.Id,
+                        target
+                    );
+                }
+                else if (Directory.Exists(target))
+                {
+                    Directory.Delete(target, recursive: true);
+                    _log?.LogInformation(
+                        "Removed obsolete asset directory '{AssetId}' at '{Path}'",
+                        item.Entry.Id,
+                        target
+                    );
+                }
+            }
+            catch (Exception ex)
+            {
+                // Removal is best-effort: a locked file shouldn't fail the
+                // whole bootstrap. The lock entry is still dropped below so
+                // the next run will plan a fresh action against this asset.
+                _log?.LogWarning(
+                    ex,
+                    "Failed to remove asset '{AssetId}' at '{Path}'",
+                    item.Entry.Id,
+                    target
+                );
+            }
+        }
+    }
+
     private static InstallStateLock BuildUpdatedLock(
         InstallManifest manifest,
         InstallStateLock existingLock,
@@ -200,7 +281,8 @@ public sealed class BootstrapRunner
                     );
                     break;
                 case AssetAction.Remove:
-                    // TODO Phase 9: delete the on-disk file when Action is Remove.
+                    // On-disk deletion is handled by ApplyRemovals before this
+                    // method runs; here we only drop the lock entry.
                     installed.Remove(item.Entry.Id);
                     break;
                 case AssetAction.Skip:

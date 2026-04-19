@@ -11,6 +11,14 @@ namespace PersonaEngine.Lib.Bootstrapper;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
+    ///     The on-disk root all bootstrapped assets land under. Used by both
+    ///     <see cref="AssetPlanner" /> (to detect already-installed files) and
+    ///     <see cref="PlanItemAssetDownloader" /> (to compute destination paths).
+    ///     They MUST agree, hence the single source of truth here.
+    /// </summary>
+    private static string ResourceRoot => Path.Combine(AppContext.BaseDirectory, "Resources");
+
+    /// <summary>
     ///     Registers the bootstrapper services into the bootstrap-time DI graph.
     ///     The main app uses a separate <see cref="IServiceCollection" /> populated by
     ///     <c>AddApp</c>; both register <see cref="IAssetCatalog" /> via the same
@@ -30,7 +38,7 @@ public static class ServiceCollectionExtensions
             sp.GetService<ILogger<InstallStateLockStore>>()
         ));
 
-        services.AddSingleton<AssetPlanner>();
+        services.AddSingleton<AssetPlanner>(_ => new AssetPlanner(ResourceRoot));
 
         // Named HttpClient with retry + transient-error handling.
         services.AddAssetDownloadHttpClient();
@@ -68,7 +76,7 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<AssetDownloader>(),
             sp.GetRequiredService<HuggingFaceClient>(),
             sp.GetRequiredService<NvidiaRedistClient>(),
-            Path.Combine(AppContext.BaseDirectory, "Resources"),
+            ResourceRoot,
             sp.GetService<ILogger<PlanItemAssetDownloader>>()
         ));
 
@@ -87,7 +95,16 @@ public static class ServiceCollectionExtensions
             services.AddSingleton<IBootstrapUserInterface, SpectreBootstrapUserInterface>();
         }
 
-        services.AddSingleton<BootstrapRunner>();
+        services.AddSingleton<BootstrapRunner>(sp => new BootstrapRunner(
+            sp.GetRequiredService<InstallManifest>(),
+            sp.GetRequiredService<InstallStateLockStore>(),
+            sp.GetRequiredService<AssetPlanner>(),
+            sp.GetRequiredService<IAssetDownloader>(),
+            sp.GetRequiredService<IAssetCatalog>(),
+            sp.GetRequiredService<IBootstrapUserInterface>(),
+            ResourceRoot,
+            sp.GetService<ILogger<BootstrapRunner>>()
+        ));
         return services;
     }
 }

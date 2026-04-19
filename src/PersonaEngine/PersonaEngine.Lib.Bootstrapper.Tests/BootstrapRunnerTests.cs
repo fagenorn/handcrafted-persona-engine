@@ -47,7 +47,15 @@ public sealed class BootstrapRunnerTests : IDisposable
     {
         var lockStore = new InstallStateLockStore(_lockPath);
         var planner = new AssetPlanner(_tempDir);
-        return new BootstrapRunner(manifest, lockStore, planner, _downloader, _catalog, _ui);
+        return new BootstrapRunner(
+            manifest,
+            lockStore,
+            planner,
+            _downloader,
+            _catalog,
+            _ui,
+            _tempDir
+        );
     }
 
     [Fact]
@@ -109,7 +117,15 @@ public sealed class BootstrapRunnerTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(_tempDir, "model-b.bin"), "dummy");
 
         var planner = new AssetPlanner(_tempDir);
-        var runner = new BootstrapRunner(manifest, lockStore, planner, _downloader, _catalog, _ui);
+        var runner = new BootstrapRunner(
+            manifest,
+            lockStore,
+            planner,
+            _downloader,
+            _catalog,
+            _ui,
+            _tempDir
+        );
 
         var result = await runner.RunAsync(
             new BootstrapOptions { Mode = BootstrapMode.AutoIfMissing },
@@ -220,6 +236,10 @@ public sealed class BootstrapRunnerTests : IDisposable
         );
         var manifest = BuildManifest(keepAsset, removeAsset);
 
+        // Place the remove-asset file on disk so we can assert it gets deleted.
+        var removeAssetPath = Path.Combine(_tempDir, "remove-asset.bin");
+        await File.WriteAllTextAsync(removeAssetPath, "stale-bytes");
+
         // Pre-write a lock that records "remove-asset" as already installed.
         var lockStore = new InstallStateLockStore(_lockPath);
         var existingLock = new InstallStateLock(
@@ -245,7 +265,15 @@ public sealed class BootstrapRunnerTests : IDisposable
             .Returns(Task.FromResult(true));
 
         var planner = new AssetPlanner(_tempDir);
-        var runner = new BootstrapRunner(manifest, lockStore, planner, _downloader, _catalog, _ui);
+        var runner = new BootstrapRunner(
+            manifest,
+            lockStore,
+            planner,
+            _downloader,
+            _catalog,
+            _ui,
+            _tempDir
+        );
 
         // Act
         var result = await runner.RunAsync(
@@ -267,5 +295,79 @@ public sealed class BootstrapRunnerTests : IDisposable
         writtenLock
             .Assets.Should()
             .NotContainKey("remove-asset", "removed asset must be deleted from lock");
+
+        File.Exists(removeAssetPath)
+            .Should()
+            .BeFalse("on-disk file for an out-of-profile asset must be deleted");
+    }
+
+    [Fact]
+    public async Task ApplyRemovals_deletes_directory_install_paths()
+    {
+        var keepAsset = ManifestBuilder.Asset(
+            "keep-asset",
+            ProfileTier.TryItOut,
+            installPath: "keep-asset.bin"
+        );
+        // Asset whose install path is a directory rather than a single file.
+        var removeAsset = ManifestBuilder.Asset(
+            "remove-bundle",
+            ProfileTier.BuildWithIt,
+            installPath: "remove-bundle"
+        );
+        var manifest = BuildManifest(keepAsset, removeAsset);
+
+        var bundleDir = Path.Combine(_tempDir, "remove-bundle");
+        Directory.CreateDirectory(bundleDir);
+        await File.WriteAllTextAsync(Path.Combine(bundleDir, "a.bin"), "x");
+        await File.WriteAllTextAsync(Path.Combine(bundleDir, "b.bin"), "y");
+
+        var lockStore = new InstallStateLockStore(_lockPath);
+        lockStore.Write(
+            new InstallStateLock(
+                SchemaVersion: 1,
+                ManifestVersion: "v1",
+                InstalledAt: DateTimeOffset.UtcNow,
+                SelectedProfile: ProfileTier.TryItOut,
+                Assets: new Dictionary<string, InstalledAssetRecord>
+                {
+                    ["remove-bundle"] = ManifestBuilder.Record(),
+                },
+                UserExclusions: Array.Empty<string>()
+            )
+        );
+
+        _ui.RunWithProgressAsync(
+                Arg.Any<IReadOnlyList<AssetPlanItem>>(),
+                Arg.Any<Func<AssetPlanItem, IProgress<long>, CancellationToken, Task>>(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(Task.FromResult(true));
+
+        var planner = new AssetPlanner(_tempDir);
+        var runner = new BootstrapRunner(
+            manifest,
+            lockStore,
+            planner,
+            _downloader,
+            _catalog,
+            _ui,
+            _tempDir
+        );
+
+        var result = await runner.RunAsync(
+            new BootstrapOptions
+            {
+                Mode = BootstrapMode.AutoIfMissing,
+                PreselectedProfile = ProfileTier.TryItOut,
+            },
+            CancellationToken.None
+        );
+
+        result.Success.Should().BeTrue();
+        Directory
+            .Exists(bundleDir)
+            .Should()
+            .BeFalse("directory install paths must be removed recursively");
     }
 }
