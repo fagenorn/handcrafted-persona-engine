@@ -139,6 +139,11 @@ internal static class Program
 
         var bootstrapServices = new ServiceCollection();
         bootstrapServices.AddBootstrapper(parsedArgs.NonInteractive);
+        // Wire MEL through the static Serilog logger so bootstrap-time diagnostics
+        // (per-asset download failures, HF/NVIDIA retries, plan details) reach the
+        // console sink. Without this, ILogger<T> in the bootstrap graph no-ops and
+        // the only operator-visible signal is the final "Bootstrap failed" FTL line.
+        bootstrapServices.AddLogging(b => b.AddSerilog(dispose: false));
 
         await using (var bootstrapProvider = bootstrapServices.BuildServiceProvider())
         {
@@ -168,7 +173,10 @@ internal static class Program
         //
         // Order matters: cudart must come first so cublas/cublasLt/cufft can
         // resolve their cudart imports during their own load. cudnn last as it
-        // depends on cublas/cublasLt.
+        // depends on cublas/cublasLt. Both CUDA 12 (for ONNX Runtime GPU) and
+        // CUDA 13 (for Whisper.net's ggml-cuda-whisper.dll, which imports
+        // cublas64_13.dll) live side-by-side under their own version-suffixed
+        // install dirs.
         PreloadCudaRuntime();
 
         var builder = new ConfigurationBuilder()
@@ -209,7 +217,15 @@ internal static class Program
     {
         // Ordered to satisfy CUDA's load-time dependency chain. Each entry is a
         // path under <BaseDir>/Resources mirroring the manifest's installPath.
-        var loadOrder = new[] { "cuda/cudart", "cuda/cublas", "cuda/cufft", "cudnn" };
+        var loadOrder = new[]
+        {
+            "cuda/cudart",
+            "cuda/cudart-v13",
+            "cuda/cublas",
+            "cuda/cublas-v13",
+            "cuda/cufft",
+            "cudnn",
+        };
 
         foreach (var relative in loadOrder)
         {

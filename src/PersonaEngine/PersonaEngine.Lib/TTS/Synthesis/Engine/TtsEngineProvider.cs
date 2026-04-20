@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Configuration;
@@ -14,6 +15,9 @@ internal sealed class TtsEngineProvider : ITtsEngineProvider, IDisposable
     private readonly IReadOnlyDictionary<string, ISentenceSynthesizer> _engines;
     private readonly ILogger<TtsEngineProvider> _logger;
     private readonly IDisposable? _changeToken;
+    private readonly ConcurrentDictionary<string, byte> _warnedMissing = new(
+        StringComparer.OrdinalIgnoreCase
+    );
 
     private volatile ISentenceSynthesizer _current;
 
@@ -65,12 +69,20 @@ internal sealed class TtsEngineProvider : ITtsEngineProvider, IDisposable
             return engine;
         }
 
-        _logger.LogError(
-            "TTS engine '{EngineId}' not registered. Available: {Available}. Falling back to first registered engine.",
-            engineId,
-            string.Join(", ", _engines.Keys)
-        );
+        var fallback = _engines.Values.First();
 
-        return _engines.Values.First();
+        // Dedupe so a missing optional engine (e.g. qwen3 on the TryItOut
+        // profile) doesn't spam the log on every config-monitor callback.
+        if (_warnedMissing.TryAdd(engineId ?? string.Empty, 0))
+        {
+            _logger.LogWarning(
+                "TTS engine '{EngineId}' is not installed in this profile. Available: {Available}. Using '{Fallback}' instead.",
+                engineId,
+                string.Join(", ", _engines.Keys),
+                fallback.EngineId
+            );
+        }
+
+        return fallback;
     }
 }

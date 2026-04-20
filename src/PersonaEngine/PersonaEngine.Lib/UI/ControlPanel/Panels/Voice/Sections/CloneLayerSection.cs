@@ -110,6 +110,18 @@ public sealed class CloneLayerSection : IDisposable
 
     private void RenderBody(float dt, VoiceMode mode)
     {
+        // RVC ships in StreamWithIt+. On TryItOut the toggle/voice/pitch knobs are
+        // meaningless because the runtime won't load the model — render a locked
+        // notice instead so the user knows why and can self-serve via the installer.
+        if (!_catalog.IsFeatureEnabled(FeatureIds.VoiceCloning))
+        {
+            ImGuiHelpers.LockedSection(
+                "Voice cloning",
+                FeatureProfileMap.MinimumProfileLabel(FeatureIds.VoiceCloning)
+            );
+            return;
+        }
+
         float rowY;
 
         // Enable toggle

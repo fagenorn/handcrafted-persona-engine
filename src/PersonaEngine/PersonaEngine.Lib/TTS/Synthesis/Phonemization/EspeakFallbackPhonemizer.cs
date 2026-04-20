@@ -65,6 +65,8 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
 
     private volatile string _espeakPath;
 
+    private volatile string? _espeakDataPath;
+
     // Process state
     private Process? _espeakProcess;
 
@@ -82,9 +84,9 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
         _voiceOptions = voiceOptions ?? throw new ArgumentNullException(nameof(voiceOptions));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        _espeakPath =
-            _ttsConfig.CurrentValue.EspeakPath
-            ?? throw new ArgumentNullException(nameof(ttsConfig.CurrentValue.EspeakPath));
+        var resolved = EspeakResolver.Resolve(_ttsConfig.CurrentValue.EspeakPath);
+        _espeakPath = resolved.ExecutablePath;
+        _espeakDataPath = resolved.DataPath;
         _useBritishEnglish = _voiceOptions.CurrentValue.UseBritishEnglish;
 
         _voiceOptionsChangeToken = _voiceOptions.OnChange(options =>
@@ -102,12 +104,17 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
 
         _ttsConfigChangeToken = _ttsConfig.OnChange(config =>
         {
-            if (string.IsNullOrEmpty(config.EspeakPath) || _espeakPath == config.EspeakPath)
+            var updated = EspeakResolver.Resolve(config.EspeakPath);
+            if (
+                string.IsNullOrEmpty(updated.ExecutablePath)
+                || (_espeakPath == updated.ExecutablePath && _espeakDataPath == updated.DataPath)
+            )
             {
                 return;
             }
 
-            _espeakPath = config.EspeakPath;
+            _espeakPath = updated.ExecutablePath;
+            _espeakDataPath = updated.DataPath;
             _logger.LogDebug("TTS configuration updated: EspeakPath={EspeakPath}", _espeakPath);
             _needProcessReset = true;
 
@@ -272,8 +279,13 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
                 _espeakProcess = null;
             }
 
-            // Create a new process
+            // Create a new process. When using the bundled portable binary,
+            // we point it at the sibling espeak-ng-data via ESPEAK_DATA_PATH;
+            // otherwise espeak falls back to its compile-time default
+            // (C:\Program Files\eSpeak NG\espeak-ng-data) which doesn't exist
+            // on a fresh machine.
             var language = _useBritishEnglish ? "en-gb" : "en-us";
+            var dataPath = _espeakDataPath;
             var startInfo = new ProcessStartInfo
             {
                 FileName = _espeakPath,
@@ -285,6 +297,10 @@ public class EspeakFallbackPhonemizer : IFallbackPhonemizer
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
+            if (dataPath is not null)
+            {
+                startInfo.EnvironmentVariables["ESPEAK_DATA_PATH"] = dataPath;
+            }
 
             var process = new Process { StartInfo = startInfo };
 

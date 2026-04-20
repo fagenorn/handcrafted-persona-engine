@@ -1,5 +1,6 @@
 using Hexa.NET.ImGui;
 using Microsoft.Extensions.Options;
+using PersonaEngine.Lib.Assets;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
 
@@ -15,6 +16,8 @@ public sealed class ScreenAwareness : IDisposable
 {
     private readonly IConfigWriter _configWriter;
 
+    private readonly IAssetCatalog _catalog;
+
     private readonly IDisposable? _llmSub;
 
     private readonly INavRequestBus _navBus;
@@ -29,11 +32,13 @@ public sealed class ScreenAwareness : IDisposable
         IOptionsMonitor<VisionConfig> visionOptions,
         IOptionsMonitor<LlmOptions> llmOptions,
         IConfigWriter configWriter,
-        INavRequestBus navBus
+        INavRequestBus navBus,
+        IAssetCatalog catalog
     )
     {
         _configWriter = configWriter;
         _navBus = navBus;
+        _catalog = catalog;
         _vision = visionOptions.CurrentValue;
         _llm = llmOptions.CurrentValue;
 
@@ -74,6 +79,19 @@ public sealed class ScreenAwareness : IDisposable
 
     private void RenderSettings(float dt)
     {
+        // Vision capture (Rust window-grab) and the vision LLM both ship in the
+        // BuildWithIt bundle. If the user is on a smaller profile, the toggle
+        // would silently no-op — show a locked notice instead so they know how
+        // to unlock it (and skip the LLM-enabled hint, which is irrelevant here).
+        if (!_catalog.IsFeatureEnabled(FeatureIds.VisionCapture))
+        {
+            ImGuiHelpers.LockedSection(
+                "Screen awareness",
+                FeatureProfileMap.MinimumProfileLabel(FeatureIds.VisionCapture)
+            );
+            return;
+        }
+
         if (!_llm.VisionEnabled)
         {
             ImGui.PushStyleColor(ImGuiCol.Text, Theme.TextSecondary);

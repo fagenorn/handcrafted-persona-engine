@@ -122,8 +122,8 @@ public static class ServiceCollectionExtensions
         Action<IKernelBuilder>? configureKernel = null
     )
     {
-        services.AddASRSystem(configuration);
-        services.AddTTSSystem(configuration);
+        services.AddASRSystem(configuration, catalog);
+        services.AddTTSSystem(configuration, catalog);
 
         // Gate optional subsystems whose ONNX models / runtime DLLs are downloaded
         // by the bootstrapper. Skipping registration here keeps startup clean when
@@ -179,7 +179,8 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddASRSystem(
         this IServiceCollection services,
-        IConfiguration configuration
+        IConfiguration configuration,
+        IAssetCatalog catalog
     )
     {
         services.Configure<AsrConfiguration>(configuration.GetSection("Config:Asr"));
@@ -204,6 +205,13 @@ public static class ServiceCollectionExtensions
             return new SileroVadDetector(vadOptions, siletroOptions);
         });
 
+        // Whisper model selection mirrors the install manifest tiers:
+        //   - BuildWithIt installs Turbo v3 (gates: Asr.WhisperTurbo) → primary = Turbo, barge-in = Tiny
+        //   - TryItOut/StreamWithIt only install Tiny (gates: Asr.WhisperTiny) → primary = Tiny,
+        //     no separate barge-in factory (RealtimeTranscriptor accepts null)
+        // Loading the Turbo factory unconditionally crashes DI build for non-Build profiles
+        // because the .bin isn't present.
+        var hasTurbo = catalog.IsFeatureEnabled(FeatureIds.AsrAccurate);
         services.AddSingleton<IRealtimeSpeechTranscriptor>(sp =>
         {
             var asrOptions = sp.GetRequiredService<IOptions<AsrConfiguration>>().Value;
@@ -221,14 +229,22 @@ public static class ServiceCollectionExtensions
 
             var realTimeOptions = new RealtimeOptions();
 
-            return new RealtimeTranscriptor(
-                new WhisperSpeechTranscriptorFactory(
+            var tinyFactory = new WhisperSpeechTranscriptorFactory(
+                ModelUtils.GetModelPath(ModelType.WhisperGgmlTiny)
+            );
+
+            ISpeechTranscriptorFactory primary = hasTurbo
+                ? new WhisperSpeechTranscriptorFactory(
                     ModelUtils.GetModelPath(ModelType.WhisperGgmlTurbov3)
-                ),
+                )
+                : tinyFactory;
+
+            ISpeechTranscriptorFactory? bargeIn = hasTurbo ? tinyFactory : null;
+
+            return new RealtimeTranscriptor(
+                primary,
                 sp.GetRequiredService<IVadDetector>(),
-                new WhisperSpeechTranscriptorFactory(
-                    ModelUtils.GetModelPath(ModelType.WhisperGgmlTiny)
-                ),
+                bargeIn,
                 realtimeSpeechTranscriptorOptions,
                 realTimeOptions,
                 sp.GetRequiredService<ILogger<RealtimeTranscriptor>>()
@@ -323,7 +339,8 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddTTSSystem(
         this IServiceCollection services,
-        IConfiguration configuration
+        IConfiguration configuration,
+        IAssetCatalog catalog
     )
     {
         // Configuration
@@ -340,14 +357,21 @@ public static class ServiceCollectionExtensions
             return new FileModelProvider(config.ModelDirectory, logger);
         });
 
-        // Shared forced aligner (CTC) — engine-agnostic word-level timing
-        services.AddSingleton<IForcedAligner>(provider =>
+        // Forced aligner (wav2vec2 CTC) is only consumed by Qwen3 — wav2vec2 is
+        // gated behind FeatureIds.TtsQwen3 in the install manifest, so registering
+        // it without the model file would crash DI build for TryItOut/StreamWithIt
+        // profiles where the BuildWithIt-tier Qwen3 stack isn't installed.
+        var qwen3Enabled = catalog.IsFeatureEnabled(FeatureIds.TtsQwen3);
+        if (qwen3Enabled)
         {
-            var modelProvider = provider.GetRequiredService<IModelProvider>();
-            var logger = provider.GetRequiredService<ILogger<CtcForcedAligner>>();
+            services.AddSingleton<IForcedAligner>(provider =>
+            {
+                var modelProvider = provider.GetRequiredService<IModelProvider>();
+                var logger = provider.GetRequiredService<ILogger<CtcForcedAligner>>();
 
-            return new CtcForcedAligner(modelProvider, logger);
-        });
+                return new CtcForcedAligner(modelProvider, logger);
+            });
+        }
 
         // Shared text processing
         services.AddSingleton<SentenceProcessor>();
@@ -388,11 +412,18 @@ public static class ServiceCollectionExtensions
 
         // Kokoro-specific
         services.AddSingleton<IKokoroVoiceProvider, KokoroVoiceProvider>();
-        services.AddSingleton<IQwen3VoiceProvider, Qwen3VoiceProvider>();
 
-        // Engine registrations
+        // Engine registrations — Kokoro is the always-on baseline; Qwen3 is gated
+        // on its asset bundle being installed (BuildWithIt tier). Without this
+        // gate, Qwen3SentenceSynthesizer would be activated for the TtsEngineProvider
+        // enumeration and crash on the missing model file before any sentence is
+        // synthesised.
         services.AddSingleton<ISentenceSynthesizer, KokoroSentenceSynthesizer>();
-        services.AddSingleton<ISentenceSynthesizer, Qwen3SentenceSynthesizer>();
+        if (qwen3Enabled)
+        {
+            services.AddSingleton<IQwen3VoiceProvider, Qwen3VoiceProvider>();
+            services.AddSingleton<ISentenceSynthesizer, Qwen3SentenceSynthesizer>();
+        }
 
         // Runtime engine switching
         services.AddSingleton<ITtsEngineProvider, TtsEngineProvider>();
@@ -498,7 +529,15 @@ public static class ServiceCollectionExtensions
         // Voice audition pipeline
         services.AddSingleton<OneShotAudioPlayer>();
         services.AddSingleton<IOneShotPlayer>(sp => sp.GetRequiredService<OneShotAudioPlayer>());
-        services.AddSingleton<IRvcAuditionProcessor, RvcAuditionProcessor>();
+        // RVCFilter is only registered when the VoiceCloning feature is enabled
+        // (see AddConversation), so the audition processor must mirror that gate.
+        // Without the no-op stub, profiles like TryItOut fail at DI build time
+        // because VoiceAuditionService unconditionally requires IRvcAuditionProcessor.
+        services.AddSingleton<IRvcAuditionProcessor>(sp =>
+            sp.GetRequiredService<IAssetCatalog>().IsFeatureEnabled(FeatureIds.VoiceCloning)
+                ? new RvcAuditionProcessor(sp.GetRequiredService<RVCFilter>())
+                : new NoOpRvcAuditionProcessor()
+        );
         services.AddSingleton<IVoiceAuditionService, VoiceAuditionService>();
 
         // Nav request bus — lets dashboard health cards + cross-panel hint

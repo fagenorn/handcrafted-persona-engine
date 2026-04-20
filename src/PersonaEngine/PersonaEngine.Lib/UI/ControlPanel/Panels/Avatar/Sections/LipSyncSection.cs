@@ -1,6 +1,7 @@
 using System.Numerics;
 using Hexa.NET.ImGui;
 using Microsoft.Extensions.Options;
+using PersonaEngine.Lib.Assets;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
 
@@ -22,15 +23,21 @@ public sealed class LipSyncSection : IDisposable
     private const float ChipGap = 6f;
 
     private readonly IConfigWriter _configWriter;
+    private readonly IAssetCatalog _catalog;
     private readonly IDisposable? _changeSubscription;
 
     private LipSyncOptions _lipSync;
     private AnimatedFloat _useGpuKnob;
     private bool _initialized;
 
-    public LipSyncSection(IOptionsMonitor<LipSyncOptions> monitor, IConfigWriter configWriter)
+    public LipSyncSection(
+        IOptionsMonitor<LipSyncOptions> monitor,
+        IConfigWriter configWriter,
+        IAssetCatalog catalog
+    )
     {
         _configWriter = configWriter;
+        _catalog = catalog;
         _lipSync = monitor.CurrentValue;
         _changeSubscription = monitor.OnChange(
             (updated, _) =>
@@ -68,7 +75,13 @@ public sealed class LipSyncSection : IDisposable
 
             RenderStyleRow();
 
-            if (_lipSync.Engine == LipSyncEngine.Audio2Face)
+            // Sub-rows belong to Audio2Face. Suppress them when the feature isn't
+            // installed even if the persisted setting still says Audio2Face — the
+            // runtime is using VBridger in that case, so the knobs would lie.
+            if (
+                _lipSync.Engine == LipSyncEngine.Audio2Face
+                && _catalog.IsFeatureEnabled(FeatureIds.Audio2Face)
+            )
             {
                 RenderQualityRow();
                 RenderUseGpuRow(dt);
@@ -89,6 +102,7 @@ public sealed class LipSyncSection : IDisposable
 
         var isSimple = _lipSync.Engine == LipSyncEngine.VBridger;
         var isRealistic = _lipSync.Engine == LipSyncEngine.Audio2Face;
+        var realisticAvailable = _catalog.IsFeatureEnabled(FeatureIds.Audio2Face);
 
         if (ImGuiHelpers.Chip("Simple", isSimple))
         {
@@ -98,10 +112,23 @@ public sealed class LipSyncSection : IDisposable
 
         ImGui.SameLine(0f, ChipGap);
 
-        if (ImGuiHelpers.Chip("Realistic", isRealistic))
+        if (realisticAvailable)
         {
-            if (!isRealistic)
-                WriteEngine(LipSyncEngine.Audio2Face);
+            if (ImGuiHelpers.Chip("Realistic", isRealistic))
+            {
+                if (!isRealistic)
+                    WriteEngine(LipSyncEngine.Audio2Face);
+            }
+        }
+        else
+        {
+            // Inert locked pill — never persists Audio2Face when its assets are absent,
+            // which would otherwise force the runtime to silently fall back to VBridger.
+            ImGuiHelpers.LockedChip(
+                "Realistic",
+                "Realistic lip sync",
+                FeatureProfileMap.MinimumProfileLabel(FeatureIds.Audio2Face)
+            );
         }
 
         ImGuiHelpers.SettingEndRow(rowY);

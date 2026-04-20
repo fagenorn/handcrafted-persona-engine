@@ -45,6 +45,48 @@
       "extractArchive": false
     },
     {
+      "id": "cuda-cudart-13.0",
+      "kind": "NativeRuntime",
+      "displayName": "CUDA Runtime 13.0 (cudart) — Whisper",
+      "capability": { "name": "Core runtime", "description": "GPU runtime libraries (CUDA cudart) required by Whisper.net's CUDA 13 backend" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "NvidiaRedist",
+        "channel": "cuda",
+        "package": "cuda_cudart",
+        "version": "13.0.3",
+        "platform": "windows-x86_64",
+        "extractFiles": []
+      },
+      "installPath": "cuda/cudart-v13",
+      "sha256": "FROM_NVIDIA_MANIFEST",
+      "sizeBytes": 0,
+      "gates": [],
+      "extractArchive": false
+    },
+    {
+      "id": "cuda-cublas-13.0",
+      "kind": "NativeRuntime",
+      "displayName": "cuBLAS 13.0 — Whisper",
+      "capability": { "name": "Core runtime", "description": "GPU BLAS library (cuBLAS) required by Whisper.net's CUDA 13 backend (cublas64_13.dll)" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "NvidiaRedist",
+        "channel": "cuda",
+        "package": "libcublas",
+        "version": "13.0.3",
+        "platform": "windows-x86_64",
+        "extractFiles": []
+      },
+      "installPath": "cuda/cublas-v13",
+      "sha256": "FROM_NVIDIA_MANIFEST",
+      "sizeBytes": 0,
+      "gates": [],
+      "extractArchive": false
+    },
+    {
       "id": "cuda-cufft-12.4",
       "kind": "NativeRuntime",
       "displayName": "cuFFT 12.4",
@@ -100,8 +142,8 @@
         "path": "silero-vad/silero_vad_v5.onnx"
       },
       "installPath": "silero-vad/silero_vad_v5.onnx",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "6b99cbfd39246b6706f98ec13c7c50c6b299181f2474fa05cbc8046acc274396",
+      "sizeBytes": 2313101,
       "gates": ["Asr.WhisperTiny", "Asr.WhisperTurbo"],
       "extractArchive": false
     },
@@ -119,8 +161,8 @@
         "path": "whisper/ggml-tiny.en.bin"
       },
       "installPath": "whisper/ggml-tiny.en.bin",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f",
+      "sizeBytes": 77704715,
       "gates": ["Asr.WhisperTiny"],
       "extractArchive": false
     },
@@ -138,8 +180,8 @@
         "path": "whisper/ggml-large-v3-turbo.bin"
       },
       "installPath": "whisper/ggml-large-v3-turbo.bin",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69",
+      "sizeBytes": 1624555275,
       "gates": ["Asr.WhisperTurbo"],
       "extractArchive": false
     },
@@ -157,8 +199,8 @@
         "path": "profanity/profanity.zip"
       },
       "installPath": "profanity",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "241bcce34694ebc0f78bcd18b490304c20919ec1b3bcdebb47a0a4aa3b43df3f",
+      "sizeBytes": 7899579,
       "gates": ["Tts.ProfanityBeep"],
       "extractArchive": true
     },
@@ -176,8 +218,8 @@
         "path": "opennlp/opennlp.zip"
       },
       "installPath": "opennlp",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "cbfee1c6325909238ae906a6285565e76707aa3512c67f36d67e90a37847e6cf",
+      "sizeBytes": 92857770,
       "gates": ["Tts.Kokoro", "Tts.Qwen3"],
       "extractArchive": true
     },
@@ -195,8 +237,8 @@
         "path": "kokoro/model_slim.onnx"
       },
       "installPath": "kokoro/model_slim.onnx",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "0d471792aa785fa516918d56316efb8d92ada31765dee8677703ee014fd59d92",
+      "sizeBytes": 325444192,
       "gates": ["Tts.Kokoro"],
       "extractArchive": false
     },
@@ -214,8 +256,8 @@
         "path": "kokoro/voices-default.zip"
       },
       "installPath": "kokoro/voices",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "678cf4f576e3955ea7f562ab6b2811aa36ea345fb1e1644ddd4ce5c0abd292bc",
+      "sizeBytes": 5757810,
       "gates": ["Tts.Kokoro"],
       "extractArchive": true,
       "userAssetCategory": "KokoroVoice"
@@ -234,8 +276,8 @@
         "path": "kokoro/phoneme_to_id.txt"
       },
       "installPath": "kokoro/phoneme_to_id.txt",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "407cbb2696f66156dfbbcf4c0d07912a5c96971d9f33d20216eac953c9f85dcd",
+      "sizeBytes": 1280,
       "gates": ["Tts.Kokoro"],
       "extractArchive": false
     },
@@ -253,8 +295,8 @@
         "path": "kokoro/lexicons.zip"
       },
       "installPath": "kokoro/lexicons",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "d658316d29bfb625c669f556e78abee712eebf7ac955b911b1b1b0b10e616b26",
+      "sizeBytes": 2965010,
       "gates": ["Tts.Kokoro"],
       "extractArchive": true
     },
@@ -272,8 +314,8 @@
         "path": "qwen3-tts/qwen3-tts.zip"
       },
       "installPath": "qwen3-tts",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "c688dee3d3bc133109b01c6432398131133faf6c5084a5386a325ca1391346ef",
+      "sizeBytes": 2651941388,
       "gates": ["Tts.Qwen3"],
       "extractArchive": true
     },
@@ -291,8 +333,8 @@
         "path": "rvc/vec-768-layer-12.onnx"
       },
       "installPath": "rvc/vec-768-layer-12.onnx",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "b3886e7dff1495cda514f94f4680a7b1261e05d6929f5c764cdb17934b413c2a",
+      "sizeBytes": 377655729,
       "gates": ["Tts.Rvc"],
       "extractArchive": false
     },
@@ -310,8 +352,8 @@
         "path": "rvc/crepe_tiny.onnx"
       },
       "installPath": "rvc/crepe_tiny.onnx",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "7fd045b75d2b0d08fe7bb2711e466a4e76b625714f07ea3aabedb50598d7428e",
+      "sizeBytes": 2193941,
       "gates": ["Tts.Rvc"],
       "extractArchive": false
     },
@@ -329,8 +371,8 @@
         "path": "rvc/rmvpe.onnx"
       },
       "installPath": "rvc/rmvpe.onnx",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "5370e71ac80af8b4b7c793d27efd51fd8bf962de3a7ede0766dac0befa3660fd",
+      "sizeBytes": 361688443,
       "gates": ["Tts.Rvc"],
       "extractArchive": false
     },
@@ -348,8 +390,8 @@
         "path": "rvc/voices-default.zip"
       },
       "installPath": "rvc/voices",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "a8ecacb4af8de84ceb2d35a9c3ee1149f9359e3a47fd8b2a56403e73491ec337",
+      "sizeBytes": 529356344,
       "gates": ["Tts.Rvc"],
       "extractArchive": true,
       "userAssetCategory": "RvcVoice"
@@ -368,8 +410,8 @@
         "path": "wav2vec2/wav2vec2.zip"
       },
       "installPath": "wav2vec2",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "b43183222e046d755c468395090e989d6842e148c84cb58a3b753a321c1aa344",
+      "sizeBytes": 230293129,
       "gates": ["Tts.Qwen3"],
       "extractArchive": true
     },
@@ -387,8 +429,8 @@
         "path": "live2d/aria.zip"
       },
       "installPath": "live2d/aria",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "6b4b3b0209bf84fadc4879d95c49151793275a4096a5c7b89aa793056f3868bc",
+      "sizeBytes": 45865703,
       "gates": ["Live2D.Avatar"],
       "extractArchive": true,
       "userAssetCategory": "Live2DModel"
@@ -407,8 +449,8 @@
         "path": "audio2face/audio2face.zip"
       },
       "installPath": "audio2face",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "f792d64911dd0661016269cc859a91570c703bb933d5db630209269d6a016e04",
+      "sizeBytes": 662800757,
       "gates": ["Tts.Audio2Face"],
       "extractArchive": true
     },
@@ -426,8 +468,8 @@
         "path": "mdx/mdx.zip"
       },
       "installPath": "mdx",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "447702539aac5d860c79d94267d7d301419238a5e0b3eeab49b0cdf412db7369",
+      "sizeBytes": 172776813,
       "gates": ["Music.SourceSeparation"],
       "extractArchive": true
     },
@@ -445,8 +487,8 @@
         "path": "mel_band_roformer/melbandroformer_optimized.onnx"
       },
       "installPath": "mel_band_roformer/melbandroformer_optimized.onnx",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "d40f00b37c06603ff1c354a9f824b09d34cd50f658af0d038923fc69508354e6",
+      "sizeBytes": 278136350,
       "gates": ["Music.SourceSeparation"],
       "extractArchive": false
     },
@@ -464,8 +506,8 @@
         "path": "vision/MARKER"
       },
       "installPath": "vision/MARKER",
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "sizeBytes": 0,
+      "sha256": "f1945cd6c19e56b3c1c78943ef5ec18116907a4ca1efc40a57d48ab1db7adfc5",
+      "sizeBytes": 3,
       "gates": ["Llm.Vision"],
       "extractArchive": false
     }

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.ML.OnnxRuntime;
+using PersonaEngine.Lib.TTS.Synthesis;
 using Serilog;
 using ILogger = Serilog.ILogger;
 
@@ -127,7 +128,8 @@ internal static class StartupValidator
 
     private static void CheckEspeakNg(ILogger log, IConfiguration config, ref int errors)
     {
-        var espeakPath = config["Config:Tts:EspeakPath"] ?? "espeak-ng";
+        var resolved = EspeakResolver.Resolve(config["Config:Tts:EspeakPath"]);
+        var espeakPath = resolved.ExecutablePath;
 
         try
         {
@@ -141,6 +143,10 @@ internal static class StartupValidator
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
+            if (resolved.IsBundled)
+            {
+                process.StartInfo.EnvironmentVariables["ESPEAK_DATA_PATH"] = resolved.DataPath;
+            }
             process.Start();
 
             // espeak-ng writes version info to stderr on some platforms

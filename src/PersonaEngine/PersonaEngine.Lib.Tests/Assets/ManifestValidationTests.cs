@@ -59,7 +59,7 @@ public class ManifestValidationTests
     /// assertion when <c>PERSONA_ALLOW_PLACEHOLDER_HASHES=1</c> is set in the
     /// environment. The release workflow (.github/workflows/release.yml) does
     /// NOT set that variable AND has a separate fail-fast PowerShell step, so
-    /// a tag push fails until <c>scripts/hash-manifest.ps1</c> has been run.
+    /// a tag push fails until <c>scripts/hash-manifest.py</c> has been run.
     /// </para>
     /// </summary>
     [Fact]
@@ -87,7 +87,7 @@ public class ManifestValidationTests
                 .Sha256.Should()
                 .NotMatchRegex(
                     "^0+$",
-                    $"asset '{asset.Id}' has placeholder all-zero sha256 — run scripts/hash-manifest.ps1 before tagging a release "
+                    $"asset '{asset.Id}' has placeholder all-zero sha256 — run scripts/hash-manifest.py before tagging a release "
                         + "(set PERSONA_ALLOW_PLACEHOLDER_HASHES=1 to suppress locally during pre-release dev)"
                 );
         }
