@@ -17,4 +17,11 @@ public sealed record BootstrapOptions
     /// during app startup.
     /// </remarks>
     public string? ResourceRootOverride { get; init; }
+
+    /// <summary>
+    /// Skip the NVIDIA GPU / driver preflight check. Intended for dev / WSL2 /
+    /// remote-GPU scenarios where nvidia-smi may not report accurately but
+    /// CUDA still works at runtime.
+    /// </summary>
+    public bool SkipGpuCheck { get; init; }
 }

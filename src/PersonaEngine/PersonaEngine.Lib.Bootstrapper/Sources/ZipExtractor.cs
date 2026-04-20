@@ -19,8 +19,13 @@ public static class ZipExtractor
         {
             ct.ThrowIfCancellationRequested();
 
+            // Empty list and null both mean "extract everything" — the manifest
+            // convention is `extractFiles: []` for NVIDIA archives where the
+            // whole zip's contents (DLLs in cuda_cudart/.../bin/) are wanted.
+            // Treating `[]` as "extract nothing" silently produces an empty
+            // install dir and an apparently-successful bootstrap.
             if (
-                wantedEntries is not null
+                wantedEntries is { Count: > 0 }
                 && !wantedEntries.Contains(entry.FullName, StringComparer.OrdinalIgnoreCase)
             )
                 continue;

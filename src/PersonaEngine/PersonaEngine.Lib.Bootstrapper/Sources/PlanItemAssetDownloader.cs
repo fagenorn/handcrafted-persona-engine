@@ -33,7 +33,7 @@ public sealed class PlanItemAssetDownloader : IAssetDownloader
 
     public async Task DownloadAsync(
         AssetPlanItem item,
-        IProgress<long> progress,
+        IProgress<DownloadProgress> progress,
         CancellationToken ct
     )
     {
@@ -60,12 +60,7 @@ public sealed class PlanItemAssetDownloader : IAssetDownloader
         var download = await client
             .ResolveAsync(item.Entry, destinationPath, ct)
             .ConfigureAwait(false);
-        var wrappedProgress = new Progress<DownloadProgress>(p =>
-            progress.Report(p.BytesDownloaded)
-        );
 
-        await _inner
-            .DownloadAsync(download, destinationPath, wrappedProgress, ct)
-            .ConfigureAwait(false);
+        await _inner.DownloadAsync(download, destinationPath, progress, ct).ConfigureAwait(false);
     }
 }

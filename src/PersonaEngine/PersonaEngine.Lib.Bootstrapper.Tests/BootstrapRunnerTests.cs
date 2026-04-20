@@ -2,6 +2,7 @@ using FluentAssertions;
 using NSubstitute;
 using PersonaEngine.Lib.Assets;
 using PersonaEngine.Lib.Assets.Manifest;
+using PersonaEngine.Lib.Bootstrapper.GpuPreflight;
 using PersonaEngine.Lib.Bootstrapper.Planner;
 using PersonaEngine.Lib.Bootstrapper.Sources;
 using PersonaEngine.Lib.Bootstrapper.Tests.Helpers;
@@ -16,6 +17,7 @@ public sealed class BootstrapRunnerTests : IDisposable
     private readonly IAssetDownloader _downloader;
     private readonly IAssetCatalog _catalog;
     private readonly IBootstrapUserInterface _ui;
+    private readonly IGpuPreflightCheck _gpuPreflight;
 
     public BootstrapRunnerTests()
     {
@@ -29,6 +31,13 @@ public sealed class BootstrapRunnerTests : IDisposable
         _downloader = Substitute.For<IAssetDownloader>();
         _catalog = Substitute.For<IAssetCatalog>();
         _ui = Substitute.For<IBootstrapUserInterface>();
+        _gpuPreflight = Substitute.For<IGpuPreflightCheck>();
+
+        // Default: preflight passes. Individual tests that exercise failure
+        // paths override this via .InspectAsync(...).Returns(...).
+        _gpuPreflight
+            .InspectAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(GpuStatus.Pass("580.65", "Test GPU", (8, 9))));
     }
 
     public void Dispose()
@@ -54,6 +63,7 @@ public sealed class BootstrapRunnerTests : IDisposable
             _downloader,
             _catalog,
             _ui,
+            _gpuPreflight,
             _tempDir
         );
     }
@@ -68,7 +78,9 @@ public sealed class BootstrapRunnerTests : IDisposable
             .Returns(Task.FromResult(ProfileTier.TryItOut));
         _ui.RunWithProgressAsync(
                 Arg.Any<IReadOnlyList<AssetPlanItem>>(),
-                Arg.Any<Func<AssetPlanItem, IProgress<long>, CancellationToken, Task>>(),
+                Arg.Any<
+                    Func<AssetPlanItem, IProgress<DownloadProgress>, CancellationToken, Task>
+                >(),
                 Arg.Any<CancellationToken>()
             )
             .Returns(Task.FromResult(true));
@@ -124,6 +136,7 @@ public sealed class BootstrapRunnerTests : IDisposable
             _downloader,
             _catalog,
             _ui,
+            _gpuPreflight,
             _tempDir
         );
 
@@ -144,13 +157,15 @@ public sealed class BootstrapRunnerTests : IDisposable
             .DidNotReceive()
             .DownloadAsync(
                 Arg.Any<AssetPlanItem>(),
-                Arg.Any<IProgress<long>>(),
+                Arg.Any<IProgress<DownloadProgress>>(),
                 Arg.Any<CancellationToken>()
             );
         await _ui.DidNotReceive()
             .RunWithProgressAsync(
                 Arg.Any<IReadOnlyList<AssetPlanItem>>(),
-                Arg.Any<Func<AssetPlanItem, IProgress<long>, CancellationToken, Task>>(),
+                Arg.Any<
+                    Func<AssetPlanItem, IProgress<DownloadProgress>, CancellationToken, Task>
+                >(),
                 Arg.Any<CancellationToken>()
             );
     }
@@ -181,7 +196,7 @@ public sealed class BootstrapRunnerTests : IDisposable
             .DidNotReceive()
             .DownloadAsync(
                 Arg.Any<AssetPlanItem>(),
-                Arg.Any<IProgress<long>>(),
+                Arg.Any<IProgress<DownloadProgress>>(),
                 Arg.Any<CancellationToken>()
             );
     }
@@ -194,7 +209,9 @@ public sealed class BootstrapRunnerTests : IDisposable
 
         _ui.RunWithProgressAsync(
                 Arg.Any<IReadOnlyList<AssetPlanItem>>(),
-                Arg.Any<Func<AssetPlanItem, IProgress<long>, CancellationToken, Task>>(),
+                Arg.Any<
+                    Func<AssetPlanItem, IProgress<DownloadProgress>, CancellationToken, Task>
+                >(),
                 Arg.Any<CancellationToken>()
             )
             .Returns(Task.FromResult(true));
@@ -259,7 +276,9 @@ public sealed class BootstrapRunnerTests : IDisposable
             .Returns(Task.FromResult(ProfileTier.TryItOut));
         _ui.RunWithProgressAsync(
                 Arg.Any<IReadOnlyList<AssetPlanItem>>(),
-                Arg.Any<Func<AssetPlanItem, IProgress<long>, CancellationToken, Task>>(),
+                Arg.Any<
+                    Func<AssetPlanItem, IProgress<DownloadProgress>, CancellationToken, Task>
+                >(),
                 Arg.Any<CancellationToken>()
             )
             .Returns(Task.FromResult(true));
@@ -272,6 +291,7 @@ public sealed class BootstrapRunnerTests : IDisposable
             _downloader,
             _catalog,
             _ui,
+            _gpuPreflight,
             _tempDir
         );
 
@@ -339,7 +359,9 @@ public sealed class BootstrapRunnerTests : IDisposable
 
         _ui.RunWithProgressAsync(
                 Arg.Any<IReadOnlyList<AssetPlanItem>>(),
-                Arg.Any<Func<AssetPlanItem, IProgress<long>, CancellationToken, Task>>(),
+                Arg.Any<
+                    Func<AssetPlanItem, IProgress<DownloadProgress>, CancellationToken, Task>
+                >(),
                 Arg.Any<CancellationToken>()
             )
             .Returns(Task.FromResult(true));
@@ -352,6 +374,7 @@ public sealed class BootstrapRunnerTests : IDisposable
             _downloader,
             _catalog,
             _ui,
+            _gpuPreflight,
             _tempDir
         );
 
@@ -369,5 +392,157 @@ public sealed class BootstrapRunnerTests : IDisposable
             .Exists(bundleDir)
             .Should()
             .BeFalse("directory install paths must be removed recursively");
+    }
+
+    [Fact]
+    public async Task GpuPreflight_failure_with_user_abort_short_circuits_run()
+    {
+        var asset = BuildAsset("model-gpu");
+        var manifest = BuildManifest(asset);
+
+        _gpuPreflight
+            .InspectAsync(Arg.Any<CancellationToken>())
+            .Returns(
+                Task.FromResult(
+                    GpuStatus.Fail(GpuFailureKind.NoDriver, "No NVIDIA driver detected.")
+                )
+            );
+        _ui.ShowGpuWarningAsync(Arg.Any<GpuStatus>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(GpuWarningResponse.Abort));
+
+        var runner = BuildRunner(manifest);
+        var result = await runner.RunAsync(
+            new BootstrapOptions { Mode = BootstrapMode.AutoIfMissing },
+            CancellationToken.None
+        );
+
+        // Abort: picker never runs, no downloads, no lock file, Success=false.
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("GPU preflight");
+        await _ui.DidNotReceive()
+            .PickProfileAsync(
+                Arg.Any<IReadOnlyList<ProfileChoice>>(),
+                Arg.Any<CancellationToken>()
+            );
+        await _downloader
+            .DidNotReceive()
+            .DownloadAsync(
+                Arg.Any<AssetPlanItem>(),
+                Arg.Any<IProgress<DownloadProgress>>(),
+                Arg.Any<CancellationToken>()
+            );
+        File.Exists(_lockPath).Should().BeFalse("aborted run must not persist a lock");
+    }
+
+    [Fact]
+    public async Task GpuPreflight_failure_with_user_continue_proceeds_to_install()
+    {
+        var asset = BuildAsset("model-gpu-ok");
+        var manifest = BuildManifest(asset);
+
+        _gpuPreflight
+            .InspectAsync(Arg.Any<CancellationToken>())
+            .Returns(
+                Task.FromResult(
+                    GpuStatus.Fail(
+                        GpuFailureKind.DriverTooOld,
+                        "Driver 560.30 is older than 580.65.",
+                        driver: "560.30",
+                        name: "Test GPU"
+                    )
+                )
+            );
+        _ui.ShowGpuWarningAsync(Arg.Any<GpuStatus>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(GpuWarningResponse.Continue));
+        _ui.PickProfileAsync(Arg.Any<IReadOnlyList<ProfileChoice>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(ProfileTier.TryItOut));
+        _ui.RunWithProgressAsync(
+                Arg.Any<IReadOnlyList<AssetPlanItem>>(),
+                Arg.Any<
+                    Func<AssetPlanItem, IProgress<DownloadProgress>, CancellationToken, Task>
+                >(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(Task.FromResult(true));
+
+        var runner = BuildRunner(manifest);
+        var result = await runner.RunAsync(
+            new BootstrapOptions { Mode = BootstrapMode.AutoIfMissing },
+            CancellationToken.None
+        );
+
+        result.Success.Should().BeTrue();
+        await _ui.Received(1)
+            .ShowGpuWarningAsync(Arg.Any<GpuStatus>(), Arg.Any<CancellationToken>());
+        await _ui.Received(1)
+            .PickProfileAsync(
+                Arg.Any<IReadOnlyList<ProfileChoice>>(),
+                Arg.Any<CancellationToken>()
+            );
+    }
+
+    [Fact]
+    public async Task GpuPreflight_pass_does_not_show_warning_UI()
+    {
+        // Default _gpuPreflight already returns Pass in the constructor.
+        var asset = BuildAsset("model-pass");
+        var manifest = BuildManifest(asset);
+
+        _ui.PickProfileAsync(Arg.Any<IReadOnlyList<ProfileChoice>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(ProfileTier.TryItOut));
+        _ui.RunWithProgressAsync(
+                Arg.Any<IReadOnlyList<AssetPlanItem>>(),
+                Arg.Any<
+                    Func<AssetPlanItem, IProgress<DownloadProgress>, CancellationToken, Task>
+                >(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(Task.FromResult(true));
+
+        var runner = BuildRunner(manifest);
+        await runner.RunAsync(
+            new BootstrapOptions { Mode = BootstrapMode.AutoIfMissing },
+            CancellationToken.None
+        );
+
+        await _ui.DidNotReceive()
+            .ShowGpuWarningAsync(Arg.Any<GpuStatus>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SkipGpuCheck_flag_bypasses_preflight_entirely()
+    {
+        // Configure the preflight to fail hard — if it were called, this run
+        // would abort. The --skip-gpu-check flag must short-circuit that path.
+        _gpuPreflight
+            .InspectAsync(Arg.Any<CancellationToken>())
+            .Returns(
+                Task.FromResult(GpuStatus.Fail(GpuFailureKind.NoDriver, "Should never be seen."))
+            );
+
+        var asset = BuildAsset("model-skip");
+        var manifest = BuildManifest(asset);
+
+        _ui.PickProfileAsync(Arg.Any<IReadOnlyList<ProfileChoice>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(ProfileTier.TryItOut));
+        _ui.RunWithProgressAsync(
+                Arg.Any<IReadOnlyList<AssetPlanItem>>(),
+                Arg.Any<
+                    Func<AssetPlanItem, IProgress<DownloadProgress>, CancellationToken, Task>
+                >(),
+                Arg.Any<CancellationToken>()
+            )
+            .Returns(Task.FromResult(true));
+
+        var runner = BuildRunner(manifest);
+        var result = await runner.RunAsync(
+            new BootstrapOptions { Mode = BootstrapMode.AutoIfMissing, SkipGpuCheck = true },
+            CancellationToken.None
+        );
+
+        result.Success.Should().BeTrue();
+        await _gpuPreflight.DidNotReceive().InspectAsync(Arg.Any<CancellationToken>());
+        await _ui.DidNotReceive()
+            .ShowGpuWarningAsync(Arg.Any<GpuStatus>(), Arg.Any<CancellationToken>());
     }
 }

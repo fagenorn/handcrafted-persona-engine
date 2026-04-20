@@ -46,6 +46,20 @@ public sealed class CommandLineArgsTests
     }
 
     [Fact]
+    public void SkipGpuCheck_flag_is_recognized()
+    {
+        var parsed = CommandLineArgs.Parse(new[] { "--skip-gpu-check" });
+        parsed.Bootstrap.SkipGpuCheck.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SkipGpuCheck_defaults_to_false()
+    {
+        var parsed = CommandLineArgs.Parse(Array.Empty<string>());
+        parsed.Bootstrap.SkipGpuCheck.Should().BeFalse();
+    }
+
+    [Fact]
     public void Unknown_args_are_ignored_without_failing_known_flags()
     {
         // Unknown args were originally captured into a PassThrough list; that

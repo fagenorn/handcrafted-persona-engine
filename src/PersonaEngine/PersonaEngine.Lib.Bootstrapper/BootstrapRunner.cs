@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using PersonaEngine.Lib.Assets;
 using PersonaEngine.Lib.Assets.Manifest;
+using PersonaEngine.Lib.Bootstrapper.GpuPreflight;
 using PersonaEngine.Lib.Bootstrapper.Planner;
 using PersonaEngine.Lib.Bootstrapper.Sources;
 
@@ -21,6 +22,7 @@ public sealed class BootstrapRunner
     // no explicit refresh call is needed after a download run.
     private readonly IAssetCatalog _catalog;
     private readonly IBootstrapUserInterface _ui;
+    private readonly IGpuPreflightCheck _gpuPreflight;
     private readonly string _resourceRoot;
     private readonly ILogger<BootstrapRunner>? _log;
 
@@ -31,6 +33,7 @@ public sealed class BootstrapRunner
         IAssetDownloader downloader,
         IAssetCatalog catalog,
         IBootstrapUserInterface ui,
+        IGpuPreflightCheck gpuPreflight,
         string resourceRoot,
         ILogger<BootstrapRunner>? log = null
     )
@@ -41,6 +44,7 @@ public sealed class BootstrapRunner
         _downloader = downloader;
         _catalog = catalog;
         _ui = ui;
+        _gpuPreflight = gpuPreflight;
         _resourceRoot = resourceRoot;
         _log = log;
     }
@@ -49,6 +53,38 @@ public sealed class BootstrapRunner
     {
         try
         {
+            // GPU preflight runs first so a user with an incompatible rig doesn't
+            // spend hours downloading ~9 GB of CUDA/cuDNN/ONNX redistributables.
+            // The check is opt-out via --skip-gpu-check for dev / WSL / remote-GPU
+            // scenarios where nvidia-smi may report oddly but CUDA still works.
+            if (!options.SkipGpuCheck)
+            {
+                var gpu = await _gpuPreflight.InspectAsync(ct).ConfigureAwait(false);
+                if (!gpu.Ok)
+                {
+                    _log?.LogWarning(
+                        "GPU preflight failed: {Kind} — {Detail}",
+                        gpu.Kind,
+                        gpu.Detail
+                    );
+                    var response = await _ui.ShowGpuWarningAsync(gpu, ct).ConfigureAwait(false);
+                    if (response == GpuWarningResponse.Abort)
+                    {
+                        return new BootstrapResult
+                        {
+                            Success = false,
+                            ActiveProfile = options.PreselectedProfile ?? ProfileTier.TryItOut,
+                            ChangesApplied = false,
+                            ErrorMessage = $"GPU preflight check failed ({gpu.Kind}): {gpu.Detail}",
+                        };
+                    }
+                    _log?.LogInformation(
+                        "User chose to continue despite GPU preflight failure ({Kind})",
+                        gpu.Kind
+                    );
+                }
+            }
+
             var existingLock = _lockStore.Read(_manifest.ManifestVersion);
             var profile = await ResolveProfileAsync(options, existingLock, ct)
                 .ConfigureAwait(false);
@@ -170,7 +206,8 @@ public sealed class BootstrapRunner
 
         if (needsPicker)
         {
-            return await _ui.PickProfileAsync(ProfileChoiceCatalog.All, ct).ConfigureAwait(false);
+            return await _ui.PickProfileAsync(ProfileChoiceCatalog.BuildFrom(_manifest), ct)
+                .ConfigureAwait(false);
         }
 
         // For Verify/Repair modes called before any install, existingLock.SelectedProfile will be

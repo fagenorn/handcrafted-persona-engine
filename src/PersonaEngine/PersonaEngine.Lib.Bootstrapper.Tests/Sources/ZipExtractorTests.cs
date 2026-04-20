@@ -72,6 +72,30 @@ public class ZipExtractorTests : IDisposable
     }
 
     [Fact]
+    public async Task Extract_all_entries_when_filter_is_empty_list()
+    {
+        // NVIDIA assets in the install manifest are configured with
+        // `extractFiles: []`, which deserialises to an empty list (not null).
+        // This must mean "extract everything" — the alternative ("extract
+        // nothing") silently produces an empty install dir and a fake
+        // bootstrap success.
+        var zipBytes = BuildZip(
+            new() { ["bin/cudart64_12.dll"] = new byte[] { 1 }, ["bin/extra"] = new byte[] { 2 } }
+        );
+
+        await using var zip = new MemoryStream(zipBytes);
+        await ZipExtractor.ExtractAsync(
+            zip,
+            wantedEntries: Array.Empty<string>(),
+            _tempDir,
+            CancellationToken.None
+        );
+
+        File.Exists(Path.Combine(_tempDir, "bin", "cudart64_12.dll")).Should().BeTrue();
+        File.Exists(Path.Combine(_tempDir, "bin", "extra")).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Extract_all_entries_when_filter_is_null()
     {
         var zipBytes = BuildZip(

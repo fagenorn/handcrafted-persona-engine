@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using PersonaEngine.Lib.Bootstrapper.Verification;
 
@@ -66,47 +67,63 @@ public sealed class AssetDownloader
         CancellationToken ct
     )
     {
-        // Open .partial for append (or create) so resume continues from the existing bytes.
-        await using var fs = new FileStream(
-            partial,
-            FileMode.OpenOrCreate,
-            FileAccess.Write,
-            FileShare.None
-        );
-        fs.Seek(0, SeekOrigin.End);
-
-        await using var net = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-
-        long totalCopied = resumeFrom;
-        var buffer = new byte[81920];
-        int n;
-        while (
-            (n = await net.ReadAsync(buffer.AsMemory(0, buffer.Length), ct).ConfigureAwait(false))
-            > 0
+        // Phase 1: stream the HTTP body to .partial (resumable on retry).
+        await using (
+            var fs = new FileStream(
+                partial,
+                FileMode.OpenOrCreate,
+                FileAccess.Write,
+                FileShare.None
+            )
         )
         {
-            await fs.WriteAsync(buffer.AsMemory(0, n), ct).ConfigureAwait(false);
-            totalCopied += n;
-            progress?.Report(new DownloadProgress(totalCopied, download.ExpectedSize));
-        }
-        await fs.FlushAsync(ct).ConfigureAwait(false);
-        fs.Close();
+            fs.Seek(0, SeekOrigin.End);
 
-        // Verify hash by streaming the full .partial through Sha256VerifyingStream.
+            await using var net = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+
+            long totalCopied = resumeFrom;
+            var buffer = new byte[81920];
+            int n;
+            while (
+                (
+                    n = await net.ReadAsync(buffer.AsMemory(0, buffer.Length), ct)
+                        .ConfigureAwait(false)
+                ) > 0
+            )
+            {
+                await fs.WriteAsync(buffer.AsMemory(0, n), ct).ConfigureAwait(false);
+                totalCopied += n;
+                progress?.Report(new DownloadProgress(totalCopied, download.ExpectedSize));
+            }
+            await fs.FlushAsync(ct).ConfigureAwait(false);
+        }
+
+        // Phase 2: verify SHA256 then (optionally) hand a SEEKABLE FileStream
+        // to PostProcess. ZipArchive in Read mode requires CanSeek so it can
+        // jump to the central directory at EOF; if it gets a non-seekable
+        // stream it silently buffers everything into a MemoryStream, which
+        // throws "Stream was too long" past Int32.MaxValue (~2 GB) — exactly
+        // how qwen3-tts.zip (2.65 GB) crashed the BuildWithIt bootstrap.
         try
         {
-            await using var verify = new Sha256VerifyingStream(
-                File.OpenRead(partial),
-                download.ExpectedSha256
+            await using var verify = new FileStream(
+                partial,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read
             );
+            var actualHash = Convert
+                .ToHexString(await SHA256.HashDataAsync(verify, ct).ConfigureAwait(false))
+                .ToLowerInvariant();
+            if (!actualHash.Equals(download.ExpectedSha256, StringComparison.OrdinalIgnoreCase))
+                throw new IntegrityException(
+                    $"sha256 mismatch: expected {download.ExpectedSha256.ToLowerInvariant()}, got {actualHash}"
+                );
+
             if (download.PostProcess is not null)
             {
+                verify.Seek(0, SeekOrigin.Begin);
                 await download.PostProcess(verify, ct).ConfigureAwait(false);
-            }
-            else
-            {
-                // Drain to end so the EOF check fires.
-                await verify.CopyToAsync(Stream.Null, ct).ConfigureAwait(false);
             }
         }
         catch

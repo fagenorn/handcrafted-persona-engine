@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
 using PersonaEngine.Lib.Assets.Manifest;
+using PersonaEngine.Lib.Bootstrapper.GpuPreflight;
 using PersonaEngine.Lib.Bootstrapper.Planner;
+using PersonaEngine.Lib.Bootstrapper.Sources;
 
 namespace PersonaEngine.Lib.Bootstrapper;
 
@@ -22,16 +24,31 @@ public sealed class NoOpBootstrapUserInterface : IBootstrapUserInterface
             "Cannot prompt for profile in --non-interactive mode. Pass --profile=<try|stream|build>."
         );
 
+    /// <summary>
+    /// Non-interactive mode can't prompt, so any GPU preflight failure aborts
+    /// the run. Operators can pass <c>--skip-gpu-check</c> on the CLI to run
+    /// anyway (useful in WSL / CI where nvidia-smi may report oddly).
+    /// </summary>
+    public Task<GpuWarningResponse> ShowGpuWarningAsync(GpuStatus status, CancellationToken ct)
+    {
+        _log?.LogError(
+            "GPU preflight failed in non-interactive mode ({Kind}): {Detail}",
+            status.Kind,
+            status.Detail
+        );
+        return Task.FromResult(GpuWarningResponse.Abort);
+    }
+
     public void ShowPlanSummary(AssetPlan plan) { }
 
     public async Task<bool> RunWithProgressAsync(
         IReadOnlyList<AssetPlanItem> items,
-        Func<AssetPlanItem, IProgress<long>, CancellationToken, Task> executeOne,
+        Func<AssetPlanItem, IProgress<DownloadProgress>, CancellationToken, Task> executeOne,
         CancellationToken ct
     )
     {
         var allOk = true;
-        var noopProgress = new Progress<long>(_ => { });
+        var noopProgress = new Progress<DownloadProgress>(_ => { });
         foreach (var item in items)
         {
             try

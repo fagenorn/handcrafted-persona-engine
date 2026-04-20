@@ -50,15 +50,21 @@ public sealed class NvidiaRedistManifest
             {
                 if (sub.Value.ValueKind != JsonValueKind.Object)
                     continue;
-                if (!sub.Value.TryGetProperty("relative_path", out _))
-                    continue;
 
-                platforms[sub.Name] = new NvidiaRedistPlatform(
-                    RelativePath: sub.Value.GetProperty("relative_path").GetString() ?? "",
-                    Sha256: sub.Value.GetProperty("sha256").GetString() ?? "",
-                    Md5: sub.Value.TryGetProperty("md5", out var md5) ? md5.GetString() ?? "" : "",
-                    Size: ParseSize(sub.Value.GetProperty("size"))
-                );
+                // Most NVIDIA packages (cudart, cublas, cufft, ...) keep platform
+                // entries flat: `windows-x86_64: { relative_path, sha256, ... }`.
+                // cuDNN nests by cuda variant instead:
+                //   windows-x86_64: { cuda11: { relative_path, ... }, cuda12: { ... } }
+                // The whole engine targets CUDA 12, so pick cuda12 unconditionally
+                // when we see the nested shape; cuda11 is ignored.
+                if (sub.Value.TryGetProperty("relative_path", out _))
+                {
+                    platforms[sub.Name] = ReadPlatform(sub.Value);
+                }
+                else if (sub.Value.TryGetProperty("cuda12", out var cuda12Variant))
+                {
+                    platforms[sub.Name] = ReadPlatform(cuda12Variant);
+                }
             }
 
             packages[prop.Name] = new NvidiaRedistPackage(name, license, version, platforms);
@@ -66,6 +72,14 @@ public sealed class NvidiaRedistManifest
 
         return new NvidiaRedistManifest(packages);
     }
+
+    private static NvidiaRedistPlatform ReadPlatform(JsonElement el) =>
+        new(
+            RelativePath: el.GetProperty("relative_path").GetString() ?? "",
+            Sha256: el.GetProperty("sha256").GetString() ?? "",
+            Md5: el.TryGetProperty("md5", out var md5) ? md5.GetString() ?? "" : "",
+            Size: ParseSize(el.GetProperty("size"))
+        );
 
     private static long ParseSize(JsonElement el) =>
         el.ValueKind switch

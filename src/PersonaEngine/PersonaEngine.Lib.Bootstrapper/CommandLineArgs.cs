@@ -12,6 +12,7 @@ public sealed record CommandLineArgs
         var mode = BootstrapMode.AutoIfMissing;
         ProfileTier? profile = null;
         var nonInteractive = false;
+        var skipGpuCheck = false;
 
         foreach (var arg in args)
         {
@@ -32,6 +33,9 @@ public sealed record CommandLineArgs
                 case "--non-interactive":
                     nonInteractive = true;
                     break;
+                case "--skip-gpu-check":
+                    skipGpuCheck = true;
+                    break;
                 case var s when s.StartsWith("--profile=", StringComparison.Ordinal):
                     profile = ParseProfile(s.Substring("--profile=".Length));
                     break;
@@ -46,7 +50,12 @@ public sealed record CommandLineArgs
 
         return new CommandLineArgs
         {
-            Bootstrap = new BootstrapOptions { Mode = mode, PreselectedProfile = profile },
+            Bootstrap = new BootstrapOptions
+            {
+                Mode = mode,
+                PreselectedProfile = profile,
+                SkipGpuCheck = skipGpuCheck,
+            },
             NonInteractive = nonInteractive,
         };
     }

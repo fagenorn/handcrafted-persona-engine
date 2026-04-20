@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using PersonaEngine.Lib.Assets;
 using PersonaEngine.Lib.Assets.Manifest;
+using PersonaEngine.Lib.Bootstrapper.GpuPreflight;
 using PersonaEngine.Lib.Bootstrapper.Planner;
 using PersonaEngine.Lib.Bootstrapper.Sources;
 using BootstrapperHttpExtensions = PersonaEngine.Lib.Bootstrapper.Sources.HttpClientFactoryExtensions;
@@ -29,6 +30,11 @@ public static class ServiceCollectionExtensions
         bool nonInteractive
     )
     {
+        // The host (Program.cs) is responsible for wiring providers (Serilog, etc.)
+        // — AddLogging() here just registers the LoggerFactory infrastructure. If
+        // the host adds no provider, ILogger<T> instances no-op silently, and the
+        // operator only sees the final "Bootstrap failed" FTL line. The App project
+        // calls services.AddLogging(b => b.AddSerilog(...)) after AddBootstrapper.
         services.AddLogging();
 
         services.AddSingleton<InstallManifest>(_ => ManifestLoader.LoadEmbedded());
@@ -95,6 +101,17 @@ public static class ServiceCollectionExtensions
             services.AddSingleton<IBootstrapUserInterface, SpectreBootstrapUserInterface>();
         }
 
+        // GPU preflight — bundles nvidia-smi probe + nvcuda.dll fallback into
+        // a single IGpuPreflightCheck consumed by the runner. The two probe
+        // interfaces are registered separately so tests can substitute them.
+        services.AddSingleton<INvidiaSmiRunner, NvidiaSmiRunner>();
+        services.AddSingleton<INvcudaProbe, NvcudaProbe>();
+        services.AddSingleton<IGpuPreflightCheck>(sp => new NvidiaGpuPreflightCheck(
+            sp.GetRequiredService<INvidiaSmiRunner>(),
+            sp.GetRequiredService<INvcudaProbe>(),
+            sp.GetService<ILogger<NvidiaGpuPreflightCheck>>()
+        ));
+
         services.AddSingleton<BootstrapRunner>(sp => new BootstrapRunner(
             sp.GetRequiredService<InstallManifest>(),
             sp.GetRequiredService<InstallStateLockStore>(),
@@ -102,6 +119,7 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IAssetDownloader>(),
             sp.GetRequiredService<IAssetCatalog>(),
             sp.GetRequiredService<IBootstrapUserInterface>(),
+            sp.GetRequiredService<IGpuPreflightCheck>(),
             ResourceRoot,
             sp.GetService<ILogger<BootstrapRunner>>()
         ));
