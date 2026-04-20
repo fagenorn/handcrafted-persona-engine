@@ -32,8 +32,12 @@ public class UserContentWatcherTests : IDisposable
 
         File.WriteAllText(Path.Combine(_root, "new.bin"), "x");
 
-        var done = await Task.WhenAny(fired.Task, Task.Delay(2000));
-        done.Should().Be(fired.Task, "the watcher should fire within 2s of a file being created");
+        // Timeout is generous: FileSystemWatcher first-event delivery on a
+        // loaded Windows CI runner has been observed to exceed the original
+        // 2s, even though locally it fires in <100ms. 10s still gives us a
+        // hard upper bound on "the watcher is wired up at all".
+        var done = await Task.WhenAny(fired.Task, Task.Delay(10_000));
+        done.Should().Be(fired.Task, "the watcher should fire once a file is created");
     }
 
     [Fact]
