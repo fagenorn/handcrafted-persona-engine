@@ -17,8 +17,17 @@ namespace PersonaEngine.Lib.Tests.TTS.Qwen3;
 /// </summary>
 public class CtcConfidenceAnalysisTests
 {
-    private const string DefaultModelBaseDir =
-        @"C:\Users\anisa\Projects\handcrafted-persona-engine\src\PersonaEngine\PersonaEngine.Lib\Resources\Models";
+    /// <summary>
+    ///     Resolves the model base directory using the same convention as the
+    ///     runtime: <c>AppContext.BaseDirectory/Resources</c>. Override via the
+    ///     <c>TTS_MODEL_BASE_DIR</c> environment variable when running against a
+    ///     non-default install root (e.g. CI staging).
+    /// </summary>
+    private static string GetModelBaseDir()
+    {
+        return Environment.GetEnvironmentVariable("TTS_MODEL_BASE_DIR")
+            ?? Path.Combine(AppContext.BaseDirectory, "Resources");
+    }
 
     private readonly ITestOutputHelper _output;
 
@@ -27,13 +36,16 @@ public class CtcConfidenceAnalysisTests
         _output = output;
     }
 
-    private static string GetModelBaseDir()
+    private static IModelProvider? TryCreateModelProvider(string baseDir)
     {
-        return Environment.GetEnvironmentVariable("TTS_MODEL_BASE_DIR") ?? DefaultModelBaseDir;
-    }
+        // The runtime FileModelProvider constructor throws when the base
+        // directory is missing — that's correct for the app, but in tests we
+        // want to skip cleanly when the optional Qwen3/CTC models aren't
+        // present (the tree under Resources/ is gitignored and only populated
+        // by the bootstrapper or a manual download).
+        if (!Directory.Exists(baseDir))
+            return null;
 
-    private static IModelProvider CreateModelProvider(string baseDir)
-    {
         return new FileModelProvider(baseDir, NullLogger<FileModelProvider>.Instance);
     }
 
@@ -69,7 +81,13 @@ public class CtcConfidenceAnalysisTests
     public async Task AnalyzeCtcConfidence_AtProgressiveAudioPrefixes()
     {
         var baseDir = GetModelBaseDir();
-        var provider = CreateModelProvider(baseDir);
+        var provider = TryCreateModelProvider(baseDir);
+        if (provider is null)
+        {
+            _output.WriteLine($"SKIP: model base directory not found: {baseDir}");
+            return;
+        }
+
         if (!ModelsExist(provider))
         {
             _output.WriteLine("SKIP: GGUF models not found");

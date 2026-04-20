@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Configuration;
@@ -14,6 +15,7 @@ internal sealed class LipSyncProcessorProvider : ILipSyncProcessorProvider, IDis
     private readonly IReadOnlyDictionary<LipSyncEngine, ILipSyncProcessor> _processors;
     private readonly ILogger<LipSyncProcessorProvider> _logger;
     private readonly IDisposable? _changeToken;
+    private readonly ConcurrentDictionary<LipSyncEngine, byte> _warnedMissing = new();
 
     private volatile ILipSyncProcessor _current;
 
@@ -58,12 +60,20 @@ internal sealed class LipSyncProcessorProvider : ILipSyncProcessorProvider, IDis
             return processor;
         }
 
-        _logger.LogError(
-            "LipSync processor '{EngineId}' not registered. Available: {Available}. Falling back to first registered processor.",
-            engineId,
-            string.Join(", ", _processors.Keys)
-        );
+        var fallback = _processors.Values.First();
 
-        return _processors.Values.First();
+        // Dedupe: a missing optional processor (e.g. Audio2Face on TryItOut)
+        // shouldn't spam the log on every config-monitor callback.
+        if (_warnedMissing.TryAdd(engineId, 0))
+        {
+            _logger.LogWarning(
+                "LipSync processor '{EngineId}' is not installed in this profile. Available: {Available}. Using '{Fallback}' instead.",
+                engineId,
+                string.Join(", ", _processors.Keys),
+                fallback.EngineId
+            );
+        }
+
+        return fallback;
     }
 }

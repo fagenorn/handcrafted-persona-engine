@@ -714,3 +714,7 @@ src/PersonaEngine/PersonaEngine.Lib/Rust/target/**
 !/src/PersonaEngine/PersonaEngine.Lib/Rust/target/release/*.dll
 !/src/PersonaEngine/PersonaEngine.Lib/Rust/target/release/*.so
 !/src/PersonaEngine/PersonaEngine.Lib/Rust/target/release/*.dylib
+
+# Local-only asset staging tree (uploaded to HuggingFace via scripts/upload-hf-assets.ps1)
+assets-source/*
+!assets-source/README.md

@@ -9,12 +9,7 @@ internal static class ModelUtils
     public static string GetModelPath(ModelType modelType)
     {
         var enumDescription = modelType.GetDescription();
-        var fullPath = Path.Combine(
-            Directory.GetCurrentDirectory(),
-            "Resources",
-            "Models",
-            $"{enumDescription}"
-        );
+        var fullPath = Path.Combine(AppContext.BaseDirectory, "Resources", $"{enumDescription}");
 
         // Check file or dir exists
         if (!Path.Exists(fullPath))
@@ -32,12 +27,7 @@ internal static class PromptUtils
 
     private static string GetModelPath(string filename)
     {
-        var fullPath = Path.Combine(
-            Directory.GetCurrentDirectory(),
-            "Resources",
-            "Prompts",
-            filename
-        );
+        var fullPath = Path.Combine(AppContext.BaseDirectory, "Resources", "Prompts", filename);
 
         if (!File.Exists(fullPath))
         {
@@ -79,21 +69,21 @@ internal static class PromptUtils
 
 public enum ModelType
 {
-    [Description("silero_vad_v5.onnx")]
+    [Description("silero-vad/silero_vad_v5.onnx")]
     Silero,
 
-    [Description("ggml-large-v3-turbo.bin")]
+    [Description("whisper/ggml-large-v3-turbo.bin")]
     WhisperGgmlTurbov3,
 
-    [Description("ggml-tiny.en.bin")]
+    [Description("whisper/ggml-tiny.en.bin")]
     WhisperGgmlTiny,
 
-    [Description("badwords.txt")]
+    [Description("profanity/badwords.txt")]
     BadWords,
 
-    [Description("tiny_toxic_detector.onnx")]
+    [Description("profanity/tiny_toxic_detector.onnx")]
     TinyToxic,
 
-    [Description("tiny_toxic_detector_vocab.txt")]
+    [Description("profanity/tiny_toxic_detector_vocab.txt")]
     TinyToxicVocab,
 }

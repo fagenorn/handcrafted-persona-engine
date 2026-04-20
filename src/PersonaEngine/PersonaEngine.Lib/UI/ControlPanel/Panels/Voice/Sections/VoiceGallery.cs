@@ -1,6 +1,7 @@
 using System.Numerics;
 using Hexa.NET.ImGui;
 using Microsoft.Extensions.Options;
+using PersonaEngine.Lib.Assets;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Audition;
@@ -24,6 +25,7 @@ public sealed class VoiceGallery : IDisposable
     private readonly IOptionsMonitor<TtsConfiguration> _ttsOptions;
     private readonly IOptionsMonitor<RVCFilterOptions> _rvcOptions;
     private readonly VoiceMetadataCatalog _catalog;
+    private readonly IAssetCatalog _assetCatalog;
     private readonly IVoiceAuditionService _audition;
     private readonly IConfigWriter _configWriter;
 
@@ -49,6 +51,7 @@ public sealed class VoiceGallery : IDisposable
         IOptionsMonitor<TtsConfiguration> ttsOptions,
         IOptionsMonitor<RVCFilterOptions> rvcOptions,
         VoiceMetadataCatalog catalog,
+        IAssetCatalog assetCatalog,
         IVoiceAuditionService audition,
         IConfigWriter configWriter
     )
@@ -56,6 +59,7 @@ public sealed class VoiceGallery : IDisposable
         _ttsOptions = ttsOptions;
         _rvcOptions = rvcOptions;
         _catalog = catalog;
+        _assetCatalog = assetCatalog;
         _audition = audition;
         _configWriter = configWriter;
 
@@ -78,6 +82,20 @@ public sealed class VoiceGallery : IDisposable
     {
         _elapsed += dt;
         ImGuiHelpers.SectionHeader("Voices");
+
+        // Expressive (Qwen3) voices live in the BuildWithIt bundle. If the user is
+        // viewing Expressive on a profile that doesn't ship them, show a single
+        // locked notice instead of an empty strip — the strip would be confusing
+        // because Kokoro voices don't apply here.
+        if (mode == VoiceMode.Expressive && !_assetCatalog.IsFeatureEnabled(FeatureIds.TtsQwen3))
+        {
+            ImGuiHelpers.LockedSection(
+                "Expressive voices",
+                FeatureProfileMap.MinimumProfileLabel(FeatureIds.TtsQwen3)
+            );
+            return;
+        }
+
         var engine = mode == VoiceMode.Clear ? VoiceEngine.Kokoro : VoiceEngine.Qwen3;
 
         RenderFilters();

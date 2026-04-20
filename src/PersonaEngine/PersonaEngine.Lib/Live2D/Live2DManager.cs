@@ -59,7 +59,15 @@ public class Live2DManager : IRenderComponent
             BGColor = new CubismTextureColor(0, 0, 0, 0),
         };
 
-        LoadModel(config.ModelPath, config.ModelName);
+        // Resolve ModelPath against AppContext.BaseDirectory when relative so the
+        // configured "Resources/live2d" path stays anchored to the install root
+        // regardless of the current working directory (matches TtsConfiguration
+        // and StartupValidator's BaseDirectory-relative resolution).
+        var modelPath = Path.IsPathRooted(config.ModelPath)
+            ? config.ModelPath
+            : Path.Combine(AppContext.BaseDirectory, config.ModelPath);
+
+        LoadModel(modelPath, config.ModelName);
     }
 
     public void Dispose()

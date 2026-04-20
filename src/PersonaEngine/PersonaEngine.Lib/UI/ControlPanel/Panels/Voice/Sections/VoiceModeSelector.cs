@@ -1,6 +1,7 @@
 using System.Numerics;
 using Hexa.NET.ImGui;
 using Microsoft.Extensions.Options;
+using PersonaEngine.Lib.Assets;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.UI.ControlPanel.Layout;
 
@@ -10,6 +11,12 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Sections;
 ///     Top-of-panel selector: two cards representing Clear (Kokoro) and Expressive (Qwen3)
 ///     with honest trade-off copy. Clicking a card writes to
 ///     <see cref="TtsConfiguration.ActiveEngine" /> via <see cref="IConfigWriter" />.
+///     <para>
+///         Cards are gated by <see cref="IAssetCatalog.IsFeatureEnabled" />: when the
+///         backing engine isn't installed the card renders as a locked affordance with
+///         an upgrade hint, and clicks are no-ops so we never persist a setting the
+///         runtime can't honour (which would silently fall back to Kokoro at startup).
+///     </para>
 /// </summary>
 public sealed class VoiceModeSelector : IDisposable
 {
@@ -20,16 +27,19 @@ public sealed class VoiceModeSelector : IDisposable
         "Natural, context-aware emotion and intonation. Heavy on GPU. Stands alone.";
 
     private readonly IConfigWriter _configWriter;
+    private readonly IAssetCatalog _catalog;
     private readonly IDisposable? _changeSubscription;
 
     private TtsConfiguration _tts;
 
     public VoiceModeSelector(
         IOptionsMonitor<TtsConfiguration> ttsOptions,
-        IConfigWriter configWriter
+        IConfigWriter configWriter,
+        IAssetCatalog catalog
     )
     {
         _configWriter = configWriter;
+        _catalog = catalog;
         _tts = ttsOptions.CurrentValue;
         _changeSubscription = ttsOptions.OnChange((updated, _) => _tts = updated);
     }
@@ -48,6 +58,7 @@ public sealed class VoiceModeSelector : IDisposable
         var activeMode = CurrentMode;
         var cardWidth = (ImGui.GetContentRegionAvail().X - 12f) * 0.5f;
 
+        // Clear (Kokoro) ships in every profile, so it never locks.
         RenderModeCard(
             VoiceMode.Clear,
             "Clear",
@@ -56,13 +67,31 @@ public sealed class VoiceModeSelector : IDisposable
             cardWidth
         );
         ImGui.SameLine(0f, 12f);
-        RenderModeCard(
-            VoiceMode.Expressive,
-            "Expressive",
-            ExpressiveSubtitle,
-            activeMode == VoiceMode.Expressive,
-            cardWidth
-        );
+
+        // Expressive (Qwen3) is BuildWithIt-only; render an inert locked card if the
+        // assets aren't installed so the click path can never persist a setting the
+        // runtime would silently fall back from.
+        if (_catalog.IsFeatureEnabled(FeatureIds.TtsQwen3))
+        {
+            RenderModeCard(
+                VoiceMode.Expressive,
+                "Expressive",
+                ExpressiveSubtitle,
+                activeMode == VoiceMode.Expressive,
+                cardWidth
+            );
+        }
+        else
+        {
+            ImGuiHelpers.LockedCard(
+                "##mode_expressive_locked",
+                "Expressive",
+                ExpressiveSubtitle,
+                "Expressive voice mode",
+                FeatureProfileMap.MinimumProfileLabel(FeatureIds.TtsQwen3),
+                cardWidth
+            );
+        }
     }
 
     private void RenderModeCard(

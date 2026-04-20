@@ -1,277 +1,298 @@
 <div align="center">
-  <h1>
-    ✨ Persona Engine <img src="./assets/dance.webp" width="30px" alt="Dancing Mascot"> ✨
-  </h1>
+  <img src="assets/header.png" alt="Persona Engine" width="680">
 
-  <p><i>Unleash your digital characters with the magic of AI-driven voice, animation, and personality!</i></p>
+  <h1>Persona Engine <img src="./assets/dance.webp" width="28px" alt="Dancing mascot" align="absmiddle"></h1>
 
-<p>
-  <a href="https://github.com/fagenorn/handcrafted-persona-engine/releases/latest" target="_blank"><img alt="GitHub Downloads (all assets, all releases)" src="https://img.shields.io/github/downloads/fagenorn/handcrafted-persona-engine/total?style=for-the-badge&logo=github"></a>
-  &nbsp;&nbsp; <a href="https://discord.gg/p3CXEyFtrA" target="_blank"><img alt="Discord" src="https://img.shields.io/discord/1347649495646601419?style=for-the-badge&logo=discord&logoColor=white&label=Discord&color=5865F2"></a>
-  &nbsp;&nbsp; <a href="https://x.com/fagenorn" target="_blank"><img alt="X (formerly Twitter) Follow" src="https://img.shields.io/twitter/follow/fagenorn?style=for-the-badge&logo=x"></a>
-</p>
-
-  ---
+  <p><i>An AI-driven voice, animation, and personality stack for your Live2D character.</i></p>
 
   <p>
-    <b>Persona Engine</b> is your all-in-one toolkit for creating captivating, interactive avatars! It masterfully combines:
+    <a href="https://github.com/fagenorn/handcrafted-persona-engine/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/fagenorn/handcrafted-persona-engine?style=for-the-badge&logo=github&color=6366f1"></a>
+    <a href="https://github.com/fagenorn/handcrafted-persona-engine/releases/latest"><img alt="Downloads" src="https://img.shields.io/github/downloads/fagenorn/handcrafted-persona-engine/total?style=for-the-badge&logo=github&color=8b5cf6"></a>
+    <a href="https://discord.gg/p3CXEyFtrA"><img alt="Discord" src="https://img.shields.io/discord/1347649495646601419?style=for-the-badge&logo=discord&logoColor=white&label=Discord&color=5865F2"></a>
+    <a href="https://x.com/fagenorn"><img alt="Follow on X" src="https://img.shields.io/twitter/follow/fagenorn?style=for-the-badge&logo=x&color=000000"></a>
     <br>
-    🎨 <b>Live2D:</b> For expressive, real-time character animation.
-    <br>
-    🧠 <b>Large Language Models (LLMs):</b> Giving your character a unique voice and personality.
-    <br>
-    🎤 <b>Automatic Speech Recognition (ASR):</b> To understand voice commands and conversation.
-    <br>
-    🗣️ <b>Text-to-Speech (TTS):</b> Enabling your character to speak naturally.
-    <br>
-    🎭 <b>Real-time Voice Cloning (RVC - Optional):</b> To mimic specific voice characteristics.
-    <br>
-    <br>
-    Perfectly suited for <b>VTubing 🎬</b>, dynamic <b>streaming 🎮</b>, and innovative <b>virtual assistant applications 🤖</b>.
-    <br>
-    <i>Let's bring your character to life like never before!</i> ✨
+    <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20x64-0078d6?style=flat-square">
+    <img alt=".NET" src="https://img.shields.io/badge/.NET-9.0-512BD4?style=flat-square&logo=dotnet&logoColor=white">
+    <img alt="GPU" src="https://img.shields.io/badge/GPU-NVIDIA%20CUDA-76B900?style=flat-square&logo=nvidia&logoColor=white">
+    <img alt="License" src="https://img.shields.io/github/license/fagenorn/handcrafted-persona-engine?style=flat-square&color=blue">
   </p>
+</div>
 
-  <img src="assets/header.png" alt="Persona Engine" width="650">
+<div align="center">
 
-  <h2>💖 See it in Action! 💖</h2>
-  <p>Witness the Persona Engine creating digital magic:</p>
-  <a href="https://www.youtube.com/watch?v=4V2DgI7OtHE" target="_blank"> <img src="assets/demo_1.png" alt="Persona Engine Demo Video" width="600"></a>
-  <p><i>(Click the image above to watch the demo!)</i></p>
-  <br>
+### At a glance
 
-  <p>And here's another little glimpse into what the friendly engine can do:</p>
+| What it is | What you need | How long to first pixel |
+| :---: | :---: | :---: |
+| Voice-driven Live2D character with LLM brain, real-time TTS, and streaming-ready output. | Windows x64, NVIDIA GPU with CUDA, ~16 GB free disk. | Download → double-click → pick a profile. |
+
+</div>
+
+---
+
+<details>
+<summary><b>Table of contents</b></summary>
+
+- [Overview](#overview)
+- [See it in action](#demo)
+- [Getting started](#installation-guide)
+- [Install profiles](#profiles)
+- [Screenshots](#screenshots)
+- [Features](#features)
+- [How it works](#architecture)
+- [Use cases](#use-cases)
+- [Deeper docs](#docs)
+- [Community](#community)
+- [Contributing](#contributing)
+- [Support](#support)
+
+</details>
+
+## <a id="overview"></a>Overview
+
+Persona Engine listens through your microphone, thinks with an LLM guided by a personality file, speaks back with real-time TTS (optionally voice-cloned), and drives a Live2D avatar in sync. You can watch the character inside the built-in transparent overlay, or pipe it into OBS over Spout for streaming.
+
+The included **Aria** model is rigged for the engine's lip-sync and expression pipeline out of the box. You can bring your own model too — see the [Live2D Integration Guide](./Live2D.md).
+
+> [!IMPORTANT]
+> Persona Engine feels most natural with a **fine-tuned LLM** trained on the engine's communication format. Standard OpenAI-compatible models (Groq, OpenAI, Ollama, …) work too, but you'll want to put care into `personality.txt`. A template (`personality_example.txt`) ships in the repo, and the fine-tuned model is available in [Discord](#community).
+
+## <a id="demo"></a>See it in action
+
+<div align="center">
+  <a href="https://www.youtube.com/watch?v=4V2DgI7OtHE" target="_blank">
+    <img src="assets/demo_1.png" alt="Persona Engine demo video" width="620">
+  </a>
+  <p><i>Click to watch the demo on YouTube.</i></p>
+
   <video src="https://github.com/user-attachments/assets/8c486a9f-db2c-4486-8e20-0b1e336e476c"></video>
-  <br><br>
 </div>
 
-## 📜 Table of Contents
+## <a id="installation-guide"></a>Getting started
 
-* [🌸 Overview: What's Inside?](#overview)
-* [🚀 Getting Started: Installation Guide](#installation-guide)
-* [✨ Features Galore!](#features)
-* [⚙️ Architecture / How it Works](#architecture)
-* [💡 Potential Use Cases](#use-cases)
-* [🤝 Contributing](#contributing)
-* [🎭 Live2D Integration Guide](./Live2D.md)
-* [💬 Join Our Community!](#community)
-* [❓ Support & Contact](#support)
+> [!IMPORTANT]
+> **Requires NVIDIA GPU with CUDA (Windows x64).** ASR, TTS, and RVC all run on CUDA via ONNX Runtime — CPU/AMD/Intel are not supported.
 
-## <a id="overview"></a>🌸 Overview: What's Inside?
+1. Download `PersonaEngine-<version>-win-x64.zip` from [Releases](https://github.com/fagenorn/handcrafted-persona-engine/releases).
+2. Extract somewhere with ≥ 16 GB free. Models land in a `Resources/` folder next to the exe.
+3. Double-click **`PersonaEngine.exe`** and pick an install profile when prompted. Models and the NVIDIA runtime are downloaded, hash-verified, and installed automatically.
 
-Persona Engine listens to your voice 🎤, thinks using powerful AI language models 🧠 (guided by a personality you define!), speaks back with a synthesized voice 🔊 (which can optionally be cloned using RVC!), and animates a Live2D avatar 🎭 accordingly.
+### Re-run the picker
 
-It integrates seamlessly into streaming software like OBS Studio using Spout for high-quality visual output. The included "Aria" model is specially rigged for optimal performance, but you can integrate your own Live2D models (see the [Live2D Integration Guide](./Live2D.md)).
+```bash
+PersonaEngine.exe --reinstall
+```
 
-> [!IMPORTANT]  
-> Persona Engine achieves the most natural and in-character interactions when used with a **specially fine-tuned Large Language Model (LLM)**. This model is trained to understand the engine's specific communication format.
->
-> While you *can* use standard OpenAI-compatible models (e.g., from Ollama, Groq, OpenAI), it requires careful **prompt engineering** within the `personality.txt` file. We provide a template (`personality_example.txt`) in the repository to guide you.
->
-> **Detailed instructions for configuring `personality.txt` for standard models are crucial and can be found in the [Installation Guide](./INSTALLATION.md#configure-personality-txt---important).**
->
-> 👉 Want to try the fine-tuned model or see a live demo? Hop into our [Discord](#community)! 😊
+<details>
+<summary><b>Other CLI flags</b></summary>
+
+| Flag | Purpose |
+|------|---------|
+| `--profile=try\|stream\|build` | Skip the picker and use the named profile |
+| `--repair` | Re-download anything that fails hash verification |
+| `--verify` | Re-hash installed assets and report mismatches (no downloads) |
+| `--offline` | Refuse to touch the network — fail fast if assets are missing |
+| `--non-interactive` | Treat any prompt as fatal (pair with `--profile=…`) |
+| `--skip-gpu-check` | Bypass the GPU capability gate (not recommended) |
+
+</details>
+
+<details>
+<summary><b>Upgrading from a pre-installer build</b></summary>
+
+The asset directory layout changed when the in-app installer landed. Existing `Resources/Models/` and `Resources/Live2D/Avatars/` trees from older builds are ignored — the installer re-downloads into the new locations on first launch. Free up ~16 GB before starting; delete the old folders once the bootstrapper finishes.
+
+</details>
+
+## <a id="profiles"></a>Install profiles
 
 <div align="center">
-  <h3>Screenshots!</h3>
-  <img src="./assets/screenshot_1.jpg" alt="Persona Engine integrated with a Gmail interface concept" width="800">
-  <br><i>Look how helpful it is as a desktop friend! 😊</i>
-  <br><br>
-  <img src="./assets/screenshot_2.jpg" alt="Persona Engine acting as an AI Assistant" width="800">
-  <br><i>Peek inside the engine's cozy control room! ✨</i>
-  <br><br>
+
+| | **Try it out** | **Stream with it** | **Build with it** |
+| --- | :---: | :---: | :---: |
+| Best for | First look, small downloads | Everyday streaming | Production, highest quality |
+| Listening (Whisper) | Tiny | Small | Large-v3 Turbo |
+| Voice (TTS) | Kokoro | Kokoro | Kokoro + Qwen3 expressive |
+| Lip-sync | VBridger | VBridger | VBridger + Audio2Face |
+| Approx. download | Smallest | Mid | Largest (≈ 16 GB) |
+
 </div>
-
-## <a id="installation-guide"></a>🚀 Getting Started: Installation Guide
-
-
-➡️ **Please follow the detailed [Installation and Setup Guide](./INSTALLATION.md) to install prerequisites, download models, configure, and run the engine.** ⬅️
-
-**Key Requirements Covered:**
-* **System:** **Mandatory NVIDIA GPU with CUDA support is required** for core features (ASR, TTS, RVC).
-* **Software:** .NET Runtime, espeak-ng.
-* **AI Models:** Downloading Whisper ASR models.
-* **Live2D:** Setting up your Live2D model (using Aria or your own).
-* **(Optional) RVC:** Real-time Voice Cloning setup.
-* **LLM:** Configuring access to your chosen LLM (API keys, endpoints).
-* **Streaming:** Setting up Spout output for OBS/other software.
-* **Configuration:** Understanding `appsettings.json`.
-* **Troubleshooting:** Common issues and solutions.
-
-## <a id="features"></a>✨ Features Galore!
-
-<div align="center">
-<img src="assets/mascot_wand.png" width="150" alt="Mascot with Wand">
-</div>
-
-* 🎭 **Live2D Avatar Integration:**
-    * Loads and renders Live2D models (`.model3.json`).
-    * Includes the specially rigged "Aria" model.
-    * Supports emotion-driven animations (`[EMOTION:name]`) and VBridger-standard lip-sync parameters.
-    * Dedicated services for **Emotion**, **Idle**, and **Blinking** animations.
-    * **See the detailed [Live2D Integration & Rigging Guide](./Live2D.md) for custom model requirements!**
-
-* 🧠 **AI-Driven Conversation:**
-    * Connects to OpenAI-compatible Large Language Model (`LLM`) APIs (local or cloud).
-    * Guided by your custom `personality.txt` file.
-    * Features **improved conversation context** and **session management** for more robust interactions.
-    * Optimized for the optional special fine-tuned model (see [Overview](#overview)).
-
-* 🗣️ **Voice Interaction (Requires NVIDIA `GPU`):**
-    * Listens via microphone (using `NAudio`/`PortAudio`).
-    * Detects speech segments using Silero `VAD`.
-    * Understands speech using Whisper `ASR` (via `Whisper.NET`).
-    * Includes dedicated **Barge-In Detection** to handle user interruptions more gracefully.
-    * Uses a small, fast Whisper model for interruption detection and a larger, more accurate model for transcription.
-
-* 🔊 **Advanced Text-to-Speech (`TTS`) (Requires NVIDIA `GPU`):**
-    * Sophisticated pipeline: Text Normalization -> Sentence Segmentation -> Phonemization -> `ONNX` Synthesis.
-    * Brings text to life using custom `kokoro` voice models.
-    * Uses `espeak-ng` as a fallback for unknown words/symbols.
-
-* 👤 **Optional Real-time Voice Cloning (`RVC`) (Requires NVIDIA `GPU`):**
-    * Integrates `RVC` `ONNX` models.
-    * Modifies the `TTS` voice output in real-time to sound like a specific target voice.
-    * Can be disabled for performance.
-
-* 📜 **Customizable Subtitles:**
-    * Displays spoken text with configurable styling options via the `UI`.
-
-* 💬 **Control `UI` & Chat Viewer:**
-    * Dedicated `UI` window for monitoring engine status.
-    * Viewing latency metrics (LLM, TTS, Audio)
-    * Live adjustment of `TTS` parameters (pitch, rate) and Roulette Wheel settings.
-    * View and edit the conversation history.
-
-* 👀 **Screen Awareness (Experimental):**
-    * Optional Vision module allows the AI to "see" and read text from specified application windows.
-
-* 🎡 **Interactive Roulette Wheel (Experimental):**
-    * An optional, configurable on-screen roulette wheel for interactive fun.
-
-* 📺 **Streaming Output (`Spout`):**
-    * Sends visuals (Avatar, Subtitles, Roulette Wheel) directly to OBS Studio or other `Spout`-compatible software.
-    * Uses separate, configurable `Spout` streams (no window capture needed!).
-
-* 🎶 **Audio Output:**
-    * Plays generated speech clearly via `PortAudio`.
-
-* ⚙️ **Configuration:**
-    * Primary setup via `appsettings.json` (details in [Installation Guide](./INSTALLATION.md#configuration-appsettingsjson)).
-    * Real-time adjustments for some settings via the Control `UI`.
-
-* 🤬 **Profanity Filtering:**
-    * Basic keyword list + optional Machine Learning (`ML`)-based filtering for `LLM` responses.
-
-## <a id="architecture"></a>⚙️ Architecture / How it Works
-
-Persona Engine operates in a continuous loop, bringing your character to life through these steps:
-
-1.  **Listen:** 🎤
-    * A microphone captures audio.
-    * A Voice Activity Detector (VAD) identifies speech segments.
-
-2.  **Understand:** 👂
-    * A fast Whisper model detects potential user interruptions.
-    * Once speech ends, a more accurate Whisper model transcribes the full utterance.
-
-3.  **Contextualize (Optional):** 👀
-    * If enabled, the Vision module captures text content from specified application windows.
-
-4.  **Think:** 🧠
-    * Transcribed text, conversation history, optional screen context, and rules from `personality.txt` are sent to the configured Large Language Model (LLM).
-
-5.  **Respond:** 💬
-    * The LLM generates a text response.
-    * This response may include emotion tags (e.g., `[EMOTION:😊]`) or commands.
-
-6.  **Filter (Optional):** 🤬
-    * The response is checked against profanity filters.
-
-7.  **Speak:** 🔊
-    * The Text-to-Speech (TTS) system converts the filtered text into audio.
-    * It uses a `kokoro` voice model primarily.
-    * It falls back to `espeak-ng` for unknown elements.
-
-8.  **Clone (Optional):** 👤
-    * If Real-time Voice Cloning (RVC) is enabled, it modifies the TTS audio in real-time.
-    * This uses an ONNX model to match the target voice profile.
-
-9.  **Animate:** 🎭
-    * Phonemes extracted during TTS drive lip-sync parameters (VBridger standard).
-    * Emotion tags in the LLM response trigger corresponding Live2D expressions or motions.
-    * Idle animations play when the character is not speaking to maintain a natural look.
-    * **(See [Live2D Integration & Rigging Guide](./Live2D.md) for details!)**
-
-10. **Display:**
-    * 📜 Subtitles are generated from the spoken text.
-    * 📺 The animated avatar, subtitles, and optional Roulette Wheel are sent via dedicated Spout streams to OBS or other software.
-    * 🎶 The synthesized (and optionally cloned) audio is played through the selected output device.
-
-11. **Loop:**
-    * The engine returns to the listening state, ready for the next interaction.
-
-<div align="center">
-<br/>
-<img src="assets/diagram.png" width="500" alt="Diagram">
-<br/>
-<br/>
-</div>
-
-## <a id="use-cases"></a>💡 Potential Use Cases: Imagine the Fun!
-
-<div align="center">
-<img src="assets/mascot_light.png" width="150" alt="Mascot with Lightbulb">
-</div>
-
-* 🎬 **VTubing & Live Streaming:** Create an AI co-host, an interactive character responding to chat, or even a fully AI-driven VTuber persona.
-* 🤖 **Virtual Assistant:** Build a personalized, animated desktop companion that talks back.
-* 🏪 **Interactive Kiosks:** Develop engaging virtual guides for museums, trade shows, retail environments, or information points.
-* 🎓 **Educational Tools:** Design an AI language practice partner, an interactive historical figure Q&A bot, or a dynamic tutor.
-* 🎮 **Gaming:** Implement more dynamic and conversational Non-Player Characters (NPCs) or companion characters in games.
-* 💬 **Character Chatbots:** Allow users to have immersive conversations with their favorite fictional characters brought to life.
-
-## <a id="contributing"></a>🤝 Contributing
-
-Contributions are highly welcome! If you have improvements, bug fixes, or new features in mind, please follow these steps:
-
-1.  **Discuss (Optional but Recommended):** For major changes, please open a [GitHub Issue](https://github.com/fagenorn/handcrafted-persona-engine/issues) first to discuss your ideas.
-2.  **Fork:** Fork the repository to your own GitHub account.
-3.  **Branch:** Create a new feature branch for your changes (`git checkout -b feature/YourAmazingFeature`).
-4.  **Code:** Make your changes. Please try to adhere to the existing coding style and add comments where necessary.
-5.  **Commit:** Commit your changes with clear messages (`git commit -m 'Add some AmazingFeature'`).
-6.  **Push:** Push your branch to your fork (`git push origin feature/YourAmazingFeature`).
-7.  **Pull Request:** Open a Pull Request (PR) back to the `main` branch of the original repository. Describe your changes clearly in the PR.
-
-Your help in making Persona Engine better is greatly appreciated! 😊
-
-## <a id="community"></a>💬 Join Our Community!
-
-<div align="center">
-<p>
-Need help getting started? Have questions or brilliant ideas? 💡 Want to see a live demo, test the special fine-tuned model, or chat directly with a Persona Engine character? Having trouble converting RVC models or rigging your own Live2D model? Come say hi on Discord! 👋
-</p>
-<a href="https://discord.gg/p3CXEyFtrA" target="_blank">
-<img src="assets/discord.png" alt="Join Discord Img"
-  width="400"
-  /></a>
-  <br>
-<a href="https://discord.gg/p3CXEyFtrA" target="_blank">
-<img src="https://img.shields.io/discord/1347649495646601419?label=Join%20Discord&logo=discord&style=for-the-badge" alt="Join Discord Badge" />
-</a>
-<br>
-<br>
-<p>You can also report bugs or request features via <a href="https://github.com/fagenorn/handcrafted-persona-engine/issues" target="_blank">GitHub Issues</a>.</p>
-</div>
-
-## <a id="support"></a>❓ Support & Contact
-
-* **Primary Support & Community:** Please join our [Discord Server](#community) for help, discussion, and demos.
-* **Bug Reports & Feature Requests:** Please use [GitHub Issues](https://github.com/fagenorn/handcrafted-persona-engine/issues).
-* **Direct Contact:** You can also reach out via [Twitter/X](https://x.com/fagenorn).
-
------
 
 > [!TIP]
-> *Remember to consult the [Live2D Integration & Rigging Guide](./Live2D.md) for details on preparing custom avatars.*
-> *For detailed setup steps, please refer to the [Installation and Setup Guide](./INSTALLATION.md).*
+> **Picked Build-with-it? You still have to flip the switches.** The profile downloads the bigger models, but the UI defaults keep the light ones active until you toggle them:
+>
+> - **Voice** panel → set mode to **Expressive** (Qwen3)
+> - **Listening** panel → pick the **Accurate** Whisper template
+> - **Avatar** panel → enable **Audio2Face** lip-sync
+>
+> Full walkthrough in [INSTALLATION.md](./INSTALLATION.md).
+
+## <a id="screenshots"></a>Screenshots
+
+<div align="center">
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="./assets/dashboard.png" alt="Dashboard with presence strip" width="440"><br>
+      <sub><b>Dashboard</b> — presence strip, LLM probe, quick toggles.</sub>
+    </td>
+    <td align="center">
+      <img src="./assets/voice.png" alt="Voice panel" width="440"><br>
+      <sub><b>Voice</b> — Clear / Expressive modes, RVC, audition.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="./assets/listening.png" alt="Listening panel" width="440"><br>
+      <sub><b>Listening</b> — Whisper template chips, VAD tuning.</sub>
+    </td>
+    <td align="center">
+      <img src="./assets/avatar.png" alt="Avatar & lip-sync panel" width="440"><br>
+      <sub><b>Avatar</b> — VBridger / Audio2Face lip-sync, emotions.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2">
+      <img src="./assets/overlay.png" alt="Transparent overlay on desktop" width="560"><br>
+      <sub><b>Overlay</b> — transparent, always-on-top, drag to reposition.</sub>
+    </td>
+  </tr>
+</table>
+
+</div>
+
+## <a id="features"></a>Features
+
+<div align="center">
+  <img src="assets/mascot_wand.png" width="140" alt="Mascot with wand">
+</div>
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h4>Live2D avatar</h4>
+      Real-time rendering with emotion-driven motions and VBridger lip-sync. Includes the rigged Aria model; custom models supported.
+    </td>
+    <td width="50%" valign="top">
+      <h4>LLM conversation</h4>
+      Any OpenAI-compatible endpoint (local or cloud). Personality driven by <code>personality.txt</code>, with a built-in connection probe.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>Voice in (ASR)</h4>
+      Dual-Whisper pipeline via Silero VAD: a fast model for barge-in detection, a large model for accurate transcription.
+    </td>
+    <td valign="top">
+      <h4>Voice out (TTS)</h4>
+      Two engines: <b>Kokoro</b> (clear, fast) and <b>Qwen3</b> (expressive). Optional real-time RVC voice cloning on top.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>Lip-sync</h4>
+      VBridger by default, or the higher-fidelity <b>Audio2Face</b> solver for Build-with-it setups.
+    </td>
+    <td valign="top">
+      <h4>Built-in overlay</h4>
+      Transparent, always-on-top window that mirrors the avatar. No OBS needed for desktop use.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>OBS-ready output</h4>
+      Dedicated Spout streams for avatar, subtitles, and roulette — no window capture required.
+    </td>
+    <td valign="top">
+      <h4>Control panel</h4>
+      Dashboard, per-subsystem panels, live metrics (LLM / TTS / audio latency), conversation viewer, theming.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>In-app installer</h4>
+      Profile picker, SHA-256 verification, repair and verify modes. Ships CUDA 12.4 + cuDNN 9.1.1 + CUDA 13 redists.
+    </td>
+    <td valign="top">
+      <h4>Extras</h4>
+      Subtitle rendering, interactive roulette wheel, experimental screen awareness, keyword + ML profanity filtering.
+    </td>
+  </tr>
+</table>
+
+## <a id="architecture"></a>How it works
+
+A single turn flows through these stages:
+
+1. **Listen** — microphone audio, Silero VAD picks out speech.
+2. **Understand** — fast Whisper watches for barge-in; accurate Whisper transcribes the final utterance.
+3. **Contextualize** _(optional)_ — Vision module reads text from a chosen window.
+4. **Think** — transcription + history + context + `personality.txt` go to the LLM.
+5. **Respond** — LLM streams text, optionally tagged with emotions like `[EMOTION:😊]`.
+6. **Filter** _(optional)_ — keyword + ML profanity pass.
+7. **Speak** — TTS (Kokoro or Qwen3) synthesizes the response; espeak-ng fills phoneme gaps.
+8. **Clone** _(optional)_ — RVC retargets the voice in real time.
+9. **Animate** — phonemes drive lip-sync, emotion tags trigger Live2D expressions, idle animations run between turns.
+10. **Display** — subtitles, avatar, and roulette render to the built-in overlay and/or Spout outputs for OBS; audio plays through the selected device.
+11. **Loop** — back to listening.
+
+<div align="center">
+  <img src="assets/diagram.png" width="520" alt="Pipeline diagram">
+</div>
+
+## <a id="use-cases"></a>Use cases
+
+<div align="center">
+  <img src="assets/mascot_light.png" width="140" alt="Mascot with lightbulb">
+</div>
+
+- **VTubing & streaming** — AI co-host, chat-reactive character, fully AI-driven persona.
+- **Virtual assistant** — animated desktop companion that actually talks back.
+- **Interactive kiosks** — guides for museums, trade shows, retail.
+- **Education** — language practice partner, historical-figure Q&A, tutor.
+- **Games** — more conversational NPCs and companions.
+- **Character chatbots** — immersive chats with fictional characters.
+
+## <a id="docs"></a>Deeper docs
+
+- **[INSTALLATION.md](./INSTALLATION.md)** — profile picker, CLI flags, LLM + personality setup, overlay vs Spout, building from source, upgrading, bootstrapper troubleshooting.
+- **[CONFIGURATION.md](./CONFIGURATION.md)** — every `appsettings.json` field, annotated.
+- **[Live2D.md](./Live2D.md)** — rigging requirements and the VBridger parameter spec for custom avatars.
+
+## <a id="community"></a>Community
+
+<div align="center">
+  <p>
+    Need help getting started? Want to try the fine-tuned LLM, trade rigging tips, or just chat with the engine live? Come say hi.
+  </p>
+  <a href="https://discord.gg/p3CXEyFtrA" target="_blank">
+    <img src="assets/discord.png" alt="Join Discord" width="380">
+  </a>
+  <br><br>
+  <a href="https://discord.gg/p3CXEyFtrA" target="_blank">
+    <img src="https://img.shields.io/discord/1347649495646601419?label=Join%20Discord&logo=discord&style=for-the-badge" alt="Join Discord">
+  </a>
+  <p>Bugs and feature requests live on <a href="https://github.com/fagenorn/handcrafted-persona-engine/issues">GitHub Issues</a>.</p>
+</div>
+
+## <a id="contributing"></a>Contributing
+
+PRs are welcome. The short version:
+
+1. For anything non-trivial, open an [Issue](https://github.com/fagenorn/handcrafted-persona-engine/issues) first to align on direction.
+2. Fork, branch (`feature/your-thing`), code, commit, push.
+3. Open a PR against `main` with a clear description of the change.
+
+Formatting is enforced in CI via CSharpier (`dotnet csharpier check .` from `src/PersonaEngine/`).
+
+## <a id="support"></a>Support
+
+- **Community & demos:** [Discord](#community).
+- **Bugs & feature requests:** [GitHub Issues](https://github.com/fagenorn/handcrafted-persona-engine/issues).
+- **Direct contact:** [@fagenorn on X](https://x.com/fagenorn).
+
+---
+
+> [!TIP]
+> Custom avatars → [Live2D.md](./Live2D.md). Every config knob → [CONFIGURATION.md](./CONFIGURATION.md). Full setup walkthrough → [INSTALLATION.md](./INSTALLATION.md).

@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restore tools
+        working-directory: src/PersonaEngine
+        run: dotnet tool restore
+
+      - name: Verify formatting
+        working-directory: src/PersonaEngine
+        run: dotnet csharpier check .
+
+      - name: Verify manifest hashes are populated
+        # The unit test suite skips the all-zero placeholder check when
+        # PERSONA_ALLOW_PLACEHOLDER_HASHES=1 is set; the release workflow does
+        # NOT set that env var, but we also fail-fast here so a missing
+        # scripts/hash-manifest.py run blocks the release before any compile.
+        shell: pwsh
+        run: |
+          $manifestPath = 'src/PersonaEngine/PersonaEngine.Lib/Assets/Manifest/install-manifest.json'
+          $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+          $placeholders = $manifest.assets | Where-Object {
+            $_.sha256 -and ($_.sha256 -match '^0+$')
+          }
+          if ($placeholders) {
+            $ids = ($placeholders | ForEach-Object { $_.id }) -join ', '
+            throw "Cannot release: placeholder hashes in manifest for: $ids. Run scripts/hash-manifest.py."
+          }
+
+      - name: Run tests
+        # Solution includes both PersonaEngine.Lib.Tests and
+        # PersonaEngine.Lib.Bootstrapper.Tests, so a single invocation runs both.
+        run: dotnet test src/PersonaEngine/PersonaEngine.sln --configuration Release
+
+      - name: Extract version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart('v')
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Stage appsettings.json from template
+        # appsettings.json is gitignored for secrets hygiene. 
+        # The App .csproj still requires
+        # it to exist at publish time, so we seed it from the sanitized
+        # template checked into the repo. The copy also means the release zip
+        # ships a usable appsettings.json next to the exe — end users get a
+        # working schema to fill in rather than a broken install.
+        shell: pwsh
+        run: |
+          $src = 'src/PersonaEngine/PersonaEngine.App/appsettings.template.json'
+          $dst = 'src/PersonaEngine/PersonaEngine.App/appsettings.json'
+          if (-not (Test-Path $src)) {
+            throw "Missing $src — cannot seed appsettings.json."
+          }
+          Copy-Item $src $dst -Force
+
+      - name: Build release zip
+        shell: pwsh
+        env:
+          # Use the runner's system dotnet instead of the script's local-dev default
+          # under %USERPROFILE%\.dotnet\dotnet.exe.
+          DOTNET_EXE: dotnet
+        run: ./scripts/build-release.ps1 -Version ${{ steps.version.outputs.version }}
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/PersonaEngine-${{ steps.version.outputs.version }}-win-x64.zip
+          generate_release_notes: true

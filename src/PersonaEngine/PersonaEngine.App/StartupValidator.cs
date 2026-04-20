@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.ML.OnnxRuntime;
+using PersonaEngine.Lib.TTS.Synthesis;
 using Serilog;
 using ILogger = Serilog.ILogger;
 
@@ -8,17 +9,18 @@ namespace PersonaEngine.App;
 
 /// <summary>
 ///     Runs environment checks before the DI container is built.
-///     Catches missing CUDA, models, and config issues early with actionable messages
+///     Catches missing CUDA, espeak-ng, and config issues early with actionable messages
 ///     instead of cryptic native-loader exceptions deep in service resolution.
+///     GPU / driver detection is intentionally absent: the bootstrapper's
+///     <see cref="PersonaEngine.Lib.Bootstrapper.GpuPreflight.IGpuPreflightCheck" /> already
+///     validated the NVIDIA driver, compute capability, and nvidia-smi availability before
+///     this validator runs — duplicating that here would be redundant and subtly disagree
+///     on version floors. Model-existence probes (Whisper, Kokoro, Silero, OpenNLP, Live2D
+///     avatars) are likewise absent: <see cref="PersonaEngine.Lib.Assets.IAssetCatalog" />
+///     is the single source of truth for what is installed.
 /// </summary>
 internal static class StartupValidator
 {
-    private static readonly string ModelsDir = Path.Combine(
-        Directory.GetCurrentDirectory(),
-        "Resources",
-        "Models"
-    );
-
     /// <returns>true if no errors were found and startup can proceed.</returns>
     public static bool Run(IConfiguration config)
     {
@@ -29,11 +31,8 @@ internal static class StartupValidator
         var errors = 0;
         var warnings = 0;
 
-        CheckGpu(log, ref errors);
         CheckCuda(log, ref errors);
-        CheckModels(log, ref errors);
         CheckEspeakNg(log, config, ref errors);
-        CheckLive2D(log, config, ref warnings);
         CheckPrompt(log, config, ref warnings);
 
         if (errors > 0)
@@ -53,53 +52,6 @@ internal static class StartupValidator
         }
 
         return errors == 0;
-    }
-
-    private static void CheckGpu(ILogger log, ref int errors)
-    {
-        try
-        {
-            using var process = new Process();
-            process.StartInfo = new ProcessStartInfo
-            {
-                FileName = "nvidia-smi",
-                Arguments = "--query-gpu=name --format=csv,noheader",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            process.Start();
-            var output = process.StandardOutput.ReadToEnd().Trim();
-
-            if (!process.WaitForExit(5000))
-            {
-                process.Kill();
-                log.Error("GPU: nvidia-smi timed out. Ensure NVIDIA drivers are installed");
-                errors++;
-                return;
-            }
-
-            if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
-            {
-                var gpuName = output.Split('\n')[0].Trim();
-                log.Information("GPU: {GpuName}", gpuName);
-            }
-            else
-            {
-                log.Error(
-                    "GPU: No NVIDIA GPU detected. An NVIDIA GPU with CUDA support is required"
-                );
-                errors++;
-            }
-        }
-        catch
-        {
-            log.Error(
-                "GPU: nvidia-smi not found. Install NVIDIA drivers from https://www.nvidia.com/Download/index.aspx"
-            );
-            errors++;
-        }
     }
 
     private static void CheckCuda(ILogger log, ref int errors)
@@ -128,53 +80,10 @@ internal static class StartupValidator
         }
     }
 
-    private static void CheckModels(ILogger log, ref int errors)
-    {
-        var required = new (string RelativePath, string Name)[]
-        {
-            ("ggml-large-v3-turbo.bin", "Whisper Turbo v3"),
-            ("ggml-tiny.en.bin", "Whisper Tiny"),
-            ("silero_vad_v5.onnx", "Silero VAD"),
-            ("kokoro/model_slim.onnx", "Kokoro TTS"),
-            ("kokoro/phoneme_to_id.txt", "Kokoro phoneme map"),
-            ("opennlp", "OpenNLP"),
-        };
-
-        var missing = new List<string>();
-
-        foreach (var (relativePath, name) in required)
-        {
-            var fullPath = Path.Combine(ModelsDir, relativePath);
-            if (!Path.Exists(fullPath))
-            {
-                missing.Add(name);
-            }
-        }
-
-        // Kokoro voices directory must exist and contain at least one voice file
-        var voicesDir = Path.Combine(ModelsDir, "kokoro", "voices");
-        if (!Directory.Exists(voicesDir) || !Directory.EnumerateFiles(voicesDir).Any())
-        {
-            missing.Add("Kokoro voices");
-        }
-
-        if (missing.Count == 0)
-        {
-            log.Information("Models: All {Count} required models found", required.Length + 1);
-        }
-        else
-        {
-            log.Error(
-                "Models: Missing {Missing}. Download and place in Resources/Models/. See INSTALLATION.md section 4",
-                string.Join(", ", missing)
-            );
-            errors++;
-        }
-    }
-
     private static void CheckEspeakNg(ILogger log, IConfiguration config, ref int errors)
     {
-        var espeakPath = config["Config:Tts:EspeakPath"] ?? "espeak-ng";
+        var resolved = EspeakResolver.Resolve(config["Config:Tts:EspeakPath"]);
+        var espeakPath = resolved.ExecutablePath;
 
         try
         {
@@ -188,6 +97,10 @@ internal static class StartupValidator
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
+            if (resolved.IsBundled)
+            {
+                process.StartInfo.EnvironmentVariables["ESPEAK_DATA_PATH"] = resolved.DataPath;
+            }
             process.Start();
 
             // espeak-ng writes version info to stderr on some platforms
@@ -224,36 +137,10 @@ internal static class StartupValidator
         }
     }
 
-    private static void CheckLive2D(ILogger log, IConfiguration config, ref int warnings)
-    {
-        var modelPath = config["Config:Live2D:ModelPath"] ?? "Resources/Live2D/Avatars";
-        var modelName = config["Config:Live2D:ModelName"] ?? "aria";
-        var fullPath = Path.Combine(Directory.GetCurrentDirectory(), modelPath, modelName);
-
-        if (Directory.Exists(fullPath))
-        {
-            log.Information("Live2D: Avatar '{ModelName}' found", modelName);
-        }
-        else
-        {
-            log.Warning(
-                "Live2D: Avatar directory not found at {Path}/{ModelName}. Place your Live2D model in the correct directory. See Live2D.md",
-                modelPath,
-                modelName
-            );
-            warnings++;
-        }
-    }
-
     private static void CheckPrompt(ILogger log, IConfiguration config, ref int warnings)
     {
         var promptFile = config["Config:ConversationContext:SystemPromptFile"] ?? "personality.txt";
-        var fullPath = Path.Combine(
-            Directory.GetCurrentDirectory(),
-            "Resources",
-            "Prompts",
-            promptFile
-        );
+        var fullPath = Path.Combine(AppContext.BaseDirectory, "Resources", "Prompts", promptFile);
 
         if (File.Exists(fullPath))
         {

@@ -83,29 +83,43 @@ public sealed class ConfigWriter : IConfigWriter
 
         _disposed = true;
 
+        Timer? timer;
         lock (_timerLock)
         {
-            _debounceTimer?.Dispose();
+            timer = _debounceTimer;
             _debounceTimer = null;
         }
 
-        // Flush any remaining pending sections synchronously.
-        // Acquire _flushLock to wait for any in-flight timer callback to finish first.
-        if (!_pendingSections.IsEmpty)
+        // Timer.Dispose() alone does NOT wait for in-flight callbacks to
+        // finish — if a callback is currently inside the FlushToDisk try
+        // block, it still owns _flushLock and will call Release() later. If
+        // we then Dispose() _flushLock below, the callback's Release fires
+        // on a disposed semaphore and throws ObjectDisposedException on a
+        // ThreadPool thread, which is an unhandled crash. Using the
+        // Dispose(WaitHandle) overload blocks here until every pending
+        // callback has actually returned.
+        if (timer is not null)
         {
-            _flushLock.Wait();
-            try
+            using var done = new ManualResetEvent(false);
+            if (timer.Dispose(done))
+            {
+                done.WaitOne();
+            }
+        }
+
+        // At this point no Timer callback is running, so _flushLock is safe
+        // to acquire, drain, and dispose.
+        _flushLock.Wait();
+        try
+        {
+            if (!_pendingSections.IsEmpty)
             {
                 FlushToDisk();
             }
-            finally
-            {
-                _flushLock.Release();
-                _flushLock.Dispose();
-            }
         }
-        else
+        finally
         {
+            _flushLock.Release();
             _flushLock.Dispose();
         }
     }

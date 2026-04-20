@@ -173,8 +173,15 @@ public class ConfigWriterTests : IDisposable
         writer.Write(new SubtitleOptions());
         writer.Write(new LlmOptions());
 
-        // Wait for flush
-        await Task.Delay(DebounceMs * 4);
+        // Poll for the debounce Timer callback rather than sleep a fixed
+        // multiple of DebounceMs — on contended CI runners the ThreadPool can
+        // delay the callback well past DebounceMs * 4, which caused intermittent
+        // failures where LastSaveTime was still null when assertion ran.
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (writer.LastSaveTime is null && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(25);
+        }
 
         // If we got here, all types were successfully discovered and written
         Assert.NotNull(writer.LastSaveTime);

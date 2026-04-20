@@ -1,8 +1,9 @@
 using Hexa.NET.ImGui;
 using Microsoft.Extensions.Options;
+using PersonaEngine.Lib.Assets;
 using PersonaEngine.Lib.Configuration;
-using PersonaEngine.Lib.TTS.RVC;
 using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Audition;
+using PersonaEngine.Lib.UI.ControlPanel.Threading;
 
 namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Sections;
 
@@ -18,9 +19,10 @@ namespace PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Sections;
 public sealed class CloneLayerSection : IDisposable
 {
     private readonly IOptionsMonitor<TtsConfiguration> _ttsOptions;
-    private readonly IRVCVoiceProvider _rvcVoiceProvider;
+    private readonly IAssetCatalog _catalog;
     private readonly IVoiceAuditionService _audition;
     private readonly IConfigWriter _configWriter;
+    private readonly IUiThreadDispatcher _uiDispatcher;
 
     private RVCFilterOptions _rvc;
     private readonly IDisposable? _changeSubscription;
@@ -37,31 +39,46 @@ public sealed class CloneLayerSection : IDisposable
     private VoiceMode _bodyMode;
     private readonly Action _renderBodyAction;
 
-    // RVC voice list cached so the voice picker doesn't re-array the provider
-    // every frame. Rebuilt when the provider's list size changes so
-    // newly-added voices still surface.
+    // RVC voice list cached so the voice picker doesn't re-array the catalog
+    // every frame. Invalidated by the catalog's Changed event so newly-added
+    // voices surface live without UI restart.
     private string[] _rvcVoicesCache = [];
+    private bool _rvcVoicesDirty = true;
 
     public CloneLayerSection(
         IOptionsMonitor<TtsConfiguration> ttsOptions,
         IOptionsMonitor<RVCFilterOptions> rvcOptions,
-        IRVCVoiceProvider rvcVoiceProvider,
+        IAssetCatalog catalog,
         IVoiceAuditionService audition,
-        IConfigWriter configWriter
+        IConfigWriter configWriter,
+        IUiThreadDispatcher uiDispatcher
     )
     {
         _ttsOptions = ttsOptions;
-        _rvcVoiceProvider = rvcVoiceProvider;
+        _catalog = catalog;
         _audition = audition;
         _configWriter = configWriter;
+        _uiDispatcher = uiDispatcher;
 
         _rvc = rvcOptions.CurrentValue;
         _renderBodyAction = () => RenderBody(_bodyDt, _bodyMode);
 
         _changeSubscription = rvcOptions.OnChange((updated, _) => _rvc = updated);
+        _catalog.Changed += OnCatalogChanged;
     }
 
-    public void Dispose() => _changeSubscription?.Dispose();
+    public void Dispose()
+    {
+        _catalog.Changed -= OnCatalogChanged;
+        _changeSubscription?.Dispose();
+    }
+
+    private void OnCatalogChanged(object? sender, EventArgs e) =>
+        // AssetCatalog.Changed fires from a thread-pool thread (UserContentWatcher
+        // debounce). Marshal the dirty-flag set onto the UI thread so the flag
+        // mutation, the render-time check, and the rebuild all happen on one
+        // thread — eliminates the lost-update race.
+        _uiDispatcher.Post(() => _rvcVoicesDirty = true);
 
     public void Render(float dt, VoiceMode mode)
     {
@@ -93,6 +110,18 @@ public sealed class CloneLayerSection : IDisposable
 
     private void RenderBody(float dt, VoiceMode mode)
     {
+        // RVC ships in StreamWithIt+. On TryItOut the toggle/voice/pitch knobs are
+        // meaningless because the runtime won't load the model — render a locked
+        // notice instead so the user knows why and can self-serve via the installer.
+        if (!_catalog.IsFeatureEnabled(FeatureIds.VoiceCloning))
+        {
+            ImGuiHelpers.LockedSection(
+                "Voice cloning",
+                FeatureProfileMap.MinimumProfileLabel(FeatureIds.VoiceCloning)
+            );
+            return;
+        }
+
         float rowY;
 
         // Enable toggle
@@ -164,25 +193,23 @@ public sealed class CloneLayerSection : IDisposable
 
     private string[] GetRvcVoices()
     {
-        // The provider returns a fresh IReadOnlyList<string> every call (disk
-        // scan). We can't avoid that here, but we can avoid materialising a
-        // fresh array every frame: reuse the cached copy as long as the
-        // provider's list length matches. A mismatch (rare — voice directory
-        // contents rarely change during a session) triggers a rebuild so
-        // newly-added voices still appear in the picker.
-        var live = _rvcVoiceProvider.GetAvailableVoices();
-        if (live.Count == _rvcVoicesCache.Length)
+        // Catalog drives invalidation via its Changed event (FileSystemWatcher
+        // on the rvc/voices root), so we only reproject when the dirty flag is
+        // set instead of materialising a fresh array every frame.
+        if (!_rvcVoicesDirty)
         {
             return _rvcVoicesCache;
         }
 
+        var live = _catalog.GetUserAssets(UserAssetType.RvcVoice);
         var buffer = new string[live.Count];
         for (var i = 0; i < live.Count; i++)
         {
-            buffer[i] = live[i];
+            buffer[i] = live[i].DisplayName;
         }
 
         _rvcVoicesCache = buffer;
+        _rvcVoicesDirty = false;
         return _rvcVoicesCache;
     }
 

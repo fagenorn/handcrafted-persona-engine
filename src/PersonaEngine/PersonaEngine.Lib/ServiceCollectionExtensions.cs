@@ -11,6 +11,8 @@ using Microsoft.ML.OnnxRuntime;
 using Microsoft.SemanticKernel;
 using PersonaEngine.Lib.ASR.Transcriber;
 using PersonaEngine.Lib.ASR.VAD;
+using PersonaEngine.Lib.Assets;
+using PersonaEngine.Lib.Assets.Manifest;
 using PersonaEngine.Lib.Audio;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.Core;
@@ -90,7 +92,17 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<AvatarAppConfig>(configuration.GetSection("Config"));
 
-        services.AddConversation(configuration, configureKernel);
+        // Build the manifest + catalog eagerly so AddConversation can gate optional
+        // subsystems (RVC, Vision, Audio2Face) without spinning up a temporary
+        // ServiceProvider just to query IsFeatureEnabled. Registering pre-built
+        // instances also avoids double-construction (and double FileSystemWatcher
+        // allocation) that would otherwise occur when a probe provider is disposed.
+        var manifest = ManifestLoader.LoadEmbedded();
+        var catalog = AssetCatalogFactory.Build(manifest);
+        services.AddSingleton<InstallManifest>(manifest);
+        services.AddSingleton<IAssetCatalog>(catalog);
+
+        services.AddConversation(configuration, catalog, configureKernel);
         services.AddUI(configuration);
         services.AddLive2D(configuration);
         services.AddSystemAudioPlayer();
@@ -106,16 +118,40 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddConversation(
         this IServiceCollection services,
         IConfiguration configuration,
+        IAssetCatalog catalog,
         Action<IKernelBuilder>? configureKernel = null
     )
     {
-        services.AddASRSystem(configuration);
-        services.AddTTSSystem(configuration);
-        services.AddRVC(configuration);
+        services.AddASRSystem(configuration, catalog);
+        services.AddTTSSystem(configuration, catalog);
+
+        // Gate optional subsystems whose ONNX models / runtime DLLs are downloaded
+        // by the bootstrapper. Skipping registration here keeps startup clean when
+        // a tier was deselected — no missing-file exceptions, no half-wired DI.
+        //
+        // IsFeatureEnabled is evaluated once at DI build time. Adding a tier at
+        // runtime (post-startup install) requires an app restart to wire RVC /
+        // Vision / Audio2Face into the DI graph. UI-side asset enumeration via
+        // IAssetCatalog.Changed is live-refreshed; DI gating is not.
+        if (catalog.IsFeatureEnabled(FeatureIds.VoiceCloning))
+        {
+            services.AddRVC(configuration);
+        }
+
+        if (catalog.IsFeatureEnabled(FeatureIds.Audio2Face))
+        {
+            services.AddSingleton<ILipSyncProcessor, Audio2FaceLipSyncProcessor>();
+        }
+
 #pragma warning disable SKEXP0010
         services.AddLLM(configuration, configureKernel);
 #pragma warning restore SKEXP0010
         services.AddChatEngineSystem(configuration);
+
+        if (catalog.IsFeatureEnabled(FeatureIds.LlmVision))
+        {
+            services.AddVisualChatEngine();
+        }
 
         services.AddConversationPipeline(configuration);
 
@@ -143,7 +179,8 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddASRSystem(
         this IServiceCollection services,
-        IConfiguration configuration
+        IConfiguration configuration,
+        IAssetCatalog catalog
     )
     {
         services.Configure<AsrConfiguration>(configuration.GetSection("Config:Asr"));
@@ -168,6 +205,13 @@ public static class ServiceCollectionExtensions
             return new SileroVadDetector(vadOptions, siletroOptions);
         });
 
+        // Whisper model selection mirrors the install manifest tiers:
+        //   - BuildWithIt installs Turbo v3 (gates: Asr.WhisperTurbo) → primary = Turbo, barge-in = Tiny
+        //   - TryItOut/StreamWithIt only install Tiny (gates: Asr.WhisperTiny) → primary = Tiny,
+        //     no separate barge-in factory (RealtimeTranscriptor accepts null)
+        // Loading the Turbo factory unconditionally crashes DI build for non-Build profiles
+        // because the .bin isn't present.
+        var hasTurbo = catalog.IsFeatureEnabled(FeatureIds.AsrAccurate);
         services.AddSingleton<IRealtimeSpeechTranscriptor>(sp =>
         {
             var asrOptions = sp.GetRequiredService<IOptions<AsrConfiguration>>().Value;
@@ -185,14 +229,22 @@ public static class ServiceCollectionExtensions
 
             var realTimeOptions = new RealtimeOptions();
 
-            return new RealtimeTranscriptor(
-                new WhisperSpeechTranscriptorFactory(
+            var tinyFactory = new WhisperSpeechTranscriptorFactory(
+                ModelUtils.GetModelPath(ModelType.WhisperGgmlTiny)
+            );
+
+            ISpeechTranscriptorFactory primary = hasTurbo
+                ? new WhisperSpeechTranscriptorFactory(
                     ModelUtils.GetModelPath(ModelType.WhisperGgmlTurbov3)
-                ),
+                )
+                : tinyFactory;
+
+            ISpeechTranscriptorFactory? bargeIn = hasTurbo ? tinyFactory : null;
+
+            return new RealtimeTranscriptor(
+                primary,
                 sp.GetRequiredService<IVadDetector>(),
-                new WhisperSpeechTranscriptorFactory(
-                    ModelUtils.GetModelPath(ModelType.WhisperGgmlTiny)
-                ),
+                bargeIn,
                 realtimeSpeechTranscriptorOptions,
                 realTimeOptions,
                 sp.GetRequiredService<ILogger<RealtimeTranscriptor>>()
@@ -228,6 +280,18 @@ public static class ServiceCollectionExtensions
         );
 
         services.AddSingleton<IChatEngine, SemanticKernelChatEngine>();
+
+        return services;
+    }
+
+    /// <summary>
+    ///     Registers the optional vision/screen-capture services. Gated by
+    ///     <see cref="FeatureIds.LlmVision" /> in <see cref="AddConversation" /> so the
+    ///     ONNX-backed <see cref="WindowCaptureService" /> and the vision LLM client are
+    ///     only wired when the bootstrapper installed the vision tier.
+    /// </summary>
+    public static IServiceCollection AddVisualChatEngine(this IServiceCollection services)
+    {
         services.AddSingleton<IVisualChatEngine, VisualQASemanticKernelChatEngine>();
         services.AddSingleton<IVisualQAService, VisualQAService>();
         services.AddSingleton<WindowCaptureService>();
@@ -275,7 +339,8 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddTTSSystem(
         this IServiceCollection services,
-        IConfiguration configuration
+        IConfiguration configuration,
+        IAssetCatalog catalog
     )
     {
         // Configuration
@@ -292,14 +357,21 @@ public static class ServiceCollectionExtensions
             return new FileModelProvider(config.ModelDirectory, logger);
         });
 
-        // Shared forced aligner (CTC) — engine-agnostic word-level timing
-        services.AddSingleton<IForcedAligner>(provider =>
+        // Forced aligner (wav2vec2 CTC) is only consumed by Qwen3 — wav2vec2 is
+        // gated behind FeatureIds.TtsQwen3 in the install manifest, so registering
+        // it without the model file would crash DI build for TryItOut/StreamWithIt
+        // profiles where the BuildWithIt-tier Qwen3 stack isn't installed.
+        var qwen3Enabled = catalog.IsFeatureEnabled(FeatureIds.TtsQwen3);
+        if (qwen3Enabled)
         {
-            var modelProvider = provider.GetRequiredService<IModelProvider>();
-            var logger = provider.GetRequiredService<ILogger<CtcForcedAligner>>();
+            services.AddSingleton<IForcedAligner>(provider =>
+            {
+                var modelProvider = provider.GetRequiredService<IModelProvider>();
+                var logger = provider.GetRequiredService<ILogger<CtcForcedAligner>>();
 
-            return new CtcForcedAligner(modelProvider, logger);
-        });
+                return new CtcForcedAligner(modelProvider, logger);
+            });
+        }
 
         // Shared text processing
         services.AddSingleton<SentenceProcessor>();
@@ -340,11 +412,18 @@ public static class ServiceCollectionExtensions
 
         // Kokoro-specific
         services.AddSingleton<IKokoroVoiceProvider, KokoroVoiceProvider>();
-        services.AddSingleton<IQwen3VoiceProvider, Qwen3VoiceProvider>();
 
-        // Engine registrations
+        // Engine registrations — Kokoro is the always-on baseline; Qwen3 is gated
+        // on its asset bundle being installed (BuildWithIt tier). Without this
+        // gate, Qwen3SentenceSynthesizer would be activated for the TtsEngineProvider
+        // enumeration and crash on the missing model file before any sentence is
+        // synthesised.
         services.AddSingleton<ISentenceSynthesizer, KokoroSentenceSynthesizer>();
-        services.AddSingleton<ISentenceSynthesizer, Qwen3SentenceSynthesizer>();
+        if (qwen3Enabled)
+        {
+            services.AddSingleton<IQwen3VoiceProvider, Qwen3VoiceProvider>();
+            services.AddSingleton<ISentenceSynthesizer, Qwen3SentenceSynthesizer>();
+        }
 
         // Runtime engine switching
         services.AddSingleton<ITtsEngineProvider, TtsEngineProvider>();
@@ -361,7 +440,9 @@ public static class ServiceCollectionExtensions
             configuration.GetSection("Config:LipSync:Audio2Face")
         );
         services.AddSingleton<ILipSyncProcessor, VBridgerLipSyncProcessor>();
-        services.AddSingleton<ILipSyncProcessor, Audio2FaceLipSyncProcessor>();
+        // Audio2FaceLipSyncProcessor is registered conditionally in AddConversation
+        // via FeatureIds.Audio2Face — its NVIDIA Audio2Face runtime is an optional
+        // bootstrapper download.
         services.AddSingleton<ILipSyncProcessorProvider, LipSyncProcessorProvider>();
 
         return services;
@@ -448,7 +529,15 @@ public static class ServiceCollectionExtensions
         // Voice audition pipeline
         services.AddSingleton<OneShotAudioPlayer>();
         services.AddSingleton<IOneShotPlayer>(sp => sp.GetRequiredService<OneShotAudioPlayer>());
-        services.AddSingleton<IRvcAuditionProcessor, RvcAuditionProcessor>();
+        // RVCFilter is only registered when the VoiceCloning feature is enabled
+        // (see AddConversation), so the audition processor must mirror that gate.
+        // Without the no-op stub, profiles like TryItOut fail at DI build time
+        // because VoiceAuditionService unconditionally requires IRvcAuditionProcessor.
+        services.AddSingleton<IRvcAuditionProcessor>(sp =>
+            sp.GetRequiredService<IAssetCatalog>().IsFeatureEnabled(FeatureIds.VoiceCloning)
+                ? new RvcAuditionProcessor(sp.GetRequiredService<RVCFilter>())
+                : new NoOpRvcAuditionProcessor()
+        );
         services.AddSingleton<IVoiceAuditionService, VoiceAuditionService>();
 
         // Nav request bus — lets dashboard health cards + cross-panel hint

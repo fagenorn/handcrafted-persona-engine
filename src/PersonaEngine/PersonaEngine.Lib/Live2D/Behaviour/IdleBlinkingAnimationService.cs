@@ -261,10 +261,7 @@ public sealed class IdleBlinkingAnimationService : AnimationServiceBase
             {
                 Logger.LogDebug("Successfully started idle motion.");
             }
-            // _logger.LogWarning("Failed to start idle motion for group '{IdleGroup}'. The group might be empty or invalid.", IDLE_MOTION_GROUP);
-            // Optionally disable idle animations if it fails consistently?
-            // We don't because sometimes this occurs when another animation with the same or higher priority is also playing.
-            // _isIdleAnimationAvailable = false;
+            // No log on null: this also fires when a higher-priority motion is already playing.
         }
         catch (Exception ex)
         {
@@ -393,7 +390,6 @@ public sealed class IdleBlinkingAnimationService : AnimationServiceBase
     /// <param name="value">The value to set (typically between 0.0 and 1.0).</param>
     private void SetEyeParameters(float value)
     {
-        // Redundant checks, but safe:
         if (Model?.Model == null || !_eyeParamsValid)
         {
             return;
