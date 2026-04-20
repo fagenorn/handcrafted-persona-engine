@@ -24,6 +24,7 @@ public sealed class BootstrapRunner
     private readonly IBootstrapUserInterface _ui;
     private readonly IGpuPreflightCheck _gpuPreflight;
     private readonly string _resourceRoot;
+    private readonly TimeProvider _time;
     private readonly ILogger<BootstrapRunner>? _log;
 
     public BootstrapRunner(
@@ -35,6 +36,7 @@ public sealed class BootstrapRunner
         IBootstrapUserInterface ui,
         IGpuPreflightCheck gpuPreflight,
         string resourceRoot,
+        TimeProvider? time = null,
         ILogger<BootstrapRunner>? log = null
     )
     {
@@ -46,6 +48,7 @@ public sealed class BootstrapRunner
         _ui = ui;
         _gpuPreflight = gpuPreflight;
         _resourceRoot = resourceRoot;
+        _time = time ?? TimeProvider.System;
         _log = log;
     }
 
@@ -70,13 +73,10 @@ public sealed class BootstrapRunner
                     var response = await _ui.ShowGpuWarningAsync(gpu, ct).ConfigureAwait(false);
                     if (response == GpuWarningResponse.Abort)
                     {
-                        return new BootstrapResult
-                        {
-                            Success = false,
-                            ActiveProfile = options.PreselectedProfile ?? ProfileTier.TryItOut,
-                            ChangesApplied = false,
-                            ErrorMessage = $"GPU preflight check failed ({gpu.Kind}): {gpu.Detail}",
-                        };
+                        return BootstrapResult.Fail(
+                            options.PreselectedProfile ?? ProfileTier.TryItOut,
+                            $"GPU preflight check failed ({gpu.Kind}): {gpu.Detail}"
+                        );
                     }
                     _log?.LogInformation(
                         "User chose to continue despite GPU preflight failure ({Kind})",
@@ -93,12 +93,7 @@ public sealed class BootstrapRunner
 
             if (plan.IsEmpty)
             {
-                return new BootstrapResult
-                {
-                    Success = true,
-                    ActiveProfile = profile,
-                    ChangesApplied = false,
-                };
+                return BootstrapResult.Ok(profile, changesApplied: false);
             }
 
             if (options.Mode == BootstrapMode.Offline)
@@ -108,13 +103,10 @@ public sealed class BootstrapRunner
                     ", ",
                     plan.Items.Where(i => i.Action != AssetAction.Skip).Select(i => i.Entry.Id)
                 );
-                return new BootstrapResult
-                {
-                    Success = false,
-                    ActiveProfile = profile,
-                    ChangesApplied = false,
-                    ErrorMessage = $"Offline mode: required assets are not installed ({missing}).",
-                };
+                return BootstrapResult.Fail(
+                    profile,
+                    $"Offline mode: required assets are not installed ({missing})."
+                );
             }
 
             // Only items that require network work are dispatched to the UI/downloader.
@@ -128,14 +120,18 @@ public sealed class BootstrapRunner
             {
                 // Plan was non-empty (e.g. only Remove/Reverify items) — nothing to download.
                 ApplyRemovals(plan);
-                var newLockNoDownload = BuildUpdatedLock(_manifest, existingLock, plan, profile);
+                var newLockNoDownload = BuildUpdatedLock(
+                    _manifest,
+                    existingLock,
+                    plan,
+                    profile,
+                    _time
+                );
                 _lockStore.Write(newLockNoDownload);
-                return new BootstrapResult
-                {
-                    Success = true,
-                    ActiveProfile = profile,
-                    ChangesApplied = plan.Items.Any(i => i.Action == AssetAction.Remove),
-                };
+                return BootstrapResult.Ok(
+                    profile,
+                    changesApplied: plan.Items.Any(i => i.Action == AssetAction.Remove)
+                );
             }
 
             _ui.ShowPlanSummary(plan);
@@ -149,25 +145,18 @@ public sealed class BootstrapRunner
 
             if (!allOk)
             {
-                return new BootstrapResult
-                {
-                    Success = false,
-                    ActiveProfile = profile,
-                    ChangesApplied = true,
-                    ErrorMessage = "One or more assets failed to download. See log for details.",
-                };
+                return BootstrapResult.Fail(
+                    profile,
+                    "One or more assets failed to download. See log for details.",
+                    changesApplied: true
+                );
             }
 
             ApplyRemovals(plan);
-            var newLock = BuildUpdatedLock(_manifest, existingLock, plan, profile);
+            var newLock = BuildUpdatedLock(_manifest, existingLock, plan, profile, _time);
             _lockStore.Write(newLock);
 
-            var result = new BootstrapResult
-            {
-                Success = true,
-                ActiveProfile = profile,
-                ChangesApplied = true,
-            };
+            var result = BootstrapResult.Ok(profile, changesApplied: true);
             _ui.ShowResult(result);
             return result;
         }
@@ -178,13 +167,10 @@ public sealed class BootstrapRunner
         catch (Exception ex)
         {
             _log?.LogError(ex, "Bootstrap failed");
-            return new BootstrapResult
-            {
-                Success = false,
-                ActiveProfile = options.PreselectedProfile ?? ProfileTier.TryItOut,
-                ChangesApplied = false,
-                ErrorMessage = ex.Message,
-            };
+            return BootstrapResult.Fail(
+                options.PreselectedProfile ?? ProfileTier.TryItOut,
+                ex.Message
+            );
         }
     }
 
@@ -295,9 +281,11 @@ public sealed class BootstrapRunner
         InstallManifest manifest,
         InstallStateLock existingLock,
         AssetPlan plan,
-        ProfileTier profile
+        ProfileTier profile,
+        TimeProvider time
     )
     {
+        var now = time.GetUtcNow();
         var installed = existingLock.Assets.ToDictionary(
             kvp => kvp.Key,
             kvp => kvp.Value,
@@ -314,7 +302,7 @@ public sealed class BootstrapRunner
                     installed[item.Entry.Id] = new InstalledAssetRecord(
                         Version: item.Entry.Source.SourceVersion,
                         Sha256: item.Entry.Sha256,
-                        VerifiedAt: DateTimeOffset.UtcNow
+                        VerifiedAt: now
                     );
                     break;
                 case AssetAction.Remove:
@@ -331,7 +319,7 @@ public sealed class BootstrapRunner
         return new InstallStateLock(
             SchemaVersion: 1,
             ManifestVersion: manifest.ManifestVersion,
-            InstalledAt: DateTimeOffset.UtcNow,
+            InstalledAt: now,
             SelectedProfile: profile,
             Assets: installed,
             UserExclusions: existingLock.UserExclusions

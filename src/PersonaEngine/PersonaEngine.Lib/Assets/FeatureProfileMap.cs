@@ -25,6 +25,10 @@ public static class FeatureProfileMap
         { FeatureIds.TtsKokoro, ProfileTier.TryItOut },
         { FeatureIds.ProfanityFilter, ProfileTier.TryItOut },
         { FeatureIds.Live2DAvatar, ProfileTier.TryItOut },
+        // VisionCapture is a runtime/config feature — the Rust screen-capture native
+        // library ships in every release, no manifest asset gates it. TryItOut avoids
+        // a misleading "upgrade to Build with it" tooltip.
+        { FeatureIds.VisionCapture, ProfileTier.TryItOut },
         // StreamWithIt tier
         { FeatureIds.VoiceCloning, ProfileTier.StreamWithIt },
         // BuildWithIt tier
@@ -32,7 +36,6 @@ public static class FeatureProfileMap
         { FeatureIds.AsrAccurate, ProfileTier.BuildWithIt },
         { FeatureIds.TtsQwen3, ProfileTier.BuildWithIt },
         { FeatureIds.Audio2Face, ProfileTier.BuildWithIt },
-        { FeatureIds.VisionCapture, ProfileTier.BuildWithIt },
         { FeatureIds.MusicSourceSeparation, ProfileTier.BuildWithIt },
     };
 
@@ -52,6 +55,13 @@ public static class FeatureProfileMap
     /// </summary>
     public static string MinimumProfileLabel(FeatureId feature) =>
         ProfileLabel(MinimumTier(feature));
+
+    /// <summary>
+    ///     Exposed for drift tests only — enumerates every feature the map knows about
+    ///     so callers can verify the set matches <c>FeatureIds</c> and the tiers match
+    ///     the manifest.
+    /// </summary>
+    internal static IEnumerable<KeyValuePair<FeatureId, ProfileTier>> EnumerateMappings() => Map;
 
     public static string ProfileLabel(ProfileTier tier) =>
         tier switch

@@ -18,4 +18,25 @@ public sealed record BootstrapResult
 
     /// <summary>Fatal error message if Success is false.</summary>
     public string? ErrorMessage { get; init; }
+
+    public static BootstrapResult Ok(ProfileTier profile, bool changesApplied) =>
+        new()
+        {
+            Success = true,
+            ActiveProfile = profile,
+            ChangesApplied = changesApplied,
+        };
+
+    public static BootstrapResult Fail(
+        ProfileTier profile,
+        string errorMessage,
+        bool changesApplied = false
+    ) =>
+        new()
+        {
+            Success = false,
+            ActiveProfile = profile,
+            ChangesApplied = changesApplied,
+            ErrorMessage = errorMessage,
+        };
 }

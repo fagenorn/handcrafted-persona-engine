@@ -9,9 +9,14 @@ public sealed class AssetCatalog : IAssetCatalog, IDisposable
     private readonly IReadOnlyDictionary<UserAssetType, string> _userContentRoots;
     private readonly List<UserContentWatcher> _watchers = new();
 
-    private FrozenDictionary<FeatureId, bool> _featureCache;
+    // A single snapshot holds both caches so watcher callbacks publish them
+    // atomically (see <see cref="Volatile.Write"/> in <see cref="Rebuild"/>).
+    // Without atomic publication, a reader could observe a fresh asset-state
+    // cache against a stale feature cache and report a feature as missing
+    // even though all its gated assets just landed on disk.
+    private Snapshot _snapshot;
 
-    public event EventHandler<AssetCatalogChangedEventArgs>? Changed;
+    public event EventHandler? Changed;
 
     public AssetCatalog(
         IReadOnlyList<AssetCatalogManifestEntry> entries,
@@ -22,38 +27,27 @@ public sealed class AssetCatalog : IAssetCatalog, IDisposable
         _entries = entries.ToFrozenDictionary(e => e.Id);
         _userContentRoots = userContentRoots;
         _shippedDefaults = shippedDefaults.ToFrozenSet();
-        _featureCache = ComputeFeatureCache();
+        _snapshot = BuildSnapshot();
 
-        foreach (var (type, root) in userContentRoots)
+        foreach (var (_, root) in userContentRoots)
         {
             var watcher = new UserContentWatcher(root, debounce: TimeSpan.FromMilliseconds(250));
             watcher.Changed += (_, _) =>
             {
-                _featureCache = ComputeFeatureCache();
-                Changed?.Invoke(this, new AssetCatalogChangedEventArgs(Array.Empty<AssetId>()));
+                Volatile.Write(ref _snapshot, BuildSnapshot());
+                Changed?.Invoke(this, EventArgs.Empty);
             };
             _watchers.Add(watcher);
         }
     }
 
-    public AssetState GetAssetState(AssetId id)
-    {
-        if (!_entries.TryGetValue(id, out var entry))
-            return AssetState.Missing;
-
-        if (File.Exists(entry.AbsoluteInstallPath))
-            return AssetState.Available;
-        if (
-            Directory.Exists(entry.AbsoluteInstallPath)
-            && Directory.EnumerateFileSystemEntries(entry.AbsoluteInstallPath).Any()
-        )
-            return AssetState.Available;
-
-        return AssetState.Missing;
-    }
+    public AssetState GetAssetState(AssetId id) =>
+        Volatile.Read(ref _snapshot).States.TryGetValue(id, out var state)
+            ? state
+            : AssetState.Missing;
 
     public bool IsFeatureEnabled(FeatureId feature) =>
-        _featureCache.TryGetValue(feature, out var enabled) && enabled;
+        Volatile.Read(ref _snapshot).Features.TryGetValue(feature, out var enabled) && enabled;
 
     public IReadOnlyList<UserAsset> GetUserAssets(UserAssetType type)
     {
@@ -83,22 +77,46 @@ public sealed class AssetCatalog : IAssetCatalog, IDisposable
             .ToArray();
     }
 
-    private FrozenDictionary<FeatureId, bool> ComputeFeatureCache()
+    private Snapshot BuildSnapshot()
     {
-        var byFeature = new Dictionary<FeatureId, List<AssetCatalogManifestEntry>>();
+        // Probe each asset's on-disk state once — callers hit this via UI render
+        // paths, so we don't want to re-stat the filesystem on every call.
+        var states = _entries.ToFrozenDictionary(kvp => kvp.Key, kvp => ProbeState(kvp.Value));
+
+        var byFeature = new Dictionary<FeatureId, List<AssetId>>();
         foreach (var entry in _entries.Values)
         foreach (var gate in entry.Gates)
         {
             if (!byFeature.TryGetValue(gate, out var list))
-                byFeature[gate] = list = new List<AssetCatalogManifestEntry>();
-            list.Add(entry);
+                byFeature[gate] = list = new List<AssetId>();
+            list.Add(entry.Id);
         }
 
-        return byFeature.ToFrozenDictionary(
+        var features = byFeature.ToFrozenDictionary(
             kvp => kvp.Key,
-            kvp => kvp.Value.All(e => GetAssetState(e.Id) == AssetState.Available)
+            kvp => kvp.Value.All(id => states[id] == AssetState.Available)
         );
+
+        return new Snapshot(states, features);
     }
+
+    private static AssetState ProbeState(AssetCatalogManifestEntry entry)
+    {
+        if (File.Exists(entry.AbsoluteInstallPath))
+            return AssetState.Available;
+        if (
+            Directory.Exists(entry.AbsoluteInstallPath)
+            && Directory.EnumerateFileSystemEntries(entry.AbsoluteInstallPath).Any()
+        )
+            return AssetState.Available;
+
+        return AssetState.Missing;
+    }
+
+    private sealed record Snapshot(
+        FrozenDictionary<AssetId, AssetState> States,
+        FrozenDictionary<FeatureId, bool> Features
+    );
 
     public void Dispose()
     {

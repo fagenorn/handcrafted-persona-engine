@@ -41,19 +41,47 @@ public sealed class AssetDownloader
         {
             // Server says our partial is stale — start over.
             File.Delete(partial);
-            resumeFrom = 0;
-            using var retry = new HttpRequestMessage(HttpMethod.Get, download.Url);
-            using var retryResp = await _http
-                .SendAsync(retry, HttpCompletionOption.ResponseHeadersRead, ct)
+            await RestartFromScratchAsync(download, partial, destinationPath, progress, ct)
                 .ConfigureAwait(false);
-            retryResp.EnsureSuccessStatusCode();
-            await StreamToDiskAsync(retryResp, partial, destinationPath, download, progress, 0, ct)
+            return;
+        }
+
+        // Sent a Range header but got 200 OK instead of 206 Partial Content. Some
+        // CDNs / mirrors silently ignore Range and return the whole body from byte
+        // zero. Appending that to an existing .partial would corrupt the file and
+        // the SHA check would only catch it at the end — after we wasted bandwidth
+        // on the overlap. Detect it up front and restart cleanly.
+        if (resumeFrom > 0 && resp.StatusCode == System.Net.HttpStatusCode.OK)
+        {
+            _logger.LogInformation(
+                "Server ignored Range request for {Url}; restarting from scratch",
+                download.Url
+            );
+            File.Delete(partial);
+            await RestartFromScratchAsync(download, partial, destinationPath, progress, ct)
                 .ConfigureAwait(false);
             return;
         }
 
         resp.EnsureSuccessStatusCode();
         await StreamToDiskAsync(resp, partial, destinationPath, download, progress, resumeFrom, ct)
+            .ConfigureAwait(false);
+    }
+
+    private async Task RestartFromScratchAsync(
+        AssetDownload download,
+        string partial,
+        string destinationPath,
+        IProgress<DownloadProgress>? progress,
+        CancellationToken ct
+    )
+    {
+        using var retry = new HttpRequestMessage(HttpMethod.Get, download.Url);
+        using var retryResp = await _http
+            .SendAsync(retry, HttpCompletionOption.ResponseHeadersRead, ct)
+            .ConfigureAwait(false);
+        retryResp.EnsureSuccessStatusCode();
+        await StreamToDiskAsync(retryResp, partial, destinationPath, download, progress, 0, ct)
             .ConfigureAwait(false);
     }
 
@@ -136,9 +164,9 @@ public sealed class AssetDownloader
 
         if (download.PostProcess is null)
         {
-            if (File.Exists(destinationPath))
-                File.Delete(destinationPath);
-            File.Move(partial, destinationPath);
+            // overwrite:true collapses the delete+move into one atomic-enough op and
+            // avoids a window where the destination exists with zero bytes.
+            File.Move(partial, destinationPath, overwrite: true);
         }
         else
         {

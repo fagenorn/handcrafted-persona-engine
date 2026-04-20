@@ -73,7 +73,7 @@ public sealed class CloneLayerSection : IDisposable
         _changeSubscription?.Dispose();
     }
 
-    private void OnCatalogChanged(object? sender, AssetCatalogChangedEventArgs e) =>
+    private void OnCatalogChanged(object? sender, EventArgs e) =>
         // AssetCatalog.Changed fires from a thread-pool thread (UserContentWatcher
         // debounce). Marshal the dirty-flag set onto the UI thread so the flag
         // mutation, the render-time check, and the rebuild all happen on one

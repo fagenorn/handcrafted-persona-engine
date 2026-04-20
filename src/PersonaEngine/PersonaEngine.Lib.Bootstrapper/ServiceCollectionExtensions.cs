@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using PersonaEngine.Lib.Assets;
 using PersonaEngine.Lib.Assets.Manifest;
@@ -44,7 +45,10 @@ public static class ServiceCollectionExtensions
             sp.GetService<ILogger<InstallStateLockStore>>()
         ));
 
-        services.AddSingleton<AssetPlanner>(_ => new AssetPlanner(ResourceRoot));
+        services.AddSingleton<AssetPlanner>(sp => new AssetPlanner(
+            ResourceRoot,
+            sp.GetService<ILogger<AssetPlanner>>()
+        ));
 
         // Named HttpClient with retry + transient-error handling.
         services.AddAssetDownloadHttpClient();
@@ -112,6 +116,8 @@ public static class ServiceCollectionExtensions
             sp.GetService<ILogger<NvidiaGpuPreflightCheck>>()
         ));
 
+        services.TryAddSingleton(TimeProvider.System);
+
         services.AddSingleton<BootstrapRunner>(sp => new BootstrapRunner(
             sp.GetRequiredService<InstallManifest>(),
             sp.GetRequiredService<InstallStateLockStore>(),
@@ -121,6 +127,7 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IBootstrapUserInterface>(),
             sp.GetRequiredService<IGpuPreflightCheck>(),
             ResourceRoot,
+            sp.GetRequiredService<TimeProvider>(),
             sp.GetService<ILogger<BootstrapRunner>>()
         ));
         return services;

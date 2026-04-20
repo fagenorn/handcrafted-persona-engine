@@ -33,11 +33,21 @@ public sealed class UserContentWatcher : IDisposable
     private void Schedule()
     {
         CancellationTokenSource cts;
+        CancellationTokenSource? previous;
         lock (_gate)
         {
-            _pendingFire?.Cancel();
-            _pendingFire = new CancellationTokenSource();
-            cts = _pendingFire;
+            previous = _pendingFire;
+            _pendingFire = cts = new CancellationTokenSource();
+        }
+
+        // Cancel+Dispose the superseded CTS outside the lock so cancellation
+        // callbacks from a listener can't deadlock us. Dispose is safe after
+        // Cancel; any in-flight Task.Delay continues observing the token via
+        // the captured reference, so we don't dispose until we've replaced it.
+        if (previous is not null)
+        {
+            previous.Cancel();
+            previous.Dispose();
         }
 
         Task.Delay(_debounce, cts.Token)
@@ -61,8 +71,17 @@ public sealed class UserContentWatcher : IDisposable
 
     public void Dispose()
     {
+        CancellationTokenSource? pending;
         lock (_gate)
-            _pendingFire?.Cancel();
+        {
+            pending = _pendingFire;
+            _pendingFire = null;
+        }
+        if (pending is not null)
+        {
+            pending.Cancel();
+            pending.Dispose();
+        }
         _watcher.Dispose();
     }
 }

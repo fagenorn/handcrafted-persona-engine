@@ -62,7 +62,7 @@ public sealed class ModelSection : IDisposable
         _changeSubscription?.Dispose();
     }
 
-    private void OnCatalogChanged(object? sender, AssetCatalogChangedEventArgs e) =>
+    private void OnCatalogChanged(object? sender, EventArgs e) =>
         // AssetCatalog.Changed fires from a thread-pool thread (UserContentWatcher
         // debounce). Marshal the picker refresh onto the UI thread so it doesn't
         // race the ImGui render loop reading _picker state.

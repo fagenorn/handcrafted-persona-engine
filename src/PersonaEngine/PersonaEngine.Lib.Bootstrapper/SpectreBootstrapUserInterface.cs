@@ -137,22 +137,6 @@ public sealed class SpectreBootstrapUserInterface : IBootstrapUserInterface
                     index = (index + 1) % choices.Count;
                     break;
 
-                case ConsoleKey.D1:
-                case ConsoleKey.NumPad1:
-                    if (choices.Count >= 1)
-                        index = 0;
-                    break;
-                case ConsoleKey.D2:
-                case ConsoleKey.NumPad2:
-                    if (choices.Count >= 2)
-                        index = 1;
-                    break;
-                case ConsoleKey.D3:
-                case ConsoleKey.NumPad3:
-                    if (choices.Count >= 3)
-                        index = 2;
-                    break;
-
                 case ConsoleKey.Enter:
                 case ConsoleKey.Spacebar:
                     // Clear the picker so the plan summary / download progress
@@ -163,6 +147,14 @@ public sealed class SpectreBootstrapUserInterface : IBootstrapUserInterface
                 case ConsoleKey.Escape:
                     _console.Clear();
                     throw new OperationCanceledException("Profile selection cancelled by user.");
+
+                default:
+                    // Number-key shortcut: D1..D9 / NumPad1..9 jump to that choice.
+                    // Written as a single range check so adding a 4th profile later
+                    // doesn't need another switch arm.
+                    if (TryNumberKeyToIndex(key.Key, choices.Count, out var picked))
+                        index = picked;
+                    break;
             }
         }
     }
@@ -514,5 +506,29 @@ public sealed class SpectreBootstrapUserInterface : IBootstrapUserInterface
             $"  [{TextTertiary}]First-run setup — pick what you want to install.[/]"
         );
         _console.WriteLine();
+    }
+
+    /// <summary>
+    ///     Maps a <see cref="ConsoleKey" /> representing a digit 1..9 to a zero-based
+    ///     choice index, honoring both the top-row D-keys and the numpad. Returns
+    ///     false for any other key so the caller can ignore it.
+    /// </summary>
+    internal static bool TryNumberKeyToIndex(ConsoleKey key, int choiceCount, out int index)
+    {
+        // ConsoleKey values: D0=48..D9=57, NumPad0=96..NumPad9=105.
+        // One range check per group beats a ten-arm switch and scales past 3 profiles.
+        var digit =
+            key is >= ConsoleKey.D1 and <= ConsoleKey.D9 ? key - ConsoleKey.D0
+            : key is >= ConsoleKey.NumPad1 and <= ConsoleKey.NumPad9 ? key - ConsoleKey.NumPad0
+            : 0;
+
+        if (digit >= 1 && digit <= choiceCount)
+        {
+            index = digit - 1;
+            return true;
+        }
+
+        index = -1;
+        return false;
     }
 }

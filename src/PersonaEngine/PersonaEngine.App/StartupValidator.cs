@@ -11,11 +11,13 @@ namespace PersonaEngine.App;
 ///     Runs environment checks before the DI container is built.
 ///     Catches missing CUDA, espeak-ng, and config issues early with actionable messages
 ///     instead of cryptic native-loader exceptions deep in service resolution.
-///     Model-existence probes (Whisper, Kokoro, Silero, OpenNLP, Live2D avatars) are
-///     intentionally absent: <see cref="PersonaEngine.Lib.Assets.IAssetCatalog" /> is the
-///     single source of truth for what is installed, and the bootstrapper that runs
-///     before this validator already provisions every required asset before the host
-///     reaches DI construction.
+///     GPU / driver detection is intentionally absent: the bootstrapper's
+///     <see cref="PersonaEngine.Lib.Bootstrapper.GpuPreflight.IGpuPreflightCheck" /> already
+///     validated the NVIDIA driver, compute capability, and nvidia-smi availability before
+///     this validator runs — duplicating that here would be redundant and subtly disagree
+///     on version floors. Model-existence probes (Whisper, Kokoro, Silero, OpenNLP, Live2D
+///     avatars) are likewise absent: <see cref="PersonaEngine.Lib.Assets.IAssetCatalog" />
+///     is the single source of truth for what is installed.
 /// </summary>
 internal static class StartupValidator
 {
@@ -29,7 +31,6 @@ internal static class StartupValidator
         var errors = 0;
         var warnings = 0;
 
-        CheckGpu(log, ref errors);
         CheckCuda(log, ref errors);
         CheckEspeakNg(log, config, ref errors);
         CheckPrompt(log, config, ref warnings);
@@ -51,53 +52,6 @@ internal static class StartupValidator
         }
 
         return errors == 0;
-    }
-
-    private static void CheckGpu(ILogger log, ref int errors)
-    {
-        try
-        {
-            using var process = new Process();
-            process.StartInfo = new ProcessStartInfo
-            {
-                FileName = "nvidia-smi",
-                Arguments = "--query-gpu=name --format=csv,noheader",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            process.Start();
-            var output = process.StandardOutput.ReadToEnd().Trim();
-
-            if (!process.WaitForExit(5000))
-            {
-                process.Kill();
-                log.Error("GPU: nvidia-smi timed out. Ensure NVIDIA drivers are installed");
-                errors++;
-                return;
-            }
-
-            if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
-            {
-                var gpuName = output.Split('\n')[0].Trim();
-                log.Information("GPU: {GpuName}", gpuName);
-            }
-            else
-            {
-                log.Error(
-                    "GPU: No NVIDIA GPU detected. An NVIDIA GPU with CUDA support is required"
-                );
-                errors++;
-            }
-        }
-        catch
-        {
-            log.Error(
-                "GPU: nvidia-smi not found. Install NVIDIA drivers from https://www.nvidia.com/Download/index.aspx"
-            );
-            errors++;
-        }
     }
 
     private static void CheckCuda(ILogger log, ref int errors)
