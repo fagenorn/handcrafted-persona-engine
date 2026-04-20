@@ -123,6 +123,72 @@ if (Test-Path -LiteralPath $resourcesDir) {
     Write-Host "  (no Resources/ directory in publish output)"
 }
 
+# Bundle portable espeak-ng so the app runs without a system install.
+# The app's TTS phonemizer fallback prefers native/espeak/espeak-ng.exe over
+# anything on PATH (see EspeakResolver), so the binary just needs to land at
+# that path under the publish root.
+$EspeakVersion   = '1.52.0'
+$EspeakZipUrl    = "https://github.com/espeak-ng/espeak-ng/releases/download/$EspeakVersion/espeak-ng.msi"
+$EspeakDir       = Join-Path $PublishDir 'native\espeak'
+$EspeakCacheDir  = Join-Path $OutputDir  "espeak-cache-$EspeakVersion"
+$EspeakMsi       = Join-Path $EspeakCacheDir 'espeak-ng.msi'
+
+Write-Host ""
+Write-Host "Bundling espeak-ng $EspeakVersion into $EspeakDir..."
+if ($PSCmdlet.ShouldProcess($EspeakDir, 'install portable espeak-ng')) {
+    New-Item -ItemType Directory -Force -Path $EspeakCacheDir | Out-Null
+
+    if (-not (Test-Path -LiteralPath $EspeakMsi)) {
+        Write-Host "  downloading $EspeakZipUrl"
+        Invoke-WebRequest -Uri $EspeakZipUrl -OutFile $EspeakMsi -UseBasicParsing
+    } else {
+        Write-Host "  using cached $EspeakMsi"
+    }
+
+    # Extract the MSI without running its installer (no admin, no side effects).
+    # msiexec requires fully-resolved (no '..' segments) absolute paths.
+    $EspeakExtractDir = Join-Path $EspeakCacheDir 'extracted'
+    if (Test-Path -LiteralPath $EspeakExtractDir) {
+        Remove-Item -Recurse -Force -LiteralPath $EspeakExtractDir
+    }
+    New-Item -ItemType Directory -Force -Path $EspeakExtractDir | Out-Null
+
+    $msiAbs        = (Resolve-Path -LiteralPath $EspeakMsi).ProviderPath
+    $extractAbs    = (Resolve-Path -LiteralPath $EspeakExtractDir).ProviderPath
+    $msiLog        = Join-Path $EspeakCacheDir 'msiexec.log'
+    $logAbs        = [IO.Path]::GetFullPath($msiLog)
+
+    $msiArgs = @('/a', "`"$msiAbs`"", '/qn', "TARGETDIR=`"$extractAbs`"", '/l*v', "`"$logAbs`"")
+    $proc = Start-Process -FilePath 'msiexec.exe' -ArgumentList $msiArgs -Wait -NoNewWindow -PassThru
+    if ($proc.ExitCode -ne 0) {
+        throw "msiexec failed (exit $($proc.ExitCode)). See $logAbs"
+    }
+
+    # MSI lays out under extractDir\eSpeak NG\ — pick up exe/dll/data.
+    $espeakRoot = Get-ChildItem -Path $EspeakExtractDir -Directory -Recurse |
+        Where-Object { Test-Path (Join-Path $_.FullName 'espeak-ng.exe') } |
+        Select-Object -First 1
+    if (-not $espeakRoot) {
+        throw "espeak-ng.exe not found under $EspeakExtractDir after MSI extraction."
+    }
+
+    if (Test-Path -LiteralPath $EspeakDir) {
+        Remove-Item -Recurse -Force -LiteralPath $EspeakDir
+    }
+    New-Item -ItemType Directory -Force -Path $EspeakDir | Out-Null
+
+    Copy-Item -LiteralPath (Join-Path $espeakRoot.FullName 'espeak-ng.exe')   -Destination $EspeakDir
+    Copy-Item -LiteralPath (Join-Path $espeakRoot.FullName 'libespeak-ng.dll') -Destination $EspeakDir
+    Copy-Item -LiteralPath (Join-Path $espeakRoot.FullName 'espeak-ng-data') -Destination $EspeakDir -Recurse
+
+    $espeakBytes = (Get-ChildItem -LiteralPath $EspeakDir -Recurse -File |
+        Measure-Object -Property Length -Sum).Sum
+    $espeakMb = [Math]::Round($espeakBytes / 1MB, 1)
+    Write-Host "  bundled espeak-ng ($espeakMb MB) at native/espeak/"
+} else {
+    Write-Host "(WhatIf) Would bundle espeak-ng into $EspeakDir"
+}
+
 if (Test-Path -LiteralPath $ZipPath) {
     if ($PSCmdlet.ShouldProcess($ZipPath, 'remove stale zip')) {
         Remove-Item -Force -LiteralPath $ZipPath

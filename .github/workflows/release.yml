@@ -30,7 +30,7 @@ jobs:
         # The unit test suite skips the all-zero placeholder check when
         # PERSONA_ALLOW_PLACEHOLDER_HASHES=1 is set; the release workflow does
         # NOT set that env var, but we also fail-fast here so a missing
-        # scripts/hash-manifest.ps1 run blocks the release before any compile.
+        # scripts/hash-manifest.py run blocks the release before any compile.
         shell: pwsh
         run: |
           $manifestPath = 'src/PersonaEngine/PersonaEngine.Lib/Assets/Manifest/install-manifest.json'
@@ -40,7 +40,7 @@ jobs:
           }
           if ($placeholders) {
             $ids = ($placeholders | ForEach-Object { $_.id }) -join ', '
-            throw "Cannot release: placeholder hashes in manifest for: $ids. Run scripts/hash-manifest.ps1."
+            throw "Cannot release: placeholder hashes in manifest for: $ids. Run scripts/hash-manifest.py."
           }
 
       - name: Run tests

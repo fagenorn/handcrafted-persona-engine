@@ -16,8 +16,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-if (-not (Get-Command huggingface-cli -ErrorAction SilentlyContinue)) {
-    throw "huggingface-cli not found on PATH. Install with: pip install -U huggingface_hub"
+if (-not (Get-Command hf -ErrorAction SilentlyContinue)) {
+    throw "hf CLI not found on PATH. Install with: pip install -U huggingface_hub"
 }
 
 if (-not (Test-Path -LiteralPath $AssetsRoot)) {
@@ -29,13 +29,21 @@ Write-Host "Revision : $Revision"
 Write-Host "Source   : $AssetsRoot"
 Write-Host ""
 
-Write-Host "Uploading $AssetsRoot to $Repo (revision=main)..."
-huggingface-cli upload $Repo $AssetsRoot . --repo-type=model --revision=main
+Write-Host "Uploading $AssetsRoot to $Repo (revision=main) via upload-large-folder..."
+# upload-large-folder is the supported path for multi-GB uploads: parallel
+# workers, per-file commits, and resumable on retry. The single-commit
+# `hf upload` command silently stalls on big trees from this network.
+#
+# `--exclude README.md` keeps any local-only README (notes, scratch docs)
+# out of the public assets repo. The bootstrapper never references README
+# files in the install manifest, so excluding it is safe and prevents the
+# generated landing page from appearing on the HF model card.
+hf upload-large-folder $Repo $AssetsRoot --repo-type=model --revision=main --exclude "README.md"
 if ($LASTEXITCODE -ne 0) { throw "Upload failed (exit $LASTEXITCODE)." }
 
 Write-Host ""
 Write-Host "Creating tag '$Revision' on $Repo..."
-huggingface-cli repo tag $Repo $Revision --revision main
+hf repos tag create $Repo $Revision --revision main
 if ($LASTEXITCODE -ne 0) { throw "Tag failed (exit $LASTEXITCODE)." }
 
 $browseUrl = "https://huggingface.co/$Repo/tree/$Revision"

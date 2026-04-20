@@ -73,10 +73,10 @@ redistributable CDN.
      (otherwise `FeatureIdsCoverageTests` fails)
    - `extractArchive: true` if `source.path` is a zip
 3. Refresh hashes:
-   ```pwsh
-   ./scripts/hash-manifest.ps1
+   ```sh
+   python scripts/hash-manifest.py
    ```
-   Use `-WhatIf` to preview without writing. The script refuses to write
+   Use `--dry-run` to preview without writing. The script refuses to write
    while any HuggingFace asset is missing under `assets-source/`.
 4. Commit the updated `install-manifest.json` (this is the only thing the
    git repo records about your new asset).
@@ -91,6 +91,6 @@ redistributable CDN.
 
 ## Updating an existing asset
 
-Replace the file under `assets-source/`, re-run `hash-manifest.ps1`, then
+Replace the file under `assets-source/`, re-run `hash-manifest.py`, then
 re-upload with a *new* revision tag. Never overwrite an existing tag —
 clients pin to specific revisions for reproducible installs.
