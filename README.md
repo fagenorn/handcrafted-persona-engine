@@ -91,15 +91,15 @@ It integrates seamlessly into streaming software like OBS Studio using Spout for
 1. Download the latest `PersonaEngine-<version>-win-x64.zip` from
    [Releases](https://github.com/fagenorn/handcrafted-persona-engine/releases).
 2. Extract anywhere with at least 16 GB free disk space. Models will be
-   downloaded into a `Resources/` folder next to `PersonaEngine.App.exe`.
-3. Double-click `PersonaEngine.App.exe`.
+   downloaded into a `Resources/` folder next to `PersonaEngine.exe`.
+3. Double-click `PersonaEngine.exe`.
 4. On first run, pick an install profile in the CLI prompt. Required models and
    the NVIDIA runtime are downloaded, hash-verified, and installed automatically.
 
 ### Re-run the picker
 
 ```bash
-PersonaEngine.App.exe --reinstall
+PersonaEngine.exe --reinstall
 ```
 
 ### Other flags
@@ -120,13 +120,13 @@ builds are ignored — the installer will re-download into the new locations on
 first launch. Free up ~16 GB before you start, and feel free to delete the old
 folders once the bootstrapper finishes.
 
-### Manual / air-gapped install
+### Deeper docs
 
-If you cannot use the in-app bootstrapper (offline machine, custom model
-layout, building from source), the legacy
-[Installation and Setup Guide](./INSTALLATION.md) covers manual model downloads,
-CUDA/cuDNN setup, espeak-ng, LLM configuration, Spout, and `appsettings.json`.
-The bootstrapper is the recommended path for normal installs.
+- [INSTALLATION.md](./INSTALLATION.md) — full setup guide: profile picker, CLI
+  flags, LLM + personality configuration, overlay vs Spout, building from
+  source, upgrading, and troubleshooting the bootstrapper.
+- [CONFIGURATION.md](./CONFIGURATION.md) — every `appsettings.json` field,
+  annotated.
 
 ## <a id="features"></a>✨ Features Galore!
 
@@ -187,7 +187,7 @@ The bootstrapper is the recommended path for normal installs.
     * Plays generated speech clearly via `PortAudio`.
 
 * ⚙️ **Configuration:**
-    * Primary setup via `appsettings.json` (details in [Installation Guide](./INSTALLATION.md#configuration-appsettingsjson)).
+    * Primary setup via `appsettings.json` (full field reference in [CONFIGURATION.md](./CONFIGURATION.md)).
     * Real-time adjustments for some settings via the Control `UI`.
 
 * 🤬 **Profanity Filtering:**
