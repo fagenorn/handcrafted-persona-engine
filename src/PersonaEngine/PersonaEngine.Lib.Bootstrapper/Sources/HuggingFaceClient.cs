@@ -3,27 +3,21 @@ using PersonaEngine.Lib.Assets.Manifest;
 
 namespace PersonaEngine.Lib.Bootstrapper.Sources;
 
-public sealed class HuggingFaceClient : IAssetSource
+#pragma warning disable CS9113 // Parameter is unread — logger kept for DI shape / future use.
+public sealed class HuggingFaceClient(
+    HttpClient httpClient,
+    string endpoint,
+    ILogger<HuggingFaceClient> logger
+) : IAssetSource
+#pragma warning restore CS9113
 {
     public const string DefaultEndpoint = "https://huggingface.co";
     public const string EndpointEnvVar = "HF_ENDPOINT";
 
-    private readonly HttpClient _http;
-    private readonly string _endpoint;
-    private readonly ILogger<HuggingFaceClient> _logger;
+    // Normalise once so we don't duplicate the TrimEnd on every ResolveAsync call.
+    private readonly string _endpoint = endpoint.TrimEnd('/');
 
     public SourceType Type => SourceType.HuggingFace;
-
-    public HuggingFaceClient(
-        HttpClient httpClient,
-        string endpoint,
-        ILogger<HuggingFaceClient> logger
-    )
-    {
-        _http = httpClient;
-        _endpoint = endpoint.TrimEnd('/');
-        _logger = logger;
-    }
 
     public static string ResolveEndpoint() =>
         Environment.GetEnvironmentVariable(EndpointEnvVar) ?? DefaultEndpoint;
@@ -34,6 +28,8 @@ public sealed class HuggingFaceClient : IAssetSource
         CancellationToken ct
     )
     {
+        ArgumentNullException.ThrowIfNull(asset);
+
         var src = (HuggingFaceSource)asset.Source;
         if (string.Equals(src.Revision, "main", StringComparison.Ordinal))
             throw new InvalidOperationException(

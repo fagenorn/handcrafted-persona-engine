@@ -1,50 +1,27 @@
-using System.Globalization;
 using Microsoft.Extensions.Logging;
 
 namespace PersonaEngine.Lib.Bootstrapper.GpuPreflight;
 
 /// <summary>
 /// Composes <see cref="INvidiaSmiRunner" /> + <see cref="INvcudaProbe" /> into a
-/// preflight decision. The actual version floors come from the shipping
-/// install-manifest.json: we bundle CUDA 13.0.3 (requires Windows driver
-/// ≥ 580.65) and cuDNN 9.1.1 (requires a cuBLAS / cuBLASLt that matches), and
-/// ONNX Runtime's GPU EP plus cuDNN 9 drop support below compute 6.0 (Pascal).
+/// preflight decision. The actual version floors live in <see cref="GpuFloor" />
+/// so the UI layer and tests can read them without pulling in the probes.
 /// </summary>
-public sealed class NvidiaGpuPreflightCheck : IGpuPreflightCheck
+public sealed class NvidiaGpuPreflightCheck(
+    INvidiaSmiRunner smi,
+    INvcudaProbe nvcuda,
+    ILogger<NvidiaGpuPreflightCheck>? log = null
+) : IGpuPreflightCheck
 {
-    /// <summary>
-    /// Windows driver ≥ 580.65 is the documented floor for CUDA 13.0.x user-mode
-    /// libraries. 12.x libraries are forward-compatible under the same driver,
-    /// so this one floor covers both runtimes we ship.
-    /// </summary>
-    public static readonly (int Major, int Minor) MinDriver = (580, 65);
-
-    /// <summary>
-    /// Pascal (compute 6.0) is the oldest architecture still covered by modern
-    /// cuDNN 9 and ONNX Runtime's CUDA EP. Maxwell (5.x) works for some ops but
-    /// is not supported, so we block below this floor.
-    /// </summary>
-    public static readonly (int Major, int Minor) MinCompute = (6, 0);
-
-    private readonly INvidiaSmiRunner _smi;
-    private readonly INvcudaProbe _nvcuda;
-    private readonly ILogger<NvidiaGpuPreflightCheck>? _log;
-
-    public NvidiaGpuPreflightCheck(
-        INvidiaSmiRunner smi,
-        INvcudaProbe nvcuda,
-        ILogger<NvidiaGpuPreflightCheck>? log = null
-    )
-    {
-        _smi = smi;
-        _nvcuda = nvcuda;
-        _log = log;
-    }
+    // Re-exposed for call sites that already reference these (e.g. UI guidance
+    // text, existing tests). New code should prefer GpuFloor directly.
+    public static readonly (int Major, int Minor) MinDriver = GpuFloor.MinDriver;
+    public static readonly (int Major, int Minor) MinCompute = GpuFloor.MinCompute;
 
     public async Task<GpuStatus> InspectAsync(CancellationToken ct)
     {
-        var smi = await _smi.QueryAsync(ct).ConfigureAwait(false);
-        if (smi is null)
+        var smiResult = await smi.QueryAsync(ct).ConfigureAwait(false);
+        if (smiResult is null)
         {
             // nvidia-smi absent or unusable. Fall back to probing nvcuda.dll so
             // we don't reject stripped system images where the CUDA user-mode
@@ -52,7 +29,7 @@ public sealed class NvidiaGpuPreflightCheck : IGpuPreflightCheck
             // happens on some cloud images and WSL mounts). If it loads we only
             // know "some NVIDIA driver is present" — not enough to verify
             // version, so we still warn the user and let them decide.
-            if (_nvcuda.TryLoadNvcuda())
+            if (nvcuda.TryLoadNvcuda())
             {
                 return GpuStatus.Fail(
                     GpuFailureKind.ToolMissing,
@@ -68,113 +45,64 @@ public sealed class NvidiaGpuPreflightCheck : IGpuPreflightCheck
             );
         }
 
-        var driverParsed = TryParseVersion(smi.DriverVersion);
+        var driverParsed = GpuFloor.TryParseVersion(smiResult.DriverVersion);
         if (driverParsed is null)
         {
-            _log?.LogWarning(
+            log?.LogWarning(
                 "nvidia-smi reported unparseable driver version '{Version}' — proceeding with warning",
-                smi.DriverVersion
+                smiResult.DriverVersion
             );
             return GpuStatus.Fail(
                 GpuFailureKind.UnknownGpu,
-                $"Couldn't parse driver version '{smi.DriverVersion}' reported by nvidia-smi. "
+                $"Couldn't parse driver version '{smiResult.DriverVersion}' reported by nvidia-smi. "
                     + "This may be fine, but we can't confirm you meet the minimum.",
-                driver: smi.DriverVersion,
-                name: smi.GpuName
+                driver: smiResult.DriverVersion,
+                name: smiResult.GpuName
             );
         }
 
-        if (CompareVersion(driverParsed.Value, MinDriver) < 0)
+        if (GpuFloor.CompareVersion(driverParsed.Value, GpuFloor.MinDriver) < 0)
         {
             return GpuStatus.Fail(
                 GpuFailureKind.DriverTooOld,
-                $"Driver {smi.DriverVersion} is older than the required {MinDriver.Major}.{MinDriver.Minor:00} "
+                $"Driver {smiResult.DriverVersion} is older than the required {GpuFloor.MinDriver.Major}.{GpuFloor.MinDriver.Minor:00} "
                     + "(needed for the CUDA 13 runtime we bundle). Update from nvidia.com.",
-                driver: smi.DriverVersion,
-                name: smi.GpuName
+                driver: smiResult.DriverVersion,
+                name: smiResult.GpuName
             );
         }
 
         (int Major, int Minor)? cc = null;
-        if (!string.IsNullOrWhiteSpace(smi.ComputeCap))
+        if (!string.IsNullOrWhiteSpace(smiResult.ComputeCap))
         {
-            cc = TryParseVersion(smi.ComputeCap);
+            cc = GpuFloor.TryParseVersion(smiResult.ComputeCap);
             if (cc is null)
             {
-                _log?.LogDebug(
+                log?.LogDebug(
                     "nvidia-smi reported unparseable compute_cap '{Cap}' — ignoring",
-                    smi.ComputeCap
+                    smiResult.ComputeCap
                 );
             }
-            else if (CompareVersion(cc.Value, MinCompute) < 0)
+            else if (GpuFloor.CompareVersion(cc.Value, GpuFloor.MinCompute) < 0)
             {
                 return GpuStatus.Fail(
                     GpuFailureKind.ComputeTooLow,
-                    $"GPU '{smi.GpuName}' has compute capability {cc.Value.Major}.{cc.Value.Minor}, "
-                        + $"below the {MinCompute.Major}.{MinCompute.Minor} floor (Pascal). "
+                    $"GPU '{smiResult.GpuName}' has compute capability {cc.Value.Major}.{cc.Value.Minor}, "
+                        + $"below the {GpuFloor.MinCompute.Major}.{GpuFloor.MinCompute.Minor} floor (Pascal). "
                         + "Persona Engine won't run reliably on this card.",
-                    driver: smi.DriverVersion,
-                    name: smi.GpuName,
+                    driver: smiResult.DriverVersion,
+                    name: smiResult.GpuName,
                     cc: cc
                 );
             }
         }
 
-        return GpuStatus.Pass(smi.DriverVersion, smi.GpuName, cc);
+        return GpuStatus.Pass(smiResult.DriverVersion, smiResult.GpuName, cc);
     }
 
-    /// <summary>
-    /// Returns negative / zero / positive like <see cref="IComparable" />.
-    /// Compares major then minor — patch digits on driver strings (e.g. the
-    /// trailing ".01" in "580.65.01") are stripped by <see cref="TryParseVersion" />.
-    /// </summary>
-    private static int CompareVersion((int Major, int Minor) a, (int Major, int Minor) b)
-    {
-        if (a.Major != b.Major)
-            return a.Major.CompareTo(b.Major);
-        return a.Minor.CompareTo(b.Minor);
-    }
-
-    /// <summary>
-    /// Parses "&lt;major&gt;[.&lt;minor&gt;[.&lt;patch&gt;...]]" loosely — we only care about the first
-    /// two components. nvidia-smi driver_version is typically "580.65.01" on
-    /// Linux and "580.65" on Windows; compute_cap is always "X.Y".
-    /// </summary>
-    internal static (int Major, int Minor)? TryParseVersion(string? s)
-    {
-        if (string.IsNullOrWhiteSpace(s))
-            return null;
-
-        var trimmed = s.Trim();
-        var parts = trimmed.Split('.');
-        if (
-            !int.TryParse(
-                parts[0],
-                NumberStyles.Integer,
-                CultureInfo.InvariantCulture,
-                out var major
-            )
-        )
-            return null;
-
-        var minor = 0;
-        if (parts.Length > 1)
-        {
-            // Accept "65" or "65b2" (shouldn't happen, but be forgiving) —
-            // take the leading digit run of the minor part.
-            var minorPart = parts[1];
-            var i = 0;
-            while (i < minorPart.Length && char.IsDigit(minorPart[i]))
-                i++;
-            if (i == 0)
-                return null;
-            minor = int.Parse(
-                minorPart.AsSpan(0, i),
-                NumberStyles.Integer,
-                CultureInfo.InvariantCulture
-            );
-        }
-
-        return (major, minor);
-    }
+    // Kept for backward compat with the existing test suite that calls
+    // NvidiaGpuPreflightCheck.TryParseVersion directly. New callers should use
+    // GpuFloor.TryParseVersion.
+    internal static (int Major, int Minor)? TryParseVersion(string? s) =>
+        GpuFloor.TryParseVersion(s);
 }

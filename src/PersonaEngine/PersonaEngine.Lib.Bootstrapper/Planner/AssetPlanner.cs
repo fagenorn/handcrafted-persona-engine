@@ -3,17 +3,8 @@ using PersonaEngine.Lib.Assets.Manifest;
 
 namespace PersonaEngine.Lib.Bootstrapper.Planner;
 
-public sealed class AssetPlanner
+public sealed class AssetPlanner(string installRoot, ILogger<AssetPlanner>? log = null)
 {
-    private readonly string _installRoot;
-    private readonly ILogger<AssetPlanner>? _log;
-
-    public AssetPlanner(string installRoot, ILogger<AssetPlanner>? log = null)
-    {
-        _installRoot = installRoot;
-        _log = log;
-    }
-
     public AssetPlan Compute(
         InstallManifest manifest,
         InstallStateLock lockState,
@@ -40,7 +31,7 @@ public sealed class AssetPlanner
         {
             if (!plannedIds.Contains(id))
             {
-                _log?.LogWarning(
+                log?.LogWarning(
                     "Lock entry '{AssetId}' refers to an asset not present in manifest v{ManifestVersion}; leaving it alone (manual cleanup required if needed)",
                     id,
                     manifest.ManifestVersion
@@ -105,7 +96,7 @@ public sealed class AssetPlanner
     {
         var path = Path.IsPathRooted(asset.InstallPath)
             ? asset.InstallPath
-            : Path.Combine(_installRoot, asset.InstallPath);
+            : Path.Combine(installRoot, asset.InstallPath);
         return File.Exists(path)
             || (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any());
     }

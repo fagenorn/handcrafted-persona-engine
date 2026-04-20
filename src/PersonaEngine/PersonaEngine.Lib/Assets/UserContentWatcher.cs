@@ -5,7 +5,10 @@ public sealed class UserContentWatcher : IDisposable
     private readonly FileSystemWatcher _watcher;
     private readonly TimeSpan _debounce;
     private CancellationTokenSource? _pendingFire;
-    private readonly object _gate = new();
+
+    // System.Threading.Lock (.NET 9+) — hot-path is cheaper than Monitor on object
+    // and the compiler enforces scoped usage; no behavioral change from `object`.
+    private readonly Lock _gate = new();
 
     public event EventHandler? Changed;
 

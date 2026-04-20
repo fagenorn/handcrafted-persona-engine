@@ -9,16 +9,9 @@ namespace PersonaEngine.Lib.Bootstrapper.GpuPreflight;
 /// reason (missing binary vs. timeout vs. non-zero exit) since users can't act
 /// on the distinction.
 /// </summary>
-public sealed class NvidiaSmiRunner : INvidiaSmiRunner
+public sealed class NvidiaSmiRunner(ILogger<NvidiaSmiRunner>? log = null) : INvidiaSmiRunner
 {
     private static readonly TimeSpan HardTimeout = TimeSpan.FromSeconds(5);
-
-    private readonly ILogger<NvidiaSmiRunner>? _log;
-
-    public NvidiaSmiRunner(ILogger<NvidiaSmiRunner>? log = null)
-    {
-        _log = log;
-    }
 
     public async Task<NvidiaSmiResult?> QueryAsync(CancellationToken ct)
     {
@@ -62,7 +55,7 @@ public sealed class NvidiaSmiRunner : INvidiaSmiRunner
             // doesn't exist. Log at debug so this isn't noisy on developer
             // machines without CUDA — the caller will emit the user-facing
             // message.
-            _log?.LogDebug(ex, "nvidia-smi could not be started ({Args})", args);
+            log?.LogDebug(ex, "nvidia-smi could not be started ({Args})", args);
             proc?.Dispose();
             return null;
         }
@@ -93,7 +86,7 @@ public sealed class NvidiaSmiRunner : INvidiaSmiRunner
                 {
                     /* best-effort */
                 }
-                _log?.LogWarning("nvidia-smi timed out after {Timeout}", HardTimeout);
+                log?.LogWarning("nvidia-smi timed out after {Timeout}", HardTimeout);
                 return null;
             }
 

@@ -4,16 +4,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace PersonaEngine.Lib.Assets.Manifest;
 
-public sealed class InstallStateLockStore
+public sealed class InstallStateLockStore(string path, ILogger? logger = null)
 {
-    private readonly string _path;
-    private readonly ILogger _logger;
-
-    public InstallStateLockStore(string path, ILogger? logger = null)
-    {
-        _path = path;
-        _logger = logger ?? NullLogger.Instance;
-    }
+    private readonly string _path = path;
+    private readonly ILogger _logger = logger ?? NullLogger.Instance;
 
     public InstallStateLock Read(string fallbackManifestVersion)
     {

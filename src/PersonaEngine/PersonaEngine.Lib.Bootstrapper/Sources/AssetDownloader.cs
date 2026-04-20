@@ -7,17 +7,8 @@ namespace PersonaEngine.Lib.Bootstrapper.Sources;
 
 public sealed record DownloadProgress(long BytesDownloaded, long TotalBytes);
 
-public sealed class AssetDownloader
+public sealed class AssetDownloader(HttpClient http, ILogger<AssetDownloader> logger)
 {
-    private readonly HttpClient _http;
-    private readonly ILogger<AssetDownloader> _logger;
-
-    public AssetDownloader(HttpClient http, ILogger<AssetDownloader> logger)
-    {
-        _http = http;
-        _logger = logger;
-    }
-
     public async Task DownloadAsync(
         AssetDownload download,
         string destinationPath,
@@ -33,8 +24,7 @@ public sealed class AssetDownloader
         if (resumeFrom > 0)
             req.Headers.Range = new RangeHeaderValue(resumeFrom, null);
 
-        using var resp = await _http
-            .SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct)
+        using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct)
             .ConfigureAwait(false);
 
         if (resp.StatusCode == System.Net.HttpStatusCode.RequestedRangeNotSatisfiable)
@@ -53,7 +43,7 @@ public sealed class AssetDownloader
         // on the overlap. Detect it up front and restart cleanly.
         if (resumeFrom > 0 && resp.StatusCode == System.Net.HttpStatusCode.OK)
         {
-            _logger.LogInformation(
+            logger.LogInformation(
                 "Server ignored Range request for {Url}; restarting from scratch",
                 download.Url
             );
@@ -77,8 +67,11 @@ public sealed class AssetDownloader
     )
     {
         using var retry = new HttpRequestMessage(HttpMethod.Get, download.Url);
-        using var retryResp = await _http
-            .SendAsync(retry, HttpCompletionOption.ResponseHeadersRead, ct)
+        using var retryResp = await http.SendAsync(
+                retry,
+                HttpCompletionOption.ResponseHeadersRead,
+                ct
+            )
             .ConfigureAwait(false);
         retryResp.EnsureSuccessStatusCode();
         await StreamToDiskAsync(retryResp, partial, destinationPath, download, progress, 0, ct)
