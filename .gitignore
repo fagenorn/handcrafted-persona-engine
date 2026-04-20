@@ -703,6 +703,13 @@ src/PersonaEngine/PersonaEngine.Lib/Resources/*
 !src/PersonaEngine/PersonaEngine.Lib/Resources/.gitkeep
 !src/PersonaEngine/PersonaEngine.Lib/Resources/voice_metadata.json
 
+# Static app-owned assets that must ship in the release zip (the bootstrapper
+# does NOT download these — AvatarApp hard-requires Fonts at startup, the
+# renderer needs the shader sources, and Prompts ships the default personality).
+!src/PersonaEngine/PersonaEngine.Lib/Resources/Fonts
+!src/PersonaEngine/PersonaEngine.Lib/Resources/Shaders
+!src/PersonaEngine/PersonaEngine.Lib/Resources/Prompts
+
 # Native resources for PersonaEngine
 !src/PersonaEngine/PersonaEngine.Lib/Resources/native
 
