@@ -1,6 +1,6 @@
 ﻿using PersonaEngine.Lib.Core.Conversation.Abstractions.Strategies;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Events.Input;
-using PersonaEngine.Lib.Utils;
+using PersonaEngine.Lib.Utils.Text;
 
 namespace PersonaEngine.Lib.Core.Conversation.Implementations.Strategies;
 
@@ -8,7 +8,7 @@ public class MinWordsBargeInStrategy : IBargeInStrategy
 {
     public bool ShouldAllowBargeIn(BargeInContext context)
     {
-        switch ( context.InputEvent )
+        switch (context.InputEvent)
         {
             case SttSegmentRecognizing segmentRecognizing:
             {

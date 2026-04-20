@@ -160,14 +160,23 @@ public abstract class CubismUserModel : IDisposable
     /// </summary>
     /// <param name="eventValue">発火したイベントの文字列データ</param>
     /// <param name="customData">CubismUserModelを継承したインスタンスを想定</param>
-    public static void CubismDefaultMotionEventCallback(CubismUserModel? customData, string eventValue) { customData?.MotionEventFired(eventValue); }
+    public static void CubismDefaultMotionEventCallback(
+        CubismUserModel? customData,
+        string eventValue
+    )
+    {
+        customData?.MotionEventFired(eventValue);
+    }
 
     /// <summary>
     ///     マウスドラッグの情報を設定する。
     /// </summary>
     /// <param name="x">ドラッグしているカーソルのX位置</param>
     /// <param name="y">ドラッグしているカーソルのY位置</param>
-    public void SetDragging(float x, float y) { _dragManager.Set(x, y); }
+    public void SetDragging(float x, float y)
+    {
+        _dragManager.Set(x, y);
+    }
 
     /// <summary>
     ///     加速度の情報を設定する。
@@ -198,19 +207,28 @@ public abstract class CubismUserModel : IDisposable
     ///     ポーズデータを読み込む。
     /// </summary>
     /// <param name="buffer">pose3.jsonが読み込まれているバッファ</param>
-    protected void LoadPose(string buffer) { _pose = new CubismPose(buffer); }
+    protected void LoadPose(string buffer)
+    {
+        _pose = new CubismPose(buffer);
+    }
 
     /// <summary>
     ///     物理演算データを読み込む。
     /// </summary>
     /// <param name="buffer">physics3.jsonが読み込まれているバッファ</param>
-    protected void LoadPhysics(string buffer) { _physics = new CubismPhysics(buffer); }
+    protected void LoadPhysics(string buffer)
+    {
+        _physics = new CubismPhysics(buffer);
+    }
 
     /// <summary>
     ///     ユーザーデータを読み込む。
     /// </summary>
     /// <param name="buffer">userdata3.jsonが読み込まれているバッファ</param>
-    protected void LoadUserData(string buffer) { _modelUserData = new CubismModelUserData(buffer); }
+    protected void LoadUserData(string buffer)
+    {
+        _modelUserData = new CubismModelUserData(buffer);
+    }
 
     /// <summary>
     ///     指定した位置にDrawableがヒットしているかどうかを取得する。
@@ -226,40 +244,40 @@ public abstract class CubismUserModel : IDisposable
     {
         var drawIndex = Model.GetDrawableIndex(drawableId);
 
-        if ( drawIndex < 0 )
+        if (drawIndex < 0)
         {
             return false; // 存在しない場合はfalse
         }
 
-        var count    = Model.GetDrawableVertexCount(drawIndex);
+        var count = Model.GetDrawableVertexCount(drawIndex);
         var vertices = Model.GetDrawableVertices(drawIndex);
 
-        var left   = vertices[0];
-        var right  = vertices[0];
-        var top    = vertices[1];
+        var left = vertices[0];
+        var right = vertices[0];
+        var top = vertices[1];
         var bottom = vertices[1];
 
-        for ( var j = 1; j < count; ++j )
+        for (var j = 1; j < count; ++j)
         {
             var x = vertices[CubismFramework.VertexOffset + j * CubismFramework.VertexStep];
             var y = vertices[CubismFramework.VertexOffset + j * CubismFramework.VertexStep + 1];
 
-            if ( x < left )
+            if (x < left)
             {
                 left = x; // Min x
             }
 
-            if ( x > right )
+            if (x > right)
             {
                 right = x; // Max x
             }
 
-            if ( y < top )
+            if (y < top)
             {
                 top = y; // Min y
             }
 
-            if ( y > bottom )
+            if (y > bottom)
             {
                 bottom = y; // Max y
             }
@@ -276,7 +294,7 @@ public abstract class CubismUserModel : IDisposable
     /// </summary>
     protected void CreateRenderer(CubismRenderer renderer)
     {
-        if ( Renderer != null )
+        if (Renderer != null)
         {
             DeleteRenderer();
         }
@@ -289,7 +307,7 @@ public abstract class CubismUserModel : IDisposable
     /// </summary>
     protected void DeleteRenderer()
     {
-        if ( Renderer != null )
+        if (Renderer != null)
         {
             Renderer.Dispose();
             Renderer = null;

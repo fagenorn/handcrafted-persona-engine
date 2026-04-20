@@ -42,5 +42,5 @@ public enum ShaderNames
 
     MultMaskedPremultipliedAlpha,
 
-    MultMaskedPremultipliedAlphaInverted
+    MultMaskedPremultipliedAlphaInverted,
 }

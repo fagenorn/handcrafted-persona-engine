@@ -166,7 +166,14 @@ public abstract class OpenGLApi
 
     public abstract void Uniform1i(int index, int data);
 
-    public abstract void VertexAttribPointer(int index, int length, int type, bool b, int size, nint arr);
+    public abstract void VertexAttribPointer(
+        int index,
+        int length,
+        int type,
+        bool b,
+        int size,
+        nint arr
+    );
 
     public abstract void Uniform4f(int index, float a, float b, float c, float d);
 
@@ -208,7 +215,17 @@ public abstract class OpenGLApi
 
     public abstract int GenTexture();
 
-    public abstract void TexImage2D(int type, int a, int type1, int w, int h, int size, int type2, int type3, IntPtr data);
+    public abstract void TexImage2D(
+        int type,
+        int a,
+        int type1,
+        int w,
+        int h,
+        int size,
+        int type2,
+        int type3,
+        IntPtr data
+    );
 
     public abstract void TexParameteri(int a, int b, int c);
 

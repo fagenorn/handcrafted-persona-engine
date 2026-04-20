@@ -12,9 +12,9 @@ public record AsrConfiguration
 
     public float VadThresholdGap { get; init; } = 0.15f;
 
-    public float VadMinSpeechDuration { get; init; } = 250f;
+    public float VadMinSpeechDuration { get; init; } = 150f;
 
-    public float VadMinSilenceDuration { get; init; } = 200f;
+    public float VadMinSilenceDuration { get; init; } = 450f;
 }
 
 public enum WhisperConfigTemplate
@@ -23,17 +23,21 @@ public enum WhisperConfigTemplate
 
     Balanced,
 
-    Precise
+    Precise,
 }
 
 public static class WhisperConfigTemplateExtensions
 {
-    public static WhisperProcessorBuilder ApplyTemplate(this WhisperProcessorBuilder builder, WhisperConfigTemplate template)
+    public static WhisperProcessorBuilder ApplyTemplate(
+        this WhisperProcessorBuilder builder,
+        WhisperConfigTemplate template
+    )
     {
-        switch ( template )
+        switch (template)
         {
             case WhisperConfigTemplate.Performant:
-                var sampleBuilderA = (GreedySamplingStrategyBuilder)builder.WithGreedySamplingStrategy();
+                var sampleBuilderA = (GreedySamplingStrategyBuilder)
+                    builder.WithGreedySamplingStrategy();
                 sampleBuilderA.WithBestOf(1);
 
                 builder = sampleBuilderA.ParentBuilder;
@@ -41,7 +45,8 @@ public static class WhisperConfigTemplateExtensions
 
                 break;
             case WhisperConfigTemplate.Balanced:
-                var sampleBuilderB = (BeamSearchSamplingStrategyBuilder)builder.WithBeamSearchSamplingStrategy();
+                var sampleBuilderB = (BeamSearchSamplingStrategyBuilder)
+                    builder.WithBeamSearchSamplingStrategy();
                 sampleBuilderB.WithBeamSize(2);
                 sampleBuilderB.WithPatience(1f);
 
@@ -51,7 +56,8 @@ public static class WhisperConfigTemplateExtensions
 
                 break;
             case WhisperConfigTemplate.Precise:
-                var sampleBuilderC = (BeamSearchSamplingStrategyBuilder)builder.WithBeamSearchSamplingStrategy();
+                var sampleBuilderC = (BeamSearchSamplingStrategyBuilder)
+                    builder.WithBeamSearchSamplingStrategy();
                 sampleBuilderC.WithBeamSize(5);
                 sampleBuilderC.WithPatience(1f);
 

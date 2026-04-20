@@ -37,7 +37,7 @@ public record CubismModelMatrix : CubismMatrix44
 
     public CubismModelMatrix(float w, float h)
     {
-        _width  = w;
+        _width = w;
         _height = h;
 
         SetHeight(2.0f);
@@ -70,7 +70,10 @@ public record CubismModelMatrix : CubismMatrix44
     /// </summary>
     /// <param name="x">X軸の位置</param>
     /// <param name="y">Y軸の位置</param>
-    public void SetPosition(float x, float y) { Translate(x, y); }
+    public void SetPosition(float x, float y)
+    {
+        Translate(x, y);
+    }
 
     /// <summary>
     ///     中心位置を設定する。
@@ -87,7 +90,10 @@ public record CubismModelMatrix : CubismMatrix44
     ///     上辺の位置を設定する。
     /// </summary>
     /// <param name="y">上辺のY軸位置</param>
-    public void Top(float y) { SetY(y); }
+    public void Top(float y)
+    {
+        SetY(y);
+    }
 
     /// <summary>
     ///     下辺の位置を設定する。
@@ -103,7 +109,10 @@ public record CubismModelMatrix : CubismMatrix44
     ///     左辺の位置を設定する。
     /// </summary>
     /// <param name="x">左辺のX軸位置</param>
-    public void Left(float x) { SetX(x); }
+    public void Left(float x)
+    {
+        SetX(x);
+    }
 
     /// <summary>
     ///     右辺の位置を設定する。
@@ -129,7 +138,10 @@ public record CubismModelMatrix : CubismMatrix44
     ///     X軸の位置を設定する。
     /// </summary>
     /// <param name="x">X軸の位置</param>
-    public void SetX(float x) { TranslateX(x); }
+    public void SetX(float x)
+    {
+        TranslateX(x);
+    }
 
     /// <summary>
     ///     Y軸の中心位置を設定する。
@@ -145,7 +157,10 @@ public record CubismModelMatrix : CubismMatrix44
     ///     Y軸の位置を設定する。
     /// </summary>
     /// <param name="y">Y軸の位置</param>
-    public void SetY(float y) { TranslateY(y); }
+    public void SetY(float y)
+    {
+        TranslateY(y);
+    }
 
     /// <summary>
     ///     レイアウト情報から位置を設定する。
@@ -153,49 +168,49 @@ public record CubismModelMatrix : CubismMatrix44
     /// <param name="layout">レイアウト情報</param>
     public void SetupFromLayout(Dictionary<string, float> layout)
     {
-        foreach ( var item in layout )
+        foreach (var item in layout)
         {
-            if ( item.Key == KeyWidth )
+            if (item.Key == KeyWidth)
             {
                 SetWidth(item.Value);
             }
-            else if ( item.Key == KeyHeight )
+            else if (item.Key == KeyHeight)
             {
                 SetHeight(item.Value);
             }
         }
 
-        foreach ( var item in layout )
+        foreach (var item in layout)
         {
-            if ( item.Key == KeyX )
+            if (item.Key == KeyX)
             {
                 SetX(item.Value);
             }
-            else if ( item.Key == KeyY )
+            else if (item.Key == KeyY)
             {
                 SetY(item.Value);
             }
-            else if ( item.Key == KeyCenterX )
+            else if (item.Key == KeyCenterX)
             {
                 CenterX(item.Value);
             }
-            else if ( item.Key == KeyCenterY )
+            else if (item.Key == KeyCenterY)
             {
                 CenterY(item.Value);
             }
-            else if ( item.Key == KeyTop )
+            else if (item.Key == KeyTop)
             {
                 Top(item.Value);
             }
-            else if ( item.Key == KeyBottom )
+            else if (item.Key == KeyBottom)
             {
                 Bottom(item.Value);
             }
-            else if ( item.Key == KeyLeft )
+            else if (item.Key == KeyLeft)
             {
                 Left(item.Value);
             }
-            else if ( item.Key == KeyRight )
+            else if (item.Key == KeyRight)
             {
                 Right(item.Value);
             }

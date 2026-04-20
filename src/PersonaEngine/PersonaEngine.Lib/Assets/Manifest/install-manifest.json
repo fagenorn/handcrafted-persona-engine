@@ -1,0 +1,515 @@
+{
+  "schemaVersion": 1,
+  "manifestVersion": "v1.0.0",
+  "assets": [
+    {
+      "id": "cuda-cudart-12.4",
+      "kind": "NativeRuntime",
+      "displayName": "CUDA Runtime 12.4 (cudart)",
+      "capability": { "name": "Core runtime", "description": "GPU runtime libraries (CUDA cudart)" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "NvidiaRedist",
+        "channel": "cuda",
+        "package": "cuda_cudart",
+        "version": "12.4.1",
+        "platform": "windows-x86_64",
+        "extractFiles": []
+      },
+      "installPath": "cuda/cudart",
+      "sha256": "FROM_NVIDIA_MANIFEST",
+      "sizeBytes": 0,
+      "gates": [],
+      "extractArchive": false
+    },
+    {
+      "id": "cuda-cublas-12.4",
+      "kind": "NativeRuntime",
+      "displayName": "cuBLAS 12.4",
+      "capability": { "name": "Core runtime", "description": "GPU BLAS library (cuBLAS)" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "NvidiaRedist",
+        "channel": "cuda",
+        "package": "libcublas",
+        "version": "12.4.1",
+        "platform": "windows-x86_64",
+        "extractFiles": []
+      },
+      "installPath": "cuda/cublas",
+      "sha256": "FROM_NVIDIA_MANIFEST",
+      "sizeBytes": 0,
+      "gates": [],
+      "extractArchive": false
+    },
+    {
+      "id": "cuda-cudart-13.0",
+      "kind": "NativeRuntime",
+      "displayName": "CUDA Runtime 13.0 (cudart) — Whisper",
+      "capability": { "name": "Core runtime", "description": "GPU runtime libraries (CUDA cudart) required by Whisper.net's CUDA 13 backend" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "NvidiaRedist",
+        "channel": "cuda",
+        "package": "cuda_cudart",
+        "version": "13.0.3",
+        "platform": "windows-x86_64",
+        "extractFiles": []
+      },
+      "installPath": "cuda/cudart-v13",
+      "sha256": "FROM_NVIDIA_MANIFEST",
+      "sizeBytes": 0,
+      "gates": [],
+      "extractArchive": false
+    },
+    {
+      "id": "cuda-cublas-13.0",
+      "kind": "NativeRuntime",
+      "displayName": "cuBLAS 13.0 — Whisper",
+      "capability": { "name": "Core runtime", "description": "GPU BLAS library (cuBLAS) required by Whisper.net's CUDA 13 backend (cublas64_13.dll)" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "NvidiaRedist",
+        "channel": "cuda",
+        "package": "libcublas",
+        "version": "13.0.3",
+        "platform": "windows-x86_64",
+        "extractFiles": []
+      },
+      "installPath": "cuda/cublas-v13",
+      "sha256": "FROM_NVIDIA_MANIFEST",
+      "sizeBytes": 0,
+      "gates": [],
+      "extractArchive": false
+    },
+    {
+      "id": "cuda-cufft-12.4",
+      "kind": "NativeRuntime",
+      "displayName": "cuFFT 12.4",
+      "capability": { "name": "Core runtime", "description": "GPU FFT library (cuFFT)" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "NvidiaRedist",
+        "channel": "cuda",
+        "package": "libcufft",
+        "version": "12.4.1",
+        "platform": "windows-x86_64",
+        "extractFiles": []
+      },
+      "installPath": "cuda/cufft",
+      "sha256": "FROM_NVIDIA_MANIFEST",
+      "sizeBytes": 0,
+      "gates": [],
+      "extractArchive": false
+    },
+    {
+      "id": "cudnn-9.1",
+      "kind": "NativeRuntime",
+      "displayName": "cuDNN 9.1",
+      "capability": { "name": "Core runtime", "description": "Deep neural network primitives (cuDNN)" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "NvidiaRedist",
+        "channel": "cudnn",
+        "package": "cudnn",
+        "version": "9.1.1",
+        "platform": "windows-x86_64",
+        "extractFiles": []
+      },
+      "installPath": "cudnn",
+      "sha256": "FROM_NVIDIA_MANIFEST",
+      "sizeBytes": 0,
+      "gates": [],
+      "extractArchive": false
+    },
+    {
+      "id": "silero-vad",
+      "kind": "Model",
+      "displayName": "Silero VAD v5",
+      "capability": { "name": "Voice activity detection", "description": "Silero ONNX VAD used by both ASR tiers" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "silero-vad/silero_vad_v5.onnx"
+      },
+      "installPath": "silero-vad/silero_vad_v5.onnx",
+      "sha256": "6b99cbfd39246b6706f98ec13c7c50c6b299181f2474fa05cbc8046acc274396",
+      "sizeBytes": 2313101,
+      "gates": ["Asr.WhisperTiny", "Asr.WhisperTurbo"],
+      "extractArchive": false
+    },
+    {
+      "id": "whisper-tiny-en",
+      "kind": "Model",
+      "displayName": "Whisper Tiny EN (barge-in)",
+      "capability": { "name": "Speech recognition (barge-in)", "description": "Low-latency Whisper model used for interruption detection" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "whisper/ggml-tiny.en.bin"
+      },
+      "installPath": "whisper/ggml-tiny.en.bin",
+      "sha256": "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f",
+      "sizeBytes": 77704715,
+      "gates": ["Asr.WhisperTiny"],
+      "extractArchive": false
+    },
+    {
+      "id": "whisper-large-v3-turbo",
+      "kind": "Model",
+      "displayName": "Whisper Turbo v3 (high accuracy)",
+      "capability": { "name": "Speech recognition (high accuracy)", "description": "Higher-quality Whisper model for the BuildWithIt profile" },
+      "profileTier": "BuildWithIt",
+      "required": false,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "whisper/ggml-large-v3-turbo.bin"
+      },
+      "installPath": "whisper/ggml-large-v3-turbo.bin",
+      "sha256": "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69",
+      "sizeBytes": 1624555275,
+      "gates": ["Asr.WhisperTurbo"],
+      "extractArchive": false
+    },
+    {
+      "id": "profanity-bundle",
+      "kind": "Model",
+      "displayName": "Profanity detection bundle",
+      "capability": { "name": "Profanity beep", "description": "TinyToxic ONNX detector + badword list + vocab" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "profanity/profanity.zip"
+      },
+      "installPath": "profanity",
+      "sha256": "241bcce34694ebc0f78bcd18b490304c20919ec1b3bcdebb47a0a4aa3b43df3f",
+      "sizeBytes": 7899579,
+      "gates": ["Tts.ProfanityBeep"],
+      "extractArchive": true
+    },
+    {
+      "id": "opennlp-bundle",
+      "kind": "Model",
+      "displayName": "OpenNLP sentence + POS bundle",
+      "capability": { "name": "Sentence detection", "description": "OpenNLP models for sentence segmentation and POS tagging" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "opennlp/opennlp.zip"
+      },
+      "installPath": "opennlp",
+      "sha256": "cbfee1c6325909238ae906a6285565e76707aa3512c67f36d67e90a37847e6cf",
+      "sizeBytes": 92857770,
+      "gates": ["Tts.Kokoro", "Tts.Qwen3"],
+      "extractArchive": true
+    },
+    {
+      "id": "kokoro-model",
+      "kind": "Model",
+      "displayName": "Kokoro TTS model",
+      "capability": { "name": "Avatar voice (Kokoro)", "description": "Default speech synthesis engine" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "kokoro/model_slim.onnx"
+      },
+      "installPath": "kokoro/model_slim.onnx",
+      "sha256": "0d471792aa785fa516918d56316efb8d92ada31765dee8677703ee014fd59d92",
+      "sizeBytes": 325444192,
+      "gates": ["Tts.Kokoro"],
+      "extractArchive": false
+    },
+    {
+      "id": "kokoro-voices",
+      "kind": "UserContentDefault",
+      "displayName": "Kokoro default voice pack",
+      "capability": { "name": "Avatar voice (Kokoro)", "description": "Stock voices that ship with Kokoro" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "kokoro/voices-default.zip"
+      },
+      "installPath": "kokoro/voices",
+      "sha256": "678cf4f576e3955ea7f562ab6b2811aa36ea345fb1e1644ddd4ce5c0abd292bc",
+      "sizeBytes": 5757810,
+      "gates": ["Tts.Kokoro"],
+      "extractArchive": true,
+      "userAssetCategory": "KokoroVoice"
+    },
+    {
+      "id": "kokoro-phoneme-mappings",
+      "kind": "Resource",
+      "displayName": "Kokoro phoneme mappings",
+      "capability": { "name": "Avatar voice (Kokoro)", "description": "Phoneme to token ID lookup table" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "kokoro/phoneme_to_id.txt"
+      },
+      "installPath": "kokoro/phoneme_to_id.txt",
+      "sha256": "407cbb2696f66156dfbbcf4c0d07912a5c96971d9f33d20216eac953c9f85dcd",
+      "sizeBytes": 1280,
+      "gates": ["Tts.Kokoro"],
+      "extractArchive": false
+    },
+    {
+      "id": "kokoro-lexicons",
+      "kind": "Model",
+      "displayName": "Kokoro phonemizer lexicons",
+      "capability": { "name": "Avatar voice (Kokoro)", "description": "US/GB gold and silver phoneme lexicons consumed by the G2P pipeline" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "kokoro/lexicons.zip"
+      },
+      "installPath": "kokoro/lexicons",
+      "sha256": "d658316d29bfb625c669f556e78abee712eebf7ac955b911b1b1b0b10e616b26",
+      "sizeBytes": 2965010,
+      "gates": ["Tts.Kokoro"],
+      "extractArchive": true
+    },
+    {
+      "id": "qwen3-tts-bundle",
+      "kind": "Model",
+      "displayName": "Qwen3 TTS model bundle",
+      "capability": { "name": "Avatar voice (Qwen3)", "description": "Higher-fidelity TTS engine for the BuildWithIt profile (talker, predictor, decoder, embeddings, config, tokenizer, speakers)" },
+      "profileTier": "BuildWithIt",
+      "required": false,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "qwen3-tts/qwen3-tts.zip"
+      },
+      "installPath": "qwen3-tts",
+      "sha256": "c688dee3d3bc133109b01c6432398131133faf6c5084a5386a325ca1391346ef",
+      "sizeBytes": 2651941388,
+      "gates": ["Tts.Qwen3"],
+      "extractArchive": true
+    },
+    {
+      "id": "rvc-hubert",
+      "kind": "Model",
+      "displayName": "RVC HuBERT content encoder",
+      "capability": { "name": "Voice cloning (RVC)", "description": "Content encoder for RVC voice conversion" },
+      "profileTier": "StreamWithIt",
+      "required": false,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "rvc/vec-768-layer-12.onnx"
+      },
+      "installPath": "rvc/vec-768-layer-12.onnx",
+      "sha256": "b3886e7dff1495cda514f94f4680a7b1261e05d6929f5c764cdb17934b413c2a",
+      "sizeBytes": 377655729,
+      "gates": ["Tts.Rvc"],
+      "extractArchive": false
+    },
+    {
+      "id": "rvc-crepe-tiny",
+      "kind": "Model",
+      "displayName": "RVC CREPE pitch detector",
+      "capability": { "name": "Voice cloning (RVC)", "description": "Pitch detector used by RVC" },
+      "profileTier": "StreamWithIt",
+      "required": false,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "rvc/crepe_tiny.onnx"
+      },
+      "installPath": "rvc/crepe_tiny.onnx",
+      "sha256": "7fd045b75d2b0d08fe7bb2711e466a4e76b625714f07ea3aabedb50598d7428e",
+      "sizeBytes": 2193941,
+      "gates": ["Tts.Rvc"],
+      "extractArchive": false
+    },
+    {
+      "id": "rvc-rmvpe",
+      "kind": "Model",
+      "displayName": "RVC RMVPE pitch estimator",
+      "capability": { "name": "Voice cloning (RVC)", "description": "RMVPE ONNX pitch estimator used by the RVC filter" },
+      "profileTier": "StreamWithIt",
+      "required": false,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "rvc/rmvpe.onnx"
+      },
+      "installPath": "rvc/rmvpe.onnx",
+      "sha256": "5370e71ac80af8b4b7c793d27efd51fd8bf962de3a7ede0766dac0befa3660fd",
+      "sizeBytes": 361688443,
+      "gates": ["Tts.Rvc"],
+      "extractArchive": false
+    },
+    {
+      "id": "rvc-voices",
+      "kind": "UserContentDefault",
+      "displayName": "RVC default voice pack",
+      "capability": { "name": "Voice cloning (RVC)", "description": "Stock voices for RVC voice conversion" },
+      "profileTier": "StreamWithIt",
+      "required": false,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "rvc/voices-default.zip"
+      },
+      "installPath": "rvc/voices",
+      "sha256": "a8ecacb4af8de84ceb2d35a9c3ee1149f9359e3a47fd8b2a56403e73491ec337",
+      "sizeBytes": 529356344,
+      "gates": ["Tts.Rvc"],
+      "extractArchive": true,
+      "userAssetCategory": "RvcVoice"
+    },
+    {
+      "id": "wav2vec2-ctc-aligner",
+      "kind": "Model",
+      "displayName": "wav2vec2 CTC forced aligner",
+      "capability": { "name": "Subtitle alignment", "description": "wav2vec2 CTC model + vocab used for word-level forced alignment" },
+      "profileTier": "BuildWithIt",
+      "required": false,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "wav2vec2/wav2vec2.zip"
+      },
+      "installPath": "wav2vec2",
+      "sha256": "b43183222e046d755c468395090e989d6842e148c84cb58a3b753a321c1aa344",
+      "sizeBytes": 230293129,
+      "gates": ["Tts.Qwen3"],
+      "extractArchive": true
+    },
+    {
+      "id": "live2d-aria",
+      "kind": "UserContentDefault",
+      "displayName": "Live2D Aria avatar",
+      "capability": { "name": "Avatar (Live2D)", "description": "Default Aria Live2D avatar bundled with the app" },
+      "profileTier": "TryItOut",
+      "required": true,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "live2d/aria.zip"
+      },
+      "installPath": "live2d/aria",
+      "sha256": "6b4b3b0209bf84fadc4879d95c49151793275a4096a5c7b89aa793056f3868bc",
+      "sizeBytes": 45865703,
+      "gates": ["Live2D.Avatar"],
+      "extractArchive": true,
+      "userAssetCategory": "Live2DModel"
+    },
+    {
+      "id": "audio2face-bundle",
+      "kind": "Model",
+      "displayName": "Audio2Face streaming solver bundle",
+      "capability": { "name": "Lip-sync (Audio2Face)", "description": "NVIDIA Audio2Face network plus per-identity skin/model data (Claire, James, Mark)" },
+      "profileTier": "BuildWithIt",
+      "required": false,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "audio2face/audio2face.zip"
+      },
+      "installPath": "audio2face",
+      "sha256": "f792d64911dd0661016269cc859a91570c703bb933d5db630209269d6a016e04",
+      "sizeBytes": 662800757,
+      "gates": ["Tts.Audio2Face"],
+      "extractArchive": true
+    },
+    {
+      "id": "mdx-bundle",
+      "kind": "Model",
+      "displayName": "MDX music source separation models",
+      "capability": { "name": "Music source separation (MDX)", "description": "ONNX UVR-MDX vocal/instrument/dereverb models" },
+      "profileTier": "BuildWithIt",
+      "required": false,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "mdx/mdx.zip"
+      },
+      "installPath": "mdx",
+      "sha256": "447702539aac5d860c79d94267d7d301419238a5e0b3eeab49b0cdf412db7369",
+      "sizeBytes": 172776813,
+      "gates": ["Music.SourceSeparation"],
+      "extractArchive": true
+    },
+    {
+      "id": "mel-band-roformer",
+      "kind": "Model",
+      "displayName": "Mel-band RoFormer separator",
+      "capability": { "name": "Music source separation (MelBandRoformer)", "description": "Streaming source separation ONNX model" },
+      "profileTier": "BuildWithIt",
+      "required": false,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "mel_band_roformer/melbandroformer_optimized.onnx"
+      },
+      "installPath": "mel_band_roformer/melbandroformer_optimized.onnx",
+      "sha256": "d40f00b37c06603ff1c354a9f824b09d34cd50f658af0d038923fc69508354e6",
+      "sizeBytes": 278136350,
+      "gates": ["Music.SourceSeparation"],
+      "extractArchive": false
+    },
+    {
+      "id": "vision-llm-marker",
+      "kind": "Resource",
+      "displayName": "Vision feature gate (endpoint-driven, no model file)",
+      "capability": { "name": "Vision LLM", "description": "Marker file enabling the vision pipeline" },
+      "profileTier": "BuildWithIt",
+      "required": false,
+      "source": {
+        "type": "HuggingFace",
+        "repo": "fagenorn/persona-engine-assets",
+        "revision": "v1.0.0",
+        "path": "vision/MARKER"
+      },
+      "installPath": "vision/MARKER",
+      "sha256": "f1945cd6c19e56b3c1c78943ef5ec18116907a4ca1efc40a57d48ab1db7adfc5",
+      "sizeBytes": 3,
+      "gates": ["Llm.Vision"],
+      "extractArchive": false
+    }
+  ]
+}

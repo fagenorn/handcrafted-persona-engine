@@ -9,29 +9,36 @@ public class MaxTurnsCleanupStrategy : IConversationCleanupStrategy
 
     public MaxTurnsCleanupStrategy(int maxTurns)
     {
-        if ( maxTurns < 0 )
+        if (maxTurns < 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(maxTurns), "Max turns cannot be negative.");
+            throw new ArgumentOutOfRangeException(
+                nameof(maxTurns),
+                "Max turns cannot be negative."
+            );
         }
 
         _maxTurns = maxTurns;
     }
 
-    public bool Cleanup(List<InteractionTurn> history, ConversationContextOptions options, IReadOnlyDictionary<string, ParticipantInfo> participants)
+    public bool Cleanup(
+        List<InteractionTurn> history,
+        ConversationContextOptions options,
+        IReadOnlyDictionary<string, ParticipantInfo> participants
+    )
     {
-        if ( _maxTurns == 0 || history.Count <= _maxTurns )
+        if (_maxTurns == 0 || history.Count <= _maxTurns)
         {
             return false;
         }
 
         var turnsToRemove = history.Count - _maxTurns;
-        if ( turnsToRemove > 0 )
+        if (turnsToRemove > 0)
         {
             history.RemoveRange(0, turnsToRemove);
-            
+
             return true;
         }
-        
+
         return false;
     }
 }

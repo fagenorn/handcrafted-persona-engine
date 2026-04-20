@@ -6,5 +6,5 @@ public enum CompletionReason
 
     Cancelled,
 
-    Error
+    Error,
 }

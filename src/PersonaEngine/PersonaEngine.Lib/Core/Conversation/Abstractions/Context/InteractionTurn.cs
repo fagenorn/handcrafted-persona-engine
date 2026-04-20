@@ -4,23 +4,45 @@ namespace PersonaEngine.Lib.Core.Conversation.Abstractions.Context;
 
 public class InteractionTurn
 {
-    public InteractionTurn(Guid turnId, IEnumerable<string> participantIds, DateTimeOffset startTime, DateTimeOffset? endTime, IEnumerable<ChatMessage> messages, bool wasInterrupted)
+    public InteractionTurn(
+        Guid turnId,
+        IEnumerable<string> participantIds,
+        DateTimeOffset startTime,
+        DateTimeOffset? endTime,
+        IEnumerable<ChatMessage> messages,
+        bool wasInterrupted
+    )
     {
-        TurnId         = turnId;
+        TurnId = turnId;
         ParticipantIds = participantIds.ToList().AsReadOnly();
-        StartTime      = startTime;
-        EndTime        = endTime;
-        Messages       = messages.ToList();
+        StartTime = startTime;
+        EndTime = endTime;
+        Messages = messages.ToList();
         WasInterrupted = wasInterrupted;
     }
 
-    private InteractionTurn(Guid turnId, IEnumerable<string> participantIds, DateTimeOffset startTime, IEnumerable<ChatMessage> messages)
+    private InteractionTurn(
+        Guid turnId,
+        IEnumerable<string> participantIds,
+        DateTimeOffset startTime,
+        IEnumerable<ChatMessage> messages
+    )
     {
-        TurnId         = turnId;
+        TurnId = turnId;
         ParticipantIds = participantIds.ToList().AsReadOnly();
-        StartTime      = startTime;
-        EndTime        = null;
-        Messages       = messages.Select(m => new ChatMessage(m.MessageId, m.ParticipantId, m.ParticipantName, m.Text, m.Timestamp, m.IsPartial, m.Role)).ToList();
+        StartTime = startTime;
+        EndTime = null;
+        Messages = messages
+            .Select(m => new ChatMessage(
+                m.MessageId,
+                m.ParticipantId,
+                m.ParticipantName,
+                m.Text,
+                m.Timestamp,
+                m.IsPartial,
+                m.Role
+            ))
+            .ToList();
         WasInterrupted = false;
     }
 
@@ -36,5 +58,8 @@ public class InteractionTurn
 
     public bool WasInterrupted { get; internal set; }
 
-    internal InteractionTurn CreateSnapshot() { return new InteractionTurn(TurnId, ParticipantIds, StartTime, Messages); }
+    internal InteractionTurn CreateSnapshot()
+    {
+        return new InteractionTurn(TurnId, ParticipantIds, StartTime, Messages);
+    }
 }

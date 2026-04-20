@@ -56,5 +56,9 @@ public interface IPlaybackController : IDisposable
     ///     A task that completes when the packet is scheduled, with a boolean indicating whether the packet should be
     ///     sent.
     /// </returns>
-    Task<bool> SchedulePlaybackAsync(int samplesPerChannel, int sampleRate, CancellationToken cancellationToken);
+    Task<bool> SchedulePlaybackAsync(
+        int samplesPerChannel,
+        int sampleRate,
+        CancellationToken cancellationToken
+    );
 }

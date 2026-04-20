@@ -16,12 +16,21 @@ namespace PersonaEngine.Lib.Audio;
 /// </remarks>
 public class AwaitableAudioSource(
     IReadOnlyDictionary<string, string> metadata,
-    bool                                storeSamples        = true,
-    bool                                storeBytes          = false,
-    int                                 initialSizeFloats   = BufferedMemoryAudioSource.DefaultInitialSize,
-    int                                 initialSizeBytes    = BufferedMemoryAudioSource.DefaultInitialSize,
-    IChannelAggregationStrategy?        aggregationStrategy = null)
-    : DiscardableMemoryAudioSource(metadata, storeSamples, storeBytes, initialSizeFloats, initialSizeBytes, aggregationStrategy), IAwaitableAudioSource
+    bool storeSamples = true,
+    bool storeBytes = false,
+    int initialSizeFloats = BufferedMemoryAudioSource.DefaultInitialSize,
+    int initialSizeBytes = BufferedMemoryAudioSource.DefaultInitialSize,
+    IChannelAggregationStrategy? aggregationStrategy = null
+)
+    : DiscardableMemoryAudioSource(
+        metadata,
+        storeSamples,
+        storeBytes,
+        initialSizeFloats,
+        initialSizeBytes,
+        aggregationStrategy
+    ),
+        IAwaitableAudioSource
 {
     private readonly TaskCompletionSource<bool> initializationTcs = new();
 
@@ -34,7 +43,11 @@ public class AwaitableAudioSource(
     /// </summary>
     public bool IsFlushed { get; private set; }
 
-    public override Task<Memory<byte>> GetFramesAsync(long startFrame, int maxFrames = int.MaxValue, CancellationToken cancellationToken = default)
+    public override Task<Memory<byte>> GetFramesAsync(
+        long startFrame,
+        int maxFrames = int.MaxValue,
+        CancellationToken cancellationToken = default
+    )
     {
         lock (syncRoot)
         {
@@ -43,7 +56,12 @@ public class AwaitableAudioSource(
         }
     }
 
-    public override Task<int> CopyFramesAsync(Memory<byte> destination, long startFrame, int maxFrames = int.MaxValue, CancellationToken cancellationToken = default)
+    public override Task<int> CopyFramesAsync(
+        Memory<byte> destination,
+        long startFrame,
+        int maxFrames = int.MaxValue,
+        CancellationToken cancellationToken = default
+    )
     {
         lock (syncRoot)
         {
@@ -52,7 +70,11 @@ public class AwaitableAudioSource(
         }
     }
 
-    public override Task<Memory<float>> GetSamplesAsync(long startFrame, int maxFrames = int.MaxValue, CancellationToken cancellationToken = default)
+    public override Task<Memory<float>> GetSamplesAsync(
+        long startFrame,
+        int maxFrames = int.MaxValue,
+        CancellationToken cancellationToken = default
+    )
     {
         lock (syncRoot)
         {
@@ -64,24 +86,33 @@ public class AwaitableAudioSource(
     /// <inheritdoc />
     public async Task WaitForNewSamplesAsync(long sampleCount, CancellationToken cancellationToken)
     {
-        while ( !IsFlushed && SampleVirtualCount <= sampleCount )
+        while (!IsFlushed && SampleVirtualCount <= sampleCount)
         {
-            await samplesAvailableEvent.WaitAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+            await samplesAvailableEvent
+                .WaitAsync()
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
         }
     }
 
-    public async Task WaitForNewSamplesAsync(TimeSpan minimumDuration, CancellationToken cancellationToken)
+    public async Task WaitForNewSamplesAsync(
+        TimeSpan minimumDuration,
+        CancellationToken cancellationToken
+    )
     {
-        while ( !IsFlushed && Duration <= minimumDuration )
+        while (!IsFlushed && Duration <= minimumDuration)
         {
-            await samplesAvailableEvent.WaitAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+            await samplesAvailableEvent
+                .WaitAsync()
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
         }
     }
 
     /// <inheritdoc />
     public async Task WaitForInitializationAsync(CancellationToken cancellationToken)
     {
-        if ( IsInitialized )
+        if (IsInitialized)
         {
             return;
         }
@@ -111,13 +142,15 @@ public class AwaitableAudioSource(
     {
         lock (syncRoot)
         {
-            if ( IsFlushed )
+            if (IsFlushed)
             {
-                throw new InvalidOperationException("The source is flushed and cannot accept new frames.");
+                throw new InvalidOperationException(
+                    "The source is flushed and cannot accept new frames."
+                );
             }
 
             base.AddFrame(frame);
-            if ( IsInitialized && !initializationTcs.Task.IsCompleted )
+            if (IsInitialized && !initializationTcs.Task.IsCompleted)
             {
                 initializationTcs.SetResult(true);
             }
@@ -128,13 +161,15 @@ public class AwaitableAudioSource(
     {
         lock (syncRoot)
         {
-            if ( IsFlushed )
+            if (IsFlushed)
             {
-                throw new InvalidOperationException("The source is flushed and cannot accept new frames.");
+                throw new InvalidOperationException(
+                    "The source is flushed and cannot accept new frames."
+                );
             }
 
             base.AddFrame(frame);
-            if ( IsInitialized && !initializationTcs.Task.IsCompleted )
+            if (IsInitialized && !initializationTcs.Task.IsCompleted)
             {
                 initializationTcs.SetResult(true);
             }
@@ -144,5 +179,8 @@ public class AwaitableAudioSource(
     /// <summary>
     ///     Notifies that new samples are available.
     /// </summary>
-    public void NotifyNewSamples() { samplesAvailableEvent.Set(); }
+    public void NotifyNewSamples()
+    {
+        samplesAvailableEvent.Set();
+    }
 }

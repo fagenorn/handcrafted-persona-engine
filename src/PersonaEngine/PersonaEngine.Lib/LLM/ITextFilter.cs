@@ -6,9 +6,16 @@ public interface ITextFilter
 {
     int Priority { get; }
 
-    ValueTask<TextFilterResult> ProcessAsync(string text, CancellationToken cancellationToken = default);
+    ValueTask<TextFilterResult> ProcessAsync(
+        string text,
+        CancellationToken cancellationToken = default
+    );
 
-    ValueTask PostProcessAsync(TextFilterResult textFilterResult, AudioSegment segment, CancellationToken cancellationToken = default);
+    ValueTask PostProcessAsync(
+        TextFilterResult textFilterResult,
+        AudioSegment segment,
+        CancellationToken cancellationToken = default
+    );
 }
 
 public record TextFilterResult

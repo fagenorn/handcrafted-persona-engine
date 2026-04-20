@@ -10,7 +10,7 @@ public enum CubismPhysicsTargetType
     /// <summary>
     ///     パラメータに対して適用
     /// </summary>
-    CubismPhysicsTargetType_Parameter
+    CubismPhysicsTargetType_Parameter,
 }
 
 /// <summary>
@@ -31,7 +31,7 @@ public enum CubismPhysicsSource
     /// <summary>
     ///     角度から
     /// </summary>
-    CubismPhysicsSource_Angle
+    CubismPhysicsSource_Angle,
 }
 
 /// <summary>
@@ -203,16 +203,16 @@ public record CubismPhysicsSubRig
 /// <param name="isInverted">値が反転されているか？</param>
 /// <param name="weight">重み</param>
 public delegate void NormalizedPhysicsParameterValueGetter(
-    ref Vector2                targetTranslation,
-    ref float                  targetAngle,
-    float                      value,
-    float                      parameterMinimumValue,
-    float                      parameterMaximumValue,
-    float                      parameterDefaultValue,
+    ref Vector2 targetTranslation,
+    ref float targetAngle,
+    float value,
+    float parameterMinimumValue,
+    float parameterMaximumValue,
+    float parameterDefaultValue,
     CubismPhysicsNormalization normalizationPosition,
     CubismPhysicsNormalization normalizationAngle,
-    bool                       isInverted,
-    float                      weight
+    bool isInverted,
+    float weight
 );
 
 /// <summary>
@@ -225,12 +225,12 @@ public delegate void NormalizedPhysicsParameterValueGetter(
 /// <param name="parentGravity">重力</param>
 /// <returns>値</returns>
 public delegate float PhysicsValueGetter(
-    Vector2                 translation,
+    Vector2 translation,
     CubismPhysicsParticle[] particles,
-    int                     currentParticleIndex,
-    int                     particleIndex,
-    bool                    isInverted,
-    Vector2                 parentGravity
+    int currentParticleIndex,
+    int particleIndex,
+    bool isInverted,
+    Vector2 parentGravity
 );
 
 /// <summary>

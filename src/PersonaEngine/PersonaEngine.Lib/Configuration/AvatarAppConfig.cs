@@ -10,6 +10,8 @@ public record AvatarAppConfig
 
     public TtsConfiguration Tts { get; set; } = new();
 
+    public LipSyncOptions LipSync { get; set; } = new();
+
     public AsrConfiguration Asr { get; set; } = new();
 
     public MicrophoneConfiguration Microphone { get; set; } = new();
@@ -20,12 +22,14 @@ public record AvatarAppConfig
 
     public SpoutConfiguration[] SpoutConfigs { get; set; } = [];
 
+    public OverlayConfiguration Overlay { get; set; } = new();
+
     public VisionConfig Vision { get; set; } = new();
 
     public RouletteWheelOptions RouletteWheel { get; set; } = new();
 
     public ConversationOptions Conversation { get; set; } = new();
-    
+
     // This would need to be seperate per configured conversation session
     public ConversationContextOptions ConversationContext { get; set; } = new();
 }

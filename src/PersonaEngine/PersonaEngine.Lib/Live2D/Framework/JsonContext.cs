@@ -1,5 +1,4 @@
 ﻿using System.Text.Json.Serialization;
-
 using PersonaEngine.Lib.Live2D.Framework.Model;
 using PersonaEngine.Lib.Live2D.Framework.Motion;
 using PersonaEngine.Lib.Live2D.Framework.Physics;

@@ -2,7 +2,6 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -10,9 +9,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.SemanticKernel;
-
 using PersonaEngine.Lib.ASR.Transcriber;
 using PersonaEngine.Lib.ASR.VAD;
+using PersonaEngine.Lib.Assets;
+using PersonaEngine.Lib.Assets.Manifest;
 using PersonaEngine.Lib.Audio;
 using PersonaEngine.Lib.Configuration;
 using PersonaEngine.Lib.Core;
@@ -23,36 +23,86 @@ using PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Input;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Adapters.Audio.Output;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Metrics;
 using PersonaEngine.Lib.Core.Conversation.Implementations.Session;
+using PersonaEngine.Lib.Health;
+using PersonaEngine.Lib.Health.Probes;
+using PersonaEngine.Lib.IO;
 using PersonaEngine.Lib.Live2D;
 using PersonaEngine.Lib.Live2D.Behaviour;
 using PersonaEngine.Lib.Live2D.Behaviour.Emotion;
 using PersonaEngine.Lib.Live2D.Behaviour.LipSync;
 using PersonaEngine.Lib.LLM;
+using PersonaEngine.Lib.LLM.Connection;
 using PersonaEngine.Lib.Logging;
 using PersonaEngine.Lib.TTS.Audio;
 using PersonaEngine.Lib.TTS.Profanity;
 using PersonaEngine.Lib.TTS.RVC;
 using PersonaEngine.Lib.TTS.Synthesis;
+using PersonaEngine.Lib.TTS.Synthesis.Alignment;
+using PersonaEngine.Lib.TTS.Synthesis.Audio;
+using PersonaEngine.Lib.TTS.Synthesis.Engine;
+using PersonaEngine.Lib.TTS.Synthesis.Kokoro;
+using PersonaEngine.Lib.TTS.Synthesis.LipSync;
+using PersonaEngine.Lib.TTS.Synthesis.LipSync.Audio2Face;
+using PersonaEngine.Lib.TTS.Synthesis.LipSync.VBridger;
+using PersonaEngine.Lib.TTS.Synthesis.Qwen3;
+using PersonaEngine.Lib.TTS.Synthesis.TextProcessing;
 using PersonaEngine.Lib.UI;
 using PersonaEngine.Lib.UI.Common;
-using PersonaEngine.Lib.UI.GUI;
-using PersonaEngine.Lib.UI.RouletteWheel;
-using PersonaEngine.Lib.UI.Text.Subtitles;
+using PersonaEngine.Lib.UI.ControlPanel;
+using PersonaEngine.Lib.UI.ControlPanel.Layout;
+using PersonaEngine.Lib.UI.ControlPanel.Panels;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Avatar;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Avatar.Sections;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard.Sections;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Listening;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Listening.Sections;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.LlmConnection;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.LlmConnection.Sections;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Personality;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Personality.Sections;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Subtitles;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Subtitles.Sections;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Audition;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Models;
+using PersonaEngine.Lib.UI.ControlPanel.Panels.Voice.Sections;
+using PersonaEngine.Lib.UI.ControlPanel.Services;
+using PersonaEngine.Lib.UI.ControlPanel.Threading;
+using PersonaEngine.Lib.UI.ControlPanel.Visuals;
+using PersonaEngine.Lib.UI.Host;
+using PersonaEngine.Lib.UI.Overlay;
+using PersonaEngine.Lib.UI.Rendering.RouletteWheel;
+using PersonaEngine.Lib.UI.Rendering.Subtitles;
 using PersonaEngine.Lib.Vision;
-
 using Polly;
 using Polly.Retry;
 using Polly.Timeout;
+using Dashboard = PersonaEngine.Lib.UI.ControlPanel.Panels.Dashboard.Dashboard;
+using SentenceSegmenter = PersonaEngine.Lib.TTS.Synthesis.TextProcessing.SentenceSegmenter;
 
 namespace PersonaEngine.Lib;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddApp(this IServiceCollection services, IConfiguration configuration, Action<IKernelBuilder>? configureKernel = null)
+    public static IServiceCollection AddApp(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        Action<IKernelBuilder>? configureKernel = null
+    )
     {
         services.Configure<AvatarAppConfig>(configuration.GetSection("Config"));
 
-        services.AddConversation(configuration, configureKernel);
+        // Build the manifest + catalog eagerly so AddConversation can gate optional
+        // subsystems (RVC, Vision, Audio2Face) without spinning up a temporary
+        // ServiceProvider just to query IsFeatureEnabled. Registering pre-built
+        // instances also avoids double-construction (and double FileSystemWatcher
+        // allocation) that would otherwise occur when a probe provider is disposed.
+        var manifest = ManifestLoader.LoadEmbedded();
+        var catalog = AssetCatalogFactory.Build(manifest);
+        services.AddSingleton<InstallManifest>(manifest);
+        services.AddSingleton<IAssetCatalog>(catalog);
+
+        services.AddConversation(configuration, catalog, configureKernel);
         services.AddUI(configuration);
         services.AddLive2D(configuration);
         services.AddSystemAudioPlayer();
@@ -65,15 +115,43 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddConversation(this IServiceCollection services, IConfiguration configuration, Action<IKernelBuilder>? configureKernel = null)
+    public static IServiceCollection AddConversation(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        IAssetCatalog catalog,
+        Action<IKernelBuilder>? configureKernel = null
+    )
     {
-        services.AddASRSystem(configuration);
-        services.AddTTSSystem(configuration);
-        services.AddRVC(configuration);
+        services.AddASRSystem(configuration, catalog);
+        services.AddTTSSystem(configuration, catalog);
+
+        // Gate optional subsystems whose ONNX models / runtime DLLs are downloaded
+        // by the bootstrapper. Skipping registration here keeps startup clean when
+        // a tier was deselected — no missing-file exceptions, no half-wired DI.
+        //
+        // IsFeatureEnabled is evaluated once at DI build time. Adding a tier at
+        // runtime (post-startup install) requires an app restart to wire RVC /
+        // Vision / Audio2Face into the DI graph. UI-side asset enumeration via
+        // IAssetCatalog.Changed is live-refreshed; DI gating is not.
+        if (catalog.IsFeatureEnabled(FeatureIds.VoiceCloning))
+        {
+            services.AddRVC(configuration);
+        }
+
+        if (catalog.IsFeatureEnabled(FeatureIds.Audio2Face))
+        {
+            services.AddSingleton<ILipSyncProcessor, Audio2FaceLipSyncProcessor>();
+        }
+
 #pragma warning disable SKEXP0010
         services.AddLLM(configuration, configureKernel);
 #pragma warning restore SKEXP0010
         services.AddChatEngineSystem(configuration);
+
+        if (catalog.IsFeatureEnabled(FeatureIds.LlmVision))
+        {
+            services.AddVisualChatEngine();
+        }
 
         services.AddConversationPipeline(configuration);
 
@@ -82,61 +160,102 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddConversationPipeline(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddConversationPipeline(
+        this IServiceCollection services,
+        IConfiguration configuration
+    )
     {
         services.AddSingleton<ConversationMetrics>();
 
         services.AddSingleton<IInputAdapter, MicrophoneInputAdapter>();
 
+        services.AddSingleton<IConversationInputGate, ConversationInputGate>();
+        services.AddSingleton<IMicMuteController, MicMuteController>();
         services.AddSingleton<IConversationSessionFactory, ConversationSessionFactory>();
         services.AddSingleton<IConversationOrchestrator, ConversationOrchestrator>();
 
         return services;
     }
 
-    public static IServiceCollection AddASRSystem(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddASRSystem(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        IAssetCatalog catalog
+    )
     {
         services.Configure<AsrConfiguration>(configuration.GetSection("Config:Asr"));
         services.Configure<MicrophoneConfiguration>(configuration.GetSection("Config:Microphone"));
 
         services.AddSingleton<IVadDetector>(sp =>
-                                            {
-                                                var asrOptions = sp.GetRequiredService<IOptions<AsrConfiguration>>().Value;
+        {
+            var asrOptions = sp.GetRequiredService<IOptions<AsrConfiguration>>().Value;
 
-                                                var siletroOptions = new SileroVadOptions(ModelUtils.GetModelPath(ModelType.Silero)) { Threshold = asrOptions.VadThreshold, ThresholdGap = asrOptions.VadThresholdGap };
+            var siletroOptions = new SileroVadOptions(ModelUtils.GetModelPath(ModelType.Silero))
+            {
+                Threshold = asrOptions.VadThreshold,
+                ThresholdGap = asrOptions.VadThresholdGap,
+            };
 
-                                                var vadOptions = new VadDetectorOptions { MinSpeechDuration = TimeSpan.FromMilliseconds(asrOptions.VadMinSpeechDuration), MinSilenceDuration = TimeSpan.FromMilliseconds(asrOptions.VadMinSilenceDuration) };
+            var vadOptions = new VadDetectorOptions
+            {
+                MinSpeechDuration = TimeSpan.FromMilliseconds(asrOptions.VadMinSpeechDuration),
+                MinSilenceDuration = TimeSpan.FromMilliseconds(asrOptions.VadMinSilenceDuration),
+            };
 
-                                                return new SileroVadDetector(vadOptions, siletroOptions);
-                                            });
+            return new SileroVadDetector(vadOptions, siletroOptions);
+        });
 
+        // Whisper model selection mirrors the install manifest tiers:
+        //   - BuildWithIt installs Turbo v3 (gates: Asr.WhisperTurbo) → primary = Turbo, barge-in = Tiny
+        //   - TryItOut/StreamWithIt only install Tiny (gates: Asr.WhisperTiny) → primary = Tiny,
+        //     no separate barge-in factory (RealtimeTranscriptor accepts null)
+        // Loading the Turbo factory unconditionally crashes DI build for non-Build profiles
+        // because the .bin isn't present.
+        var hasTurbo = catalog.IsFeatureEnabled(FeatureIds.AsrAccurate);
         services.AddSingleton<IRealtimeSpeechTranscriptor>(sp =>
-                                                           {
-                                                               var asrOptions = sp.GetRequiredService<IOptions<AsrConfiguration>>().Value;
+        {
+            var asrOptions = sp.GetRequiredService<IOptions<AsrConfiguration>>().Value;
 
-                                                               var realtimeSpeechTranscriptorOptions = new RealtimeSpeechTranscriptorOptions {
-                                                                                                                                                 AutodetectLanguageOnce        = false,                    // Flag to detect the language only once or for each segment
-                                                                                                                                                 IncludeSpeechRecogizingEvents = true,                     // Flag to include speech recognizing events (RealtimeSegmentRecognizing)
-                                                                                                                                                 RetrieveTokenDetails          = false,                    // Flag to retrieve token details
-                                                                                                                                                 LanguageAutoDetect            = false,                    // Flag to auto-detect the language
-                                                                                                                                                 Language                      = new CultureInfo("en-US"), // Language to use for transcription
-                                                                                                                                                 Prompt                        = asrOptions.TtsPrompt,
-                                                                                                                                                 Template                      = asrOptions.TtsMode
-                                                                                                                                             };
+            var realtimeSpeechTranscriptorOptions = new RealtimeSpeechTranscriptorOptions
+            {
+                AutodetectLanguageOnce = false,
+                IncludeSpeechRecogizingEvents = false,
+                RetrieveTokenDetails = false,
+                LanguageAutoDetect = false,
+                Language = new CultureInfo("en-US"),
+                Prompt = asrOptions.TtsPrompt,
+                Template = asrOptions.TtsMode,
+            };
 
-                                                               var realTimeOptions = new RealtimeOptions();
+            var realTimeOptions = new RealtimeOptions();
 
-                                                               return new RealtimeTranscriptor(
-                                                                                               new WhisperSpeechTranscriptorFactory(ModelUtils.GetModelPath(ModelType.WhisperGgmlTurbov3)),
-                                                                                               sp.GetRequiredService<IVadDetector>(),
-                                                                                               new WhisperSpeechTranscriptorFactory(ModelUtils.GetModelPath(ModelType.WhisperGgmlTiny)),
-                                                                                               realtimeSpeechTranscriptorOptions,
-                                                                                               realTimeOptions,
-                                                                                               sp.GetRequiredService<ILogger<RealtimeTranscriptor>>());
-                                                           });
+            var tinyFactory = new WhisperSpeechTranscriptorFactory(
+                ModelUtils.GetModelPath(ModelType.WhisperGgmlTiny)
+            );
+
+            ISpeechTranscriptorFactory primary = hasTurbo
+                ? new WhisperSpeechTranscriptorFactory(
+                    ModelUtils.GetModelPath(ModelType.WhisperGgmlTurbov3)
+                )
+                : tinyFactory;
+
+            ISpeechTranscriptorFactory? bargeIn = hasTurbo ? tinyFactory : null;
+
+            return new RealtimeTranscriptor(
+                primary,
+                sp.GetRequiredService<IVadDetector>(),
+                bargeIn,
+                realtimeSpeechTranscriptorOptions,
+                realTimeOptions,
+                sp.GetRequiredService<ILogger<RealtimeTranscriptor>>()
+            );
+        });
 
         services.AddSingleton<IMicrophone, MicrophoneInputNAudioSource>();
         services.AddSingleton<IAwaitableAudioSource>(sp => sp.GetRequiredService<IMicrophone>());
+
+        services.AddSingleton<IMicrophoneAmplitudeProvider, MicrophoneAmplitudeProvider>();
+        services.AddSingleton<IVadProbabilityProvider, VadProbabilityProvider>();
 
         return services;
     }
@@ -145,16 +264,34 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<IOutputAdapter, PortaudioOutputAdapter>();
         services.AddSingleton<IAudioProgressNotifier, AudioProgressNotifier>();
+        services.AddSingleton<IAudioAmplitudeProvider, AudioAmplitudeProvider>();
 
         return services;
     }
 
-    public static IServiceCollection AddChatEngineSystem(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddChatEngineSystem(
+        this IServiceCollection services,
+        IConfiguration configuration
+    )
     {
         services.Configure<ConversationOptions>(configuration.GetSection("Config:Conversation"));
-        services.Configure<ConversationContextOptions>(configuration.GetSection("Config:ConversationContext"));
+        services.Configure<ConversationContextOptions>(
+            configuration.GetSection("Config:ConversationContext")
+        );
 
         services.AddSingleton<IChatEngine, SemanticKernelChatEngine>();
+
+        return services;
+    }
+
+    /// <summary>
+    ///     Registers the optional vision/screen-capture services. Gated by
+    ///     <see cref="FeatureIds.LlmVision" /> in <see cref="AddConversation" /> so the
+    ///     ONNX-backed <see cref="WindowCaptureService" /> and the vision LLM client are
+    ///     only wired when the bootstrapper installed the vision tier.
+    /// </summary>
+    public static IServiceCollection AddVisualChatEngine(this IServiceCollection services)
+    {
         services.AddSingleton<IVisualChatEngine, VisualQASemanticKernelChatEngine>();
         services.AddSingleton<IVisualQAService, VisualQAService>();
         services.AddSingleton<WindowCaptureService>();
@@ -163,22 +300,37 @@ public static class ServiceCollectionExtensions
     }
 
     [Experimental("SKEXP0010")]
-    public static IServiceCollection AddLLM(this IServiceCollection services, IConfiguration configuration, Action<IKernelBuilder>? configureKernel = null)
+    public static IServiceCollection AddLLM(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        Action<IKernelBuilder>? configureKernel = null
+    )
     {
         services.Configure<LlmOptions>(configuration.GetSection("Config:Llm"));
 
-        services.AddSingleton(sp =>
-                              {
-                                  var llmOptions    = sp.GetRequiredService<IOptions<LlmOptions>>().Value;
-                                  var kernelBuilder = Kernel.CreateBuilder();
-
-                                  kernelBuilder.AddOpenAIChatCompletion(llmOptions.TextModel, new Uri(llmOptions.TextEndpoint), llmOptions.TextApiKey, serviceId: "text");
-                                  kernelBuilder.AddOpenAIChatCompletion(llmOptions.VisionEndpoint, new Uri(llmOptions.VisionEndpoint), llmOptions.VisionApiKey, serviceId: "vision");
-
-                                  configureKernel?.Invoke(kernelBuilder);
-
-                                  return kernelBuilder.Build();
-                              });
+        // Named client so IHttpClientFactory pools/rotates the SocketsHttpHandler
+        // (default 2-minute lifetime) — avoids DNS pinning from a long-lived
+        // HttpClient singleton while keeping the 5-second probe timeout.
+        services.AddHttpClient(
+            LlmConnectionProbe.HttpClientName,
+            c => c.Timeout = TimeSpan.FromSeconds(5)
+        );
+        services.AddSingleton<ILlmConnectionProbe, LlmConnectionProbe>();
+        services.AddSingleton<IKernelReloadCoordinator, KernelReloadCoordinator>();
+        services.AddSingleton<ILlmKernelProvider>(sp => new LlmKernelProvider(
+            sp.GetRequiredService<IOptionsMonitor<LlmOptions>>(),
+            sp.GetRequiredService<IKernelReloadCoordinator>(),
+            configureKernel,
+            sp.GetRequiredService<ILogger<LlmKernelProvider>>()
+        ));
+        // Chat engines take a Lazy<ILlmKernelProvider> to break the singleton
+        // resolution cycle: LlmKernelProvider → IKernelReloadCoordinator →
+        // IConversationOrchestrator → IConversationSessionFactory → IChatEngine
+        // → ILlmKernelProvider. The Lazy defers resolution to first use, which
+        // happens after the DI graph is fully constructed.
+        services.AddSingleton<Lazy<ILlmKernelProvider>>(sp => new Lazy<ILlmKernelProvider>(
+            sp.GetRequiredService<ILlmKernelProvider>
+        ));
 
         services.AddSingleton<ITextFilter, NameTextFilter>();
 
@@ -187,72 +339,119 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddTTSSystem(
         this IServiceCollection services,
-        IConfiguration          configuration)
+        IConfiguration configuration,
+        IAssetCatalog catalog
+    )
     {
-        // Add configuration
+        // Configuration
         services.Configure<TtsConfiguration>(configuration.GetSection("Config:Tts"));
-        services.Configure<KokoroVoiceOptions>(configuration.GetSection("Config:Tts:Voice"));
+        services.Configure<KokoroVoiceOptions>(configuration.GetSection("Config:Tts:Kokoro"));
+        services.Configure<Qwen3TtsOptions>(configuration.GetSection("Config:Tts:Qwen3"));
 
-        // Add core TTS components
-        services.AddSingleton<ITtsEngine, TtsEngine>();
+        // Shared model provider
+        services.AddSingleton<IModelProvider>(provider =>
+        {
+            var config = provider.GetRequiredService<IOptions<TtsConfiguration>>().Value;
+            var logger = provider.GetRequiredService<ILogger<FileModelProvider>>();
 
-        // Add text processing components
-        services.AddSingleton<ITextProcessor, TextProcessor>();
+            return new FileModelProvider(config.ModelDirectory, logger);
+        });
+
+        // Forced aligner (wav2vec2 CTC) is only consumed by Qwen3 — wav2vec2 is
+        // gated behind FeatureIds.TtsQwen3 in the install manifest, so registering
+        // it without the model file would crash DI build for TryItOut/StreamWithIt
+        // profiles where the BuildWithIt-tier Qwen3 stack isn't installed.
+        var qwen3Enabled = catalog.IsFeatureEnabled(FeatureIds.TtsQwen3);
+        if (qwen3Enabled)
+        {
+            services.AddSingleton<IForcedAligner>(provider =>
+            {
+                var modelProvider = provider.GetRequiredService<IModelProvider>();
+                var logger = provider.GetRequiredService<ILogger<CtcForcedAligner>>();
+
+                return new CtcForcedAligner(modelProvider, logger);
+            });
+        }
+
+        // Shared text processing
+        services.AddSingleton<SentenceProcessor>();
         services.AddSingleton<ITextNormalizer, TextNormalizer>();
         services.AddSingleton<ISentenceSegmenter, SentenceSegmenter>();
         services.AddSingleton<IMlSentenceDetector>(provider =>
-                                                   {
-                                                       var logger        = provider.GetRequiredService<ILogger<OpenNlpSentenceDetector>>();
-                                                       var modelProvider = provider.GetRequiredService<IModelProvider>();
-                                                       var basePath      = modelProvider.GetModelAsync(TTS.Synthesis.ModelType.OpenNLPDir).GetAwaiter().GetResult().Path;
-                                                       var modelPath     = Path.Combine(basePath, "EnglishSD.nbin");
+        {
+            var logger = provider.GetRequiredService<ILogger<OpenNlpSentenceDetector>>();
+            var modelProvider = provider.GetRequiredService<IModelProvider>();
+            var basePath = modelProvider.GetModelPath(IO.ModelType.OpenNlp.Directory);
+            var modelPath = Path.Combine(basePath, "EnglishSD.nbin");
 
-                                                       return new OpenNlpSentenceDetector(modelPath, logger);
-                                                   });
+            return new OpenNlpSentenceDetector(modelPath, logger);
+        });
 
-        // Add phoneme processing components
+        // Shared phoneme infrastructure (used by Kokoro directly + orchestrator enrichment)
         services.AddSingleton<IPhonemizer>(provider =>
-                                           {
-                                               var posTagger = provider.GetRequiredService<IPosTagger>();
-                                               var lexicon   = provider.GetRequiredService<ILexicon>();
-                                               var fallback  = provider.GetRequiredService<IFallbackPhonemizer>();
+        {
+            var posTagger = provider.GetRequiredService<IPosTagger>();
+            var lexicon = provider.GetRequiredService<ILexicon>();
+            var fallback = provider.GetRequiredService<IFallbackPhonemizer>();
 
-                                               return new PhonemizerG2P(posTagger, lexicon, fallback);
-                                           });
+            return new PhonemizerG2P(posTagger, lexicon, fallback);
+        });
 
         services.AddSingleton<IPosTagger>(provider =>
-                                          {
-                                              var logger        = provider.GetRequiredService<ILogger<OpenNlpPosTagger>>();
-                                              var modelProvider = provider.GetRequiredService<IModelProvider>();
+        {
+            var logger = provider.GetRequiredService<ILogger<OpenNlpPosTagger>>();
+            var modelProvider = provider.GetRequiredService<IModelProvider>();
+            var basePath = modelProvider.GetModelPath(IO.ModelType.OpenNlp.Directory);
+            var modelPath = Path.Combine(basePath, "EnglishPOS.nbin");
 
-                                              var basePath  = modelProvider.GetModelAsync(TTS.Synthesis.ModelType.OpenNLPDir).GetAwaiter().GetResult().Path;
-                                              var modelPath = Path.Combine(basePath, "EnglishPOS.nbin");
-
-                                              return new OpenNlpPosTagger(modelPath, logger);
-                                          });
+            return new OpenNlpPosTagger(modelPath, logger);
+        });
 
         services.AddSingleton<ILexicon, Lexicon>();
         services.AddSingleton<IFallbackPhonemizer, EspeakFallbackPhonemizer>();
 
-        services.AddSingleton<IAudioSynthesizer, OnnxAudioSynthesizer>();
-        services.AddSingleton<IModelProvider>(provider =>
-                                              {
-                                                  var config = provider.GetRequiredService<IOptions<TtsConfiguration>>().Value;
-                                                  var logger = provider.GetRequiredService<ILogger<FileModelProvider>>();
-
-                                                  return new FileModelProvider(config.ModelDirectory, logger);
-                                              });
-
+        // Kokoro-specific
         services.AddSingleton<IKokoroVoiceProvider, KokoroVoiceProvider>();
+
+        // Engine registrations — Kokoro is the always-on baseline; Qwen3 is gated
+        // on its asset bundle being installed (BuildWithIt tier). Without this
+        // gate, Qwen3SentenceSynthesizer would be activated for the TtsEngineProvider
+        // enumeration and crash on the missing model file before any sentence is
+        // synthesised.
+        services.AddSingleton<ISentenceSynthesizer, KokoroSentenceSynthesizer>();
+        if (qwen3Enabled)
+        {
+            services.AddSingleton<IQwen3VoiceProvider, Qwen3VoiceProvider>();
+            services.AddSingleton<ISentenceSynthesizer, Qwen3SentenceSynthesizer>();
+        }
+
+        // Runtime engine switching
+        services.AddSingleton<ITtsEngineProvider, TtsEngineProvider>();
+
+        // Top-level orchestrator (replaces TtsEngine)
+        services.AddSingleton<ITtsEngine, TtsOrchestrator>();
+
         services.AddSingleton<ITtsCache, TtsMemoryCache>();
         services.AddSingleton<IAudioFilter, BlacklistAudioFilter>();
+
+        // Lip sync
+        services.Configure<LipSyncOptions>(configuration.GetSection("Config:LipSync"));
+        services.Configure<Audio2FaceOptions>(
+            configuration.GetSection("Config:LipSync:Audio2Face")
+        );
+        services.AddSingleton<ILipSyncProcessor, VBridgerLipSyncProcessor>();
+        // Audio2FaceLipSyncProcessor is registered conditionally in AddConversation
+        // via FeatureIds.Audio2Face — its NVIDIA Audio2Face runtime is an optional
+        // bootstrapper download.
+        services.AddSingleton<ILipSyncProcessorProvider, LipSyncProcessorProvider>();
 
         return services;
     }
 
     public static IServiceCollection AddUI(
         this IServiceCollection services,
-        IConfiguration          configuration)
+        IConfiguration configuration
+    )
     {
         services.Configure<SubtitleOptions>(configuration.GetSection("Config:Subtitle"));
         services.Configure<RouletteWheelOptions>(configuration.GetSection("Config:RouletteWheel"));
@@ -260,59 +459,169 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRenderComponent, SubtitleRenderer>();
         services.AddSingleton<RouletteWheel>();
         services.AddSingleton<IRenderComponent>(x => x.GetRequiredService<RouletteWheel>());
-        services.AddConfigEditor();
+        services.AddSingleton<IUiThreadDispatcher, UiThreadDispatcher>();
+        services.AddControlPanel();
 
         services.AddSingleton<FontProvider>();
         services.AddSingleton<IStartupTask>(x => x.GetRequiredService<FontProvider>());
+
+        services.AddSingleton<WindowManager>(sp =>
+        {
+            var config = sp.GetRequiredService<IOptions<AvatarAppConfig>>().Value.Window;
+            return new WindowManager(
+                new Silk.NET.Maths.Vector2D<int>(config.Width, config.Height),
+                new Silk.NET.Maths.Vector2D<int>(config.MinWidth, config.MinHeight),
+                config.Title
+            );
+        });
+
+        services.AddSingleton<OverlayHost>();
 
         return services;
     }
 
     public static IServiceCollection AddLive2D(
         this IServiceCollection services,
-        IConfiguration          configuration)
+        IConfiguration configuration
+    )
     {
         services.Configure<Live2DOptions>(configuration.GetSection("Config:Live2D"));
 
         services.AddSingleton<IRenderComponent, Live2DManager>();
-        services.AddSingleton<ILive2DAnimationService, VBridgerLipSyncService>();
+        services.AddSingleton<ILive2DAnimationService, LipSyncAnimationService>();
         services.AddSingleton<ILive2DAnimationService, IdleBlinkingAnimationService>();
         services.AddEmotionProcessing(configuration);
 
         return services;
     }
 
-    public static IServiceCollection AddConfigEditor(this IServiceCollection services)
+    public static IServiceCollection AddControlPanel(this IServiceCollection services)
     {
-        services.AddSingleton<IUiConfigurationManager, UiConfigurationManager>();
-        services.AddSingleton<IEditorStateManager, EditorStateManager>();
-        services.AddSingleton<IConfigSectionRegistry, ConfigSectionRegistry>();
-        services.AddSingleton<IUiThemeManager, UiThemeManager>();
-        services.AddSingleton<INotificationService, NotificationService>();
+        // Config writer — discovers section paths from AvatarAppConfig type hierarchy
+        services.AddSingleton<IConfigWriter>(sp => new ConfigWriter(
+            Path.Combine(AppContext.BaseDirectory, "appsettings.json"),
+            logger: sp.GetRequiredService<ILogger<ConfigWriter>>()
+        ));
 
-        services.AddSingleton<IRenderComponent, ConfigEditorComponent>();
+        // Layout components
+        services.AddSingleton<PresenceOrb>();
+        services.AddSingleton<StatusBar>();
+        services.AddSingleton<ControlBar>();
+        services.AddSingleton<TitleBar>();
 
-        services.AddSingleton<TtsConfigEditor>();
-        services.AddSingleton<RouletteWheelEditor>();
-        services.AddSingleton<ChatEditor>();
-        services.AddSingleton<MicrophoneConfigEditor>();
+        // Persona state bridge for UI effects
+        services.AddSingleton<PersonaStateProvider>();
+        services.AddSingleton<AmbientRenderer>();
+        services.AddSingleton<WindowFrameGlow>();
+        services.AddSingleton<IUiSoundEmitter, NoOpUiSoundEmitter>();
 
-        services.AddSingleton<IStartupTask, ConfigSectionRegistrationTask>();
+        // Voice panel sections
+        services.AddSingleton<VoiceModeSelector>();
+        services.AddSingleton<VoiceCard>();
+        services.AddSingleton<VoiceGallery>();
+        services.AddSingleton<DeliverySection>();
+        services.AddSingleton<CloneLayerSection>();
+        services.AddSingleton<AdvancedSection>();
+
+        // Voice metadata
+        services.AddSingleton<VoiceMetadataCatalog>();
+
+        // Voice audition pipeline
+        services.AddSingleton<OneShotAudioPlayer>();
+        services.AddSingleton<IOneShotPlayer>(sp => sp.GetRequiredService<OneShotAudioPlayer>());
+        // RVCFilter is only registered when the VoiceCloning feature is enabled
+        // (see AddConversation), so the audition processor must mirror that gate.
+        // Without the no-op stub, profiles like TryItOut fail at DI build time
+        // because VoiceAuditionService unconditionally requires IRvcAuditionProcessor.
+        services.AddSingleton<IRvcAuditionProcessor>(sp =>
+            sp.GetRequiredService<IAssetCatalog>().IsFeatureEnabled(FeatureIds.VoiceCloning)
+                ? new RvcAuditionProcessor(sp.GetRequiredService<RVCFilter>())
+                : new NoOpRvcAuditionProcessor()
+        );
+        services.AddSingleton<IVoiceAuditionService, VoiceAuditionService>();
+
+        // Nav request bus — lets dashboard health cards + cross-panel hint
+        // links drive the active sidebar section.
+        services.AddSingleton<NavRequestBus>();
+        services.AddSingleton<INavRequestBus>(sp => sp.GetRequiredService<NavRequestBus>());
+
+        // Subsystem health probes — registration order defines dashboard card order.
+        services.AddSingleton<MicrophoneHealthProbe>();
+        services.AddSingleton<ISubsystemHealthProbe>(sp =>
+            sp.GetRequiredService<MicrophoneHealthProbe>()
+        );
+        services.AddSingleton<LlmHealthProbe>();
+        services.AddSingleton<ISubsystemHealthProbe>(sp => sp.GetRequiredService<LlmHealthProbe>());
+        services.AddSingleton<TtsHealthProbe>();
+        services.AddSingleton<ISubsystemHealthProbe>(sp => sp.GetRequiredService<TtsHealthProbe>());
+
+        // Dashboard panel sections + services
+        services.AddSingleton<SessionStatsCollector>();
+        services.AddSingleton<PresenceStripSection>();
+        services.AddSingleton<SystemHealthSection>();
+        services.AddSingleton<TranscriptSection>();
+        services.AddSingleton<ControlsSection>();
+        services.AddSingleton<SessionStatsSection>();
+
+        // Panels
+        services.AddSingleton<Dashboard>();
+        services.AddSingleton<VoicePanel>();
+        // Personality panel sections
+        services.AddSingleton<PromptSourceSection>();
+        services.AddSingleton<CurrentVibeSection>();
+        services.AddSingleton<TopicsSection>();
+        services.AddSingleton<PersonalityPanel>();
+        services.AddSingleton<MicrophoneDeviceSection>();
+        services.AddSingleton<SpeechDetectionSection>();
+        services.AddSingleton<RecognitionSection>();
+        services.AddSingleton<InterruptionSection>();
+        services.AddSingleton<LiveMeterWidget>();
+        services.AddSingleton<ListeningPanel>();
+        // Avatar panel sections
+        services.AddSingleton<ModelSection>();
+        services.AddSingleton<LipSyncSection>();
+        services.AddSingleton<AvatarPanel>();
+        // Subtitles panel sections
+        services.AddSingleton<SubtitlePreviewRenderer>();
+        services.AddSingleton<PreviewSection>();
+        services.AddSingleton<TextStyleSection>();
+        services.AddSingleton<ColorsSection>();
+        services.AddSingleton<PlacementSection>();
+        services.AddSingleton<CanvasSection>();
+        services.AddSingleton<SubtitlesPanel>();
+        services.AddSingleton<OverlayPanel>();
+        services.AddSingleton<RouletteWheelPanel>();
+        services.AddSingleton<ScreenAwareness>();
+        services.AddSingleton<Streaming>();
+        services.AddSingleton<TextLlmSection>();
+        services.AddSingleton<VisionLlmSection>();
+        services.AddSingleton<LlmConnectionPanel>();
+        services.AddSingleton<Application>();
+
+        // Shell — registered as IRenderComponent
+        services.AddSingleton<IRenderComponent, ControlPanelComponent>();
 
         return services;
     }
 
-    public static IServiceCollection AddRVC(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddRVC(
+        this IServiceCollection services,
+        IConfiguration configuration
+    )
     {
         services.Configure<RVCFilterOptions>(configuration.GetSection("Config:Tts:Rvc"));
 
         services.AddSingleton<IRVCVoiceProvider, RVCVoiceProvider>();
-        services.AddSingleton<IAudioFilter, RVCFilter>();
+        services.AddSingleton<RVCFilter>();
+        services.AddSingleton<IAudioFilter>(sp => sp.GetRequiredService<RVCFilter>());
 
         return services;
     }
 
-    public static IServiceCollection AddEmotionProcessing(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddEmotionProcessing(
+        this IServiceCollection services,
+        IConfiguration configuration
+    )
     {
         services.AddSingleton<IEmotionService, EmotionService>();
         services.AddSingleton<ITextFilter, EmotionProcessor>();
@@ -322,33 +631,64 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddPolly(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddPolly(
+        this IServiceCollection services,
+        IConfiguration configuration
+    )
     {
-        services.AddResiliencePipeline("semantickernel-chat", pipelineBuilder =>
-                                                              {
-                                                                  pipelineBuilder
-                                                                      .AddTimeout(TimeSpan.FromSeconds(60))
-                                                                      .AddRetry(new RetryStrategyOptions {
-                                                                                                             Name = "ChatServiceRetry",
-                                                                                                             ShouldHandle = new PredicateBuilder().Handle<Exception>(ex => ex is HttpRequestException ||
-                                                                                                                                                                           ex is TimeoutRejectedException ||
-                                                                                                                                                                           (ex is KernelException ke && ke.Message.Contains("transient", StringComparison.OrdinalIgnoreCase))),
-                                                                                                             Delay            = TimeSpan.FromSeconds(2),
-                                                                                                             BackoffType      = DelayBackoffType.Exponential,
-                                                                                                             MaxDelay         = TimeSpan.FromSeconds(30),
-                                                                                                             MaxRetryAttempts = 3,
-                                                                                                             UseJitter        = true,
-                                                                                                             OnRetry = args =>
-                                                                                                                       {
-                                                                                                                           var sessionId = args.Context.Properties.TryGetValue(ResilienceKeys.SessionId, out var x) ? x : Guid.Empty;
-                                                                                                                           var logger    = args.Context.Properties.TryGetValue(ResilienceKeys.Logger, out var y) ? y : NullLogger.Instance;
-                                                                                                                           logger.LogWarning("Request failed/stopped for session {SessionId}. Retrying in {Timespan}. Attempt {RetryAttempt}...",
-                                                                                                                                             sessionId, args.Duration, args.AttemptNumber);
+        services.AddResiliencePipeline(
+            "semantickernel-chat",
+            pipelineBuilder =>
+            {
+                pipelineBuilder
+                    .AddTimeout(TimeSpan.FromSeconds(60))
+                    .AddRetry(
+                        new RetryStrategyOptions
+                        {
+                            Name = "ChatServiceRetry",
+                            ShouldHandle = new PredicateBuilder().Handle<Exception>(ex =>
+                                ex is HttpRequestException
+                                || ex is TimeoutRejectedException
+                                || (
+                                    ex is KernelException ke
+                                    && ke.Message.Contains(
+                                        "transient",
+                                        StringComparison.OrdinalIgnoreCase
+                                    )
+                                )
+                            ),
+                            Delay = TimeSpan.FromSeconds(2),
+                            BackoffType = DelayBackoffType.Exponential,
+                            MaxDelay = TimeSpan.FromSeconds(30),
+                            MaxRetryAttempts = 3,
+                            UseJitter = true,
+                            OnRetry = args =>
+                            {
+                                var sessionId = args.Context.Properties.TryGetValue(
+                                    ResilienceKeys.SessionId,
+                                    out var x
+                                )
+                                    ? x
+                                    : Guid.Empty;
+                                var logger = args.Context.Properties.TryGetValue(
+                                    ResilienceKeys.Logger,
+                                    out var y
+                                )
+                                    ? y
+                                    : NullLogger.Instance;
+                                logger.LogWarning(
+                                    "Request failed/stopped for session {SessionId}. Retrying in {Timespan}. Attempt {RetryAttempt}...",
+                                    sessionId,
+                                    args.Duration,
+                                    args.AttemptNumber
+                                );
 
-                                                                                                                           return ValueTask.CompletedTask;
-                                                                                                                       }
-                                                                                                         });
-                                                              });
+                                return ValueTask.CompletedTask;
+                            },
+                        }
+                    );
+            }
+        );
 
         return services;
     }

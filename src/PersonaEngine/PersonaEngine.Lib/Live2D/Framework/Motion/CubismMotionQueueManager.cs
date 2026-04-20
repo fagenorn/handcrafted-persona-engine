@@ -42,10 +42,10 @@ public class CubismMotionQueueManager
         CubismMotionQueueEntry motionQueueEntry;
 
         // 既にモーションがあれば終了フラグを立てる
-        for ( var i = 0; i < Motions.Count; ++i )
+        for (var i = 0; i < Motions.Count; ++i)
         {
             motionQueueEntry = Motions[0];
-            if ( motionQueueEntry == null )
+            if (motionQueueEntry == null)
             {
                 continue;
             }
@@ -70,15 +70,17 @@ public class CubismMotionQueueManager
     [Obsolete("Please use StartMotion(ACubismMotion motion")]
     public CubismMotionQueueEntry StartMotion(ACubismMotion motion, float userTimeSeconds)
     {
-        CubismLog.Warning("StartMotion(ACubismMotion motion, float userTimeSeconds) is a deprecated function. Please use StartMotion(ACubismMotion motion).");
+        CubismLog.Warning(
+            "StartMotion(ACubismMotion motion, float userTimeSeconds) is a deprecated function. Please use StartMotion(ACubismMotion motion)."
+        );
 
         CubismMotionQueueEntry motionQueueEntry;
 
         // 既にモーションがあれば終了フラグを立てる
-        for ( var i = 0; i < Motions.Count; ++i )
+        for (var i = 0; i < Motions.Count; ++i)
         {
             motionQueueEntry = Motions[i];
-            if ( motionQueueEntry == null )
+            if (motionQueueEntry == null)
             {
                 continue;
             }
@@ -104,10 +106,10 @@ public class CubismMotionQueueManager
     {
         // ------- 処理を行う --------
         // 既にモーションがあれば終了フラグを立てる
-        foreach ( var item in Motions )
+        foreach (var item in Motions)
         {
             // ----- 終了済みの処理があれば削除する ------
-            if ( !item.Finished )
+            if (!item.Finished)
             {
                 return false;
             }
@@ -128,14 +130,14 @@ public class CubismMotionQueueManager
     {
         // 既にモーションがあれば終了フラグを立てる
 
-        foreach ( var item in Motions )
+        foreach (var item in Motions)
         {
-            if ( item == null )
+            if (item == null)
             {
                 continue;
             }
 
-            if ( item == motionQueueEntryNumber && !item.Finished )
+            if (item == motionQueueEntryNumber && !item.Finished)
             {
                 return false;
             }
@@ -168,9 +170,9 @@ public class CubismMotionQueueManager
         //------- 処理を行う --------
         //既にモーションがあれば終了フラグを立てる
 
-        foreach ( var item in Motions )
+        foreach (var item in Motions)
         {
-            if ( item == motionQueueEntryNumber )
+            if (item == motionQueueEntryNumber)
             {
                 return item;
             }
@@ -186,7 +188,7 @@ public class CubismMotionQueueManager
     /// <param name="customData">コールバックに返されるデータ</param>
     public void SetEventCallback(CubismMotionEventFunction callback, CubismUserModel customData)
     {
-        _eventCallback   = callback;
+        _eventCallback = callback;
         _eventCustomData = customData;
     }
 
@@ -208,9 +210,9 @@ public class CubismMotionQueueManager
 
         _remove.Clear();
 
-        for ( var motionIndex = Motions.Count - 1; motionIndex >= 0; motionIndex-- )
+        for (var motionIndex = Motions.Count - 1; motionIndex >= 0; motionIndex--)
         {
-            var item   = Motions[motionIndex];
+            var item = Motions[motionIndex];
             var motion = item.Motion;
 
             // ------ 値を反映する ------
@@ -219,10 +221,11 @@ public class CubismMotionQueueManager
 
             // ------ ユーザトリガーイベントを検査する ----
             var firedList = motion.GetFiredEvent(
-                                                 item.LastEventCheckSeconds - item.StartTime,
-                                                 userTimeSeconds - item.StartTime);
+                item.LastEventCheckSeconds - item.StartTime,
+                userTimeSeconds - item.StartTime
+            );
 
-            for ( var i = 0; i < firedList.Count; ++i )
+            for (var i = 0; i < firedList.Count; ++i)
             {
                 _eventCallback?.Invoke(_eventCustomData, firedList[i]);
             }
@@ -230,20 +233,20 @@ public class CubismMotionQueueManager
             item.LastEventCheckSeconds = userTimeSeconds;
 
             // ----- 終了済みの処理があれば削除する ------
-            if ( item.Finished )
+            if (item.Finished)
             {
                 _remove.Add(item); // 削除
             }
             else
             {
-                if ( item.IsTriggeredFadeOut )
+                if (item.IsTriggeredFadeOut)
                 {
                     item.StartFadeout(item.FadeOutSeconds, userTimeSeconds);
                 }
             }
         }
 
-        foreach ( var item in _remove )
+        foreach (var item in _remove)
         {
             Motions.Remove(item);
         }

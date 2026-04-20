@@ -33,23 +33,23 @@ public class LAppView(LAppDelegate lapp)
     {
         lapp.GL.GetWindowSize(out var width, out var height);
 
-        if ( width == 0 || height == 0 )
+        if (width == 0 || height == 0)
         {
             return;
         }
 
         // 縦サイズを基準とする
-        var ratio  = (float)width / height;
-        var left   = -ratio;
-        var right  = ratio;
+        var ratio = (float)width / height;
+        var left = -ratio;
+        var right = ratio;
         var bottom = LAppDefine.ViewLogicalLeft;
-        var top    = LAppDefine.ViewLogicalRight;
+        var top = LAppDefine.ViewLogicalRight;
 
         _viewMatrix.SetScreenRect(left, right, bottom, top); // デバイスに対応する画面の範囲。 Xの左端, Xの右端, Yの下端, Yの上端
         _viewMatrix.Scale(LAppDefine.ViewScale, LAppDefine.ViewScale);
 
         _deviceToScreen.LoadIdentity(); // サイズが変わった際などリセット必須
-        if ( width > height )
+        if (width > height)
         {
             var screenW = MathF.Abs(right - left);
             _deviceToScreen.ScaleRelative(screenW / width, -screenW / width);
@@ -68,11 +68,11 @@ public class LAppView(LAppDelegate lapp)
 
         // 表示できる最大範囲
         _viewMatrix.SetMaxScreenRect(
-                                     LAppDefine.ViewLogicalMaxLeft,
-                                     LAppDefine.ViewLogicalMaxRight,
-                                     LAppDefine.ViewLogicalMaxBottom,
-                                     LAppDefine.ViewLogicalMaxTop
-                                    );
+            LAppDefine.ViewLogicalMaxLeft,
+            LAppDefine.ViewLogicalMaxRight,
+            LAppDefine.ViewLogicalMaxBottom,
+            LAppDefine.ViewLogicalMaxTop
+        );
     }
 
     /// <summary>
@@ -156,13 +156,19 @@ public class LAppView(LAppDelegate lapp)
     ///     X座標をScreen座標に変換する。
     /// </summary>
     /// <param name="deviceX">デバイスX座標</param>
-    public float TransformScreenX(float deviceX) { return _deviceToScreen.TransformX(deviceX); }
+    public float TransformScreenX(float deviceX)
+    {
+        return _deviceToScreen.TransformX(deviceX);
+    }
 
     /// <summary>
     ///     Y座標をScreen座標に変換する。
     /// </summary>
     /// <param name="deviceY">デバイスY座標</param>
-    public float TransformScreenY(float deviceY) { return _deviceToScreen.TransformY(deviceY); }
+    public float TransformScreenY(float deviceY)
+    {
+        return _deviceToScreen.TransformY(deviceY);
+    }
 
     /// <summary>
     ///     別レンダリングターゲットにモデルを描画するサンプルで
@@ -172,12 +178,12 @@ public class LAppView(LAppDelegate lapp)
     {
         // assignの数値に応じて適当に決定
         var alpha = 0.25f + assign * 0.5f; // サンプルとしてαに適当な差をつける
-        if ( alpha > 1.0f )
+        if (alpha > 1.0f)
         {
             alpha = 1.0f;
         }
 
-        if ( alpha < 0.1f )
+        if (alpha < 0.1f)
         {
             alpha = 0.1f;
         }

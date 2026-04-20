@@ -8,7 +8,7 @@ public class ACFMethod : IF0Predictor
 
     public ACFMethod(int hopLength, int samplingRate)
     {
-        HopLength  = hopLength;
+        HopLength = hopLength;
         SampleRate = samplingRate;
     }
 
@@ -16,15 +16,15 @@ public class ACFMethod : IF0Predictor
     {
         HopLength = (int)Math.Floor(wav.Length / (double)length);
 
-        var wavSpan     = wav.Span;
-        var f0Span      = f0Output.Span;
+        var wavSpan = wav.Span;
+        var f0Span = f0Output.Span;
         var frameLength = HopLength;
 
-        for ( var i = 0; i < length; i++ )
+        for (var i = 0; i < length; i++)
         {
             // Create a window for this frame without allocations
-            var startIdx  = i * frameLength;
-            var endIdx    = Math.Min(startIdx + (int)(frameLength * 1.5), wav.Length);
+            var startIdx = i * frameLength;
+            var endIdx = Math.Min(startIdx + (int)(frameLength * 1.5), wav.Length);
             var frameSize = endIdx - startIdx;
 
             f0Span[i] = ComputeF0ForFrame(wavSpan.Slice(startIdx, frameSize));
@@ -35,14 +35,14 @@ public class ACFMethod : IF0Predictor
 
     private float ComputeF0ForFrame(ReadOnlySpan<float> frame)
     {
-        var         n               = frame.Length;
+        var n = frame.Length;
         Span<float> autocorrelation = stackalloc float[n]; // Use stack allocation to avoid heap allocations
 
         // Calculate autocorrelation function
-        for ( var lag = 0; lag < n; lag++ )
+        for (var lag = 0; lag < n; lag++)
         {
             float sum = 0;
-            for ( var i = 0; i < n - lag; i++ )
+            for (var i = 0; i < n - lag; i++)
             {
                 sum += frame[i] * frame[i + lag];
             }
@@ -52,17 +52,21 @@ public class ACFMethod : IF0Predictor
 
         // Ignore zero-delay peak, find first non-zero delay peak
         var peakIndex = 1;
-        var maxVal    = autocorrelation[1];
-        for ( ; peakIndex < autocorrelation.Length && (maxVal = autocorrelation[peakIndex]) > 0; peakIndex++ )
+        var maxVal = autocorrelation[1];
+        for (
+            ;
+            peakIndex < autocorrelation.Length && (maxVal = autocorrelation[peakIndex]) > 0;
+            peakIndex++
+        )
         {
             ;
         }
 
-        for ( var lag = peakIndex; lag < n; lag++ )
+        for (var lag = peakIndex; lag < n; lag++)
         {
-            if ( autocorrelation[lag] > maxVal )
+            if (autocorrelation[lag] > maxVal)
             {
-                maxVal    = autocorrelation[lag];
+                maxVal = autocorrelation[lag];
                 peakIndex = lag;
             }
         }

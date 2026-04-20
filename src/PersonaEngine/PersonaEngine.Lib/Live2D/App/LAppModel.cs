@@ -1,5 +1,4 @@
 ﻿using System.Text.Json;
-
 using PersonaEngine.Lib.Live2D.Framework;
 using PersonaEngine.Lib.Live2D.Framework.Effect;
 using PersonaEngine.Lib.Live2D.Framework.Math;
@@ -53,40 +52,41 @@ public class LAppModel : CubismUserModel
     public static string GetMotionGroupName(string motionName)
     {
         var underscoreIndex = motionName.LastIndexOf('_');
-        if ( underscoreIndex > 0 && int.TryParse(motionName.AsSpan(underscoreIndex + 1), out _) )
+        if (underscoreIndex > 0 && int.TryParse(motionName.AsSpan(underscoreIndex + 1), out _))
         {
             return motionName[..underscoreIndex];
         }
 
         return motionName; // Treat whole name as group if no "_Number" suffix
     }
-    
-    public        Action<LAppModel>? ValueUpdate;
+
+    public Action<LAppModel>? ValueUpdate;
 
     public LAppModel(LAppDelegate lapp, string dir, string fileName)
     {
         _lapp = lapp;
 
-        if ( LAppDefine.MocConsistencyValidationEnable )
+        if (LAppDefine.MocConsistencyValidationEnable)
         {
             _mocConsistency = true;
         }
 
-        IdParamAngleX = CubismFramework.CubismIdManager
-                                       .GetId(CubismDefaultParameterId.ParamAngleX);
+        IdParamAngleX = CubismFramework.CubismIdManager.GetId(CubismDefaultParameterId.ParamAngleX);
 
-        IdParamAngleY = CubismFramework.CubismIdManager
-                                       .GetId(CubismDefaultParameterId.ParamAngleY);
+        IdParamAngleY = CubismFramework.CubismIdManager.GetId(CubismDefaultParameterId.ParamAngleY);
 
         IdParamAngleZ = CubismFramework.CubismIdManager.GetId(CubismDefaultParameterId.ParamAngleZ);
-        IdParamBodyAngleX = CubismFramework.CubismIdManager
-                                           .GetId(CubismDefaultParameterId.ParamBodyAngleX);
+        IdParamBodyAngleX = CubismFramework.CubismIdManager.GetId(
+            CubismDefaultParameterId.ParamBodyAngleX
+        );
 
-        IdParamEyeBallX = CubismFramework.CubismIdManager
-                                         .GetId(CubismDefaultParameterId.ParamEyeBallX);
+        IdParamEyeBallX = CubismFramework.CubismIdManager.GetId(
+            CubismDefaultParameterId.ParamEyeBallX
+        );
 
-        IdParamEyeBallY = CubismFramework.CubismIdManager
-                                         .GetId(CubismDefaultParameterId.ParamEyeBallY);
+        IdParamEyeBallY = CubismFramework.CubismIdManager.GetId(
+            CubismDefaultParameterId.ParamEyeBallY
+        );
 
         _modelHomeDir = dir;
 
@@ -94,18 +94,19 @@ public class LAppModel : CubismUserModel
 
         using var stream = File.Open(fileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
 
-        _modelSetting = JsonSerializer.Deserialize(stream, ModelSettingObjContext.Default.ModelSettingObj)
-                        ?? throw new Exception("model3.json error");
+        _modelSetting =
+            JsonSerializer.Deserialize(stream, ModelSettingObjContext.Default.ModelSettingObj)
+            ?? throw new Exception("model3.json error");
 
-        Updating    = true;
+        Updating = true;
         Initialized = false;
 
         //Cubism Model
         var path = _modelSetting.FileReferences?.Moc;
-        if ( !string.IsNullOrWhiteSpace(path) )
+        if (!string.IsNullOrWhiteSpace(path))
         {
             path = Path.GetFullPath(_modelHomeDir + path);
-            if ( !File.Exists(path) )
+            if (!File.Exists(path))
             {
                 throw new Exception("model is null");
             }
@@ -116,22 +117,22 @@ public class LAppModel : CubismUserModel
         }
 
         //Expression
-        if ( _modelSetting.FileReferences?.Expressions?.Count > 0 )
+        if (_modelSetting.FileReferences?.Expressions?.Count > 0)
         {
-            for ( var i = 0; i < _modelSetting.FileReferences.Expressions.Count; i++ )
+            for (var i = 0; i < _modelSetting.FileReferences.Expressions.Count; i++)
             {
                 var item = _modelSetting.FileReferences.Expressions[i];
                 var name = item.Name;
                 path = item.File;
                 path = Path.GetFullPath(_modelHomeDir + path);
-                if ( !File.Exists(path) )
+                if (!File.Exists(path))
                 {
                     continue;
                 }
 
                 var motion = new CubismExpressionMotion(path);
 
-                if ( _expressions.ContainsKey(name) )
+                if (_expressions.ContainsKey(name))
                 {
                     _expressions[name] = motion;
                 }
@@ -144,10 +145,10 @@ public class LAppModel : CubismUserModel
 
         //Physics
         path = _modelSetting.FileReferences?.Physics;
-        if ( !string.IsNullOrWhiteSpace(path) )
+        if (!string.IsNullOrWhiteSpace(path))
         {
             path = Path.GetFullPath(_modelHomeDir + path);
-            if ( File.Exists(path) )
+            if (File.Exists(path))
             {
                 LoadPhysics(path);
             }
@@ -155,17 +156,17 @@ public class LAppModel : CubismUserModel
 
         //Pose
         path = _modelSetting.FileReferences?.Pose;
-        if ( !string.IsNullOrWhiteSpace(path) )
+        if (!string.IsNullOrWhiteSpace(path))
         {
             path = Path.GetFullPath(_modelHomeDir + path);
-            if ( File.Exists(path) )
+            if (File.Exists(path))
             {
                 LoadPose(path);
             }
         }
 
         //EyeBlink
-        if ( _modelSetting.IsExistEyeBlinkParameters() )
+        if (_modelSetting.IsExistEyeBlinkParameters())
         {
             _eyeBlink = new CubismEyeBlink(_modelSetting);
         }
@@ -174,27 +175,27 @@ public class LAppModel : CubismUserModel
 
         //UserData
         path = _modelSetting.FileReferences?.UserData;
-        if ( !string.IsNullOrWhiteSpace(path) )
+        if (!string.IsNullOrWhiteSpace(path))
         {
             path = Path.GetFullPath(_modelHomeDir + path);
-            if ( File.Exists(path) )
+            if (File.Exists(path))
             {
                 LoadUserData(path);
             }
         }
 
         // EyeBlinkIds
-        if ( _eyeBlink != null )
+        if (_eyeBlink != null)
         {
             _eyeBlinkIds.AddRange(_eyeBlink.ParameterIds);
         }
 
         // LipSyncIds
-        if ( _modelSetting.IsExistLipSyncParameters() )
+        if (_modelSetting.IsExistLipSyncParameters())
         {
-            foreach ( var item in _modelSetting.Groups )
+            foreach (var item in _modelSetting.Groups)
             {
-                if ( item.Name == CubismModelSettingJson.LipSync )
+                if (item.Name == CubismModelSettingJson.LipSync)
                 {
                     _lipSyncIds.AddRange(item.Ids);
                 }
@@ -208,9 +209,9 @@ public class LAppModel : CubismUserModel
 
         Model.SaveParameters();
 
-        if ( _modelSetting.FileReferences?.Motions?.Count > 0 )
+        if (_modelSetting.FileReferences?.Motions?.Count > 0)
         {
-            foreach ( var item in _modelSetting.FileReferences.Motions )
+            foreach (var item in _modelSetting.FileReferences.Motions)
             {
                 PreloadMotionGroup(item.Key);
             }
@@ -218,7 +219,7 @@ public class LAppModel : CubismUserModel
 
         _motionManager.StopAllMotions();
 
-        Updating    = false;
+        Updating = false;
         Initialized = true;
 
         CreateRenderer(new CubismRenderer_OpenGLES2(_lapp.GL, Model));
@@ -234,12 +235,11 @@ public class LAppModel : CubismUserModel
     {
         get
         {
-            var list  = new List<(string, int, float)>();
+            var list = new List<(string, int, float)>();
             var count = Model.GetPartCount();
-            for ( var a = 0; a < count; a++ )
+            for (var a = 0; a < count; a++)
             {
-                list.Add((Model.GetPartId(a),
-                          a, Model.GetPartOpacity(a)));
+                list.Add((Model.GetPartId(a), a, Model.GetPartOpacity(a)));
             }
 
             return list;
@@ -287,8 +287,8 @@ public class LAppModel : CubismUserModel
     /// </summary>
     public string IdParamEyeBallY { get; set; }
 
-    public string IdParamBreath { get; set; } = CubismFramework.CubismIdManager
-                                                               .GetId(CubismDefaultParameterId.ParamBreath);
+    public string IdParamBreath { get; set; } =
+        CubismFramework.CubismIdManager.GetId(CubismDefaultParameterId.ParamBreath);
 
     public event Action<LAppModel, string>? Motion;
 
@@ -299,9 +299,9 @@ public class LAppModel : CubismUserModel
         _motions.Clear();
         _expressions.Clear();
 
-        if ( _modelSetting.FileReferences?.Motions.Count > 0 )
+        if (_modelSetting.FileReferences?.Motions.Count > 0)
         {
-            foreach ( var item in _modelSetting.FileReferences.Motions )
+            foreach (var item in _modelSetting.FileReferences.Motions)
             {
                 ReleaseMotionGroup(item.Key);
             }
@@ -311,45 +311,52 @@ public class LAppModel : CubismUserModel
     public void LoadBreath()
     {
         //Breath
-        _breath = new CubismBreath {
-                                       Parameters = [
-                                           new BreathParameterData {
-                                                                       ParameterId = IdParamAngleX,
-                                                                       Offset      = 0.0f,
-                                                                       Peak        = 15.0f,
-                                                                       Cycle       = 6.5345f,
-                                                                       Weight      = 0.5f
-                                                                   },
-                                           new BreathParameterData {
-                                                                       ParameterId = IdParamAngleY,
-                                                                       Offset      = 0.0f,
-                                                                       Peak        = 8.0f,
-                                                                       Cycle       = 3.5345f,
-                                                                       Weight      = 0.5f
-                                                                   },
-                                           new BreathParameterData {
-                                                                       ParameterId = IdParamAngleZ,
-                                                                       Offset      = 0.0f,
-                                                                       Peak        = 10.0f,
-                                                                       Cycle       = 5.5345f,
-                                                                       Weight      = 0.5f
-                                                                   },
-                                           new BreathParameterData {
-                                                                       ParameterId = IdParamBodyAngleX,
-                                                                       Offset      = 0.0f,
-                                                                       Peak        = 4.0f,
-                                                                       Cycle       = 15.5345f,
-                                                                       Weight      = 0.5f
-                                                                   },
-                                           new BreathParameterData {
-                                                                       ParameterId = IdParamBreath,
-                                                                       Offset      = 0.5f,
-                                                                       Peak        = 0.5f,
-                                                                       Cycle       = 3.2345f,
-                                                                       Weight      = 0.5f
-                                                                   }
-                                       ]
-                                   };
+        _breath = new CubismBreath
+        {
+            Parameters =
+            [
+                new BreathParameterData
+                {
+                    ParameterId = IdParamAngleX,
+                    Offset = 0.0f,
+                    Peak = 15.0f,
+                    Cycle = 6.5345f,
+                    Weight = 0.5f,
+                },
+                new BreathParameterData
+                {
+                    ParameterId = IdParamAngleY,
+                    Offset = 0.0f,
+                    Peak = 8.0f,
+                    Cycle = 3.5345f,
+                    Weight = 0.5f,
+                },
+                new BreathParameterData
+                {
+                    ParameterId = IdParamAngleZ,
+                    Offset = 0.0f,
+                    Peak = 10.0f,
+                    Cycle = 5.5345f,
+                    Weight = 0.5f,
+                },
+                new BreathParameterData
+                {
+                    ParameterId = IdParamBodyAngleX,
+                    Offset = 0.0f,
+                    Peak = 4.0f,
+                    Cycle = 15.5345f,
+                    Weight = 0.5f,
+                },
+                new BreathParameterData
+                {
+                    ParameterId = IdParamBreath,
+                    Offset = 0.5f,
+                    Peak = 0.5f,
+                    Cycle = 3.2345f,
+                    Weight = 0.5f,
+                },
+            ],
+        };
     }
 
     /// <summary>
@@ -381,7 +388,7 @@ public class LAppModel : CubismUserModel
 
         //-----------------------------------------------------------------
         Model.LoadParameters(); // 前回セーブされた状態をロード
-        if ( _motionManager.IsFinished() && RandomMotion )
+        if (_motionManager.IsFinished() && RandomMotion)
         {
             // モーションの再生がない場合、待機モーションの中からランダムで再生する
             StartRandomMotion(LAppDefine.MotionGroupIdle, MotionPriority.PriorityIdle);
@@ -399,7 +406,7 @@ public class LAppModel : CubismUserModel
         Opacity = Model.GetModelOpacity();
 
         // まばたき
-        if ( !motionUpdated )
+        if (!motionUpdated)
         {
             // メインモーションの更新がないとき
             // _eyeBlink?.UpdateParameters(Model, deltaTimeSeconds); // 目パチ
@@ -407,7 +414,7 @@ public class LAppModel : CubismUserModel
 
         _expressionManager?.UpdateMotion(Model, deltaTimeSeconds); // 表情でパラメータ更新（相対変化）
 
-        if ( CustomValueUpdate )
+        if (CustomValueUpdate)
         {
             ValueUpdate?.Invoke(this);
         }
@@ -463,13 +470,13 @@ public class LAppModel : CubismUserModel
     /// <param name="matrix">View-Projection行列</param>
     public void Draw(CubismMatrix44 matrix)
     {
-        if ( Model == null )
+        if (Model == null)
         {
             return;
         }
 
         matrix.MultiplyByMatrix(ModelMatrix);
-        if ( Renderer is CubismRenderer_OpenGLES2 ren )
+        if (Renderer is CubismRenderer_OpenGLES2 ren)
         {
             ren.ClearColor = _lapp.BGColor;
             ren.SetMvpMatrix(matrix);
@@ -486,10 +493,14 @@ public class LAppModel : CubismUserModel
     /// <param name="priority">Priority</param>
     /// <param name="onFinishedMotionHandler">The callback function that is called when the motion playback ends. If NULL, it will not be called.</param>
     /// <returns>Returns the identification number of the started motion. Used as an argument for IsFinished() to determine whether an individual motion has finished. Returns "-1" if the motion cannot be started.</returns>
-    public CubismMotionQueueEntry? StartMotion(string name, MotionPriority priority, FinishedMotionCallback? onFinishedMotionHandler = null)
+    public CubismMotionQueueEntry? StartMotion(
+        string name,
+        MotionPriority priority,
+        FinishedMotionCallback? onFinishedMotionHandler = null
+    )
     {
         var temp = name.Split("_");
-        if ( temp.Length != 2 )
+        if (temp.Length != 2)
         {
             throw new Exception("motion name error");
         }
@@ -497,13 +508,18 @@ public class LAppModel : CubismUserModel
         return StartMotion(temp[0], int.Parse(temp[1]), priority, onFinishedMotionHandler);
     }
 
-    public CubismMotionQueueEntry? StartMotion(string group, int no, MotionPriority priority, FinishedMotionCallback? onFinishedMotionHandler = null)
+    public CubismMotionQueueEntry? StartMotion(
+        string group,
+        int no,
+        MotionPriority priority,
+        FinishedMotionCallback? onFinishedMotionHandler = null
+    )
     {
-        if ( priority == MotionPriority.PriorityForce )
+        if (priority == MotionPriority.PriorityForce)
         {
             _motionManager.ReservePriority = priority;
         }
-        else if ( !_motionManager.ReserveMotion(priority) )
+        else if (!_motionManager.ReserveMotion(priority))
         {
             CubismLog.Debug("[Live2D]can't start motion.");
 
@@ -516,39 +532,28 @@ public class LAppModel : CubismUserModel
         var name = $"{group}_{no}";
 
         CubismMotion motion;
-        if ( !_motions.TryGetValue(name, out var value) )
+        if (!_motions.TryGetValue(name, out var value))
         {
             var path = item.File;
             path = Path.GetFullPath(_modelHomeDir + path);
-            if ( !File.Exists(path) )
+            if (!File.Exists(path))
             {
                 return null;
             }
 
             motion = new CubismMotion(path, onFinishedMotionHandler);
-            var fadeTime = item.FadeInTime;
-            if ( fadeTime >= 0.0f )
-            {
-                motion.FadeInSeconds = fadeTime;
-            }
-
-            fadeTime = item.FadeOutTime;
-            if ( fadeTime >= 0.0f )
-            {
-                motion.FadeOutSeconds = fadeTime;
-            }
-
+            ApplyFadeTimes(motion, item);
             motion.SetEffectIds(_eyeBlinkIds, _lipSyncIds);
         }
         else
         {
-            motion                  = (value as CubismMotion)!;
+            motion = (value as CubismMotion)!;
             motion.OnFinishedMotion = onFinishedMotionHandler;
         }
 
         //voice
         var voice = item.Sound;
-        if ( !string.IsNullOrWhiteSpace(voice) )
+        if (!string.IsNullOrWhiteSpace(voice))
         {
             var path = voice;
             path = _modelHomeDir + path;
@@ -567,9 +572,13 @@ public class LAppModel : CubismUserModel
     /// <param name="priority">Priority</param>
     /// <param name="onFinishedMotionHandler">A callback function that is called when the priority motion playback ends. If NULL, it will not be called.</param>
     /// <returns>Returns the identification number of the started motion. Used as an argument for IsFinished() to determine whether an individual motion has finished. Returns "-1" if the motion cannot be started.</returns>
-    public CubismMotionQueueEntry? StartRandomMotion(string group, MotionPriority priority, FinishedMotionCallback? onFinishedMotionHandler = null)
+    public CubismMotionQueueEntry? StartRandomMotion(
+        string group,
+        MotionPriority priority,
+        FinishedMotionCallback? onFinishedMotionHandler = null
+    )
     {
-        if ( _modelSetting.FileReferences?.Motions?.ContainsKey(group) == true )
+        if (_modelSetting.FileReferences?.Motions?.ContainsKey(group) == true)
         {
             var no = _random.Next() % _modelSetting.FileReferences.Motions[group].Count;
 
@@ -578,7 +587,7 @@ public class LAppModel : CubismUserModel
 
         return null;
     }
-    
+
     public bool IsMotionFinished(CubismMotionQueueEntry entry)
     {
         return _motionManager.IsFinished(entry);
@@ -593,7 +602,7 @@ public class LAppModel : CubismUserModel
         var motion = _expressions[expressionID];
         CubismLog.Debug($"[Live2D]expression: [{expressionID}]");
 
-        if ( motion != null )
+        if (motion != null)
         {
             _expressionManager.StartMotionPriority(motion, MotionPriority.PriorityForce);
         }
@@ -608,16 +617,16 @@ public class LAppModel : CubismUserModel
     /// </summary>
     public void SetRandomExpression()
     {
-        if ( _expressions.Count == 0 )
+        if (_expressions.Count == 0)
         {
             return;
         }
 
         var no = _random.Next() % _expressions.Count;
-        var i  = 0;
-        foreach ( var item in _expressions )
+        var i = 0;
+        foreach (var item in _expressions)
         {
-            if ( i == no )
+            if (i == no)
             {
                 SetExpression(item.Key);
 
@@ -649,16 +658,16 @@ public class LAppModel : CubismUserModel
     public bool HitTest(string hitAreaName, float x, float y)
     {
         // 透明時は当たり判定なし。
-        if ( Opacity < 1 )
+        if (Opacity < 1)
         {
             return false;
         }
 
-        if ( _modelSetting.HitAreas?.Count > 0 )
+        if (_modelSetting.HitAreas?.Count > 0)
         {
-            for ( var i = 0; i < _modelSetting.HitAreas?.Count; i++ )
+            for (var i = 0; i < _modelSetting.HitAreas?.Count; i++)
             {
-                if ( _modelSetting.HitAreas[i].Name == hitAreaName )
+                if (_modelSetting.HitAreas[i].Name == hitAreaName)
                 {
                     var id = CubismFramework.CubismIdManager.GetId(_modelSetting.HitAreas[i].Id);
 
@@ -675,7 +684,7 @@ public class LAppModel : CubismUserModel
     /// </summary>
     protected void DoDraw()
     {
-        if ( Model == null )
+        if (Model == null)
         {
             return;
         }
@@ -691,7 +700,7 @@ public class LAppModel : CubismUserModel
     private void ReleaseMotionGroup(string group)
     {
         var list = _modelSetting.FileReferences.Motions[group];
-        for ( var i = 0; i < list.Count; i++ )
+        for (var i = 0; i < list.Count; i++)
         {
             var voice = list[i].Sound;
         }
@@ -702,24 +711,31 @@ public class LAppModel : CubismUserModel
     /// </summary>
     private void SetupTextures()
     {
-        if ( _modelSetting.FileReferences?.Textures?.Count > 0 )
+        if (_modelSetting.FileReferences?.Textures?.Count > 0)
         {
-            for ( var modelTextureNumber = 0; modelTextureNumber < _modelSetting.FileReferences.Textures.Count; modelTextureNumber++ )
+            for (
+                var modelTextureNumber = 0;
+                modelTextureNumber < _modelSetting.FileReferences.Textures.Count;
+                modelTextureNumber++
+            )
             {
                 //OpenGLのテクスチャユニットにテクスチャをロードする
                 var texturePath = _modelSetting.FileReferences.Textures[modelTextureNumber];
-                if ( string.IsNullOrWhiteSpace(texturePath) )
+                if (string.IsNullOrWhiteSpace(texturePath))
                 {
                     continue;
                 }
 
                 texturePath = Path.GetFullPath(_modelHomeDir + texturePath);
 
-                var texture        = _lapp.TextureManager.CreateTextureFromPngFile(texturePath);
+                var texture = _lapp.TextureManager.CreateTextureFromPngFile(texturePath);
                 var glTextueNumber = texture.ID;
 
                 //OpenGL
-                (Renderer as CubismRenderer_OpenGLES2)?.BindTexture(modelTextureNumber, glTextueNumber);
+                (Renderer as CubismRenderer_OpenGLES2)?.BindTexture(
+                    modelTextureNumber,
+                    glTextueNumber
+                );
             }
         }
     }
@@ -734,7 +750,7 @@ public class LAppModel : CubismUserModel
         // グループに登録されているモーション数を取得
         var list = _modelSetting.FileReferences.Motions[group];
 
-        for ( var i = 0; i < list.Count; i++ )
+        for (var i = 0; i < list.Count; i++)
         {
             var item = list[i];
             //ex) idle_0
@@ -745,23 +761,10 @@ public class LAppModel : CubismUserModel
             // モーションデータの読み込み
             var tmpMotion = new CubismMotion(path);
 
-            // フェードインの時間を取得
-            var fadeTime = item.FadeInTime;
-            if ( fadeTime >= 0.0f )
-            {
-                tmpMotion.FadeInSeconds = fadeTime;
-            }
-
-            // フェードアウトの時間を取得
-            fadeTime = item.FadeOutTime;
-            if ( fadeTime >= 0.0f )
-            {
-                tmpMotion.FadeOutSeconds = fadeTime;
-            }
-
+            ApplyFadeTimes(tmpMotion, item);
             tmpMotion.SetEffectIds(_eyeBlinkIds, _lipSyncIds);
 
-            if ( _motions.ContainsKey(name) )
+            if (_motions.ContainsKey(name))
             {
                 _motions[name] = tmpMotion;
             }
@@ -769,6 +772,22 @@ public class LAppModel : CubismUserModel
             {
                 _motions.Add(name, tmpMotion);
             }
+        }
+    }
+
+    private static void ApplyFadeTimes(
+        CubismMotion motion,
+        ModelSettingObj.FileReference.Motion item
+    )
+    {
+        if (item.FadeInTime >= 0.0f)
+        {
+            motion.FadeInSeconds = item.FadeInTime;
+        }
+
+        if (item.FadeOutTime >= 0.0f)
+        {
+            motion.FadeOutSeconds = item.FadeOutTime;
         }
     }
 }

@@ -13,4 +13,6 @@ public record LlmOptions
     public string TextEndpoint { get; set; } = string.Empty;
 
     public string VisionEndpoint { get; set; } = string.Empty;
+
+    public bool VisionEnabled { get; set; } = false;
 }

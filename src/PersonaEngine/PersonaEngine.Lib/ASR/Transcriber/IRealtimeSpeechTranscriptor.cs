@@ -4,5 +4,8 @@ namespace PersonaEngine.Lib.ASR.Transcriber;
 
 public interface IRealtimeSpeechTranscriptor
 {
-    IAsyncEnumerable<IRealtimeRecognitionEvent> TranscribeAsync(IAwaitableAudioSource source, CancellationToken cancellationToken = default);
+    IAsyncEnumerable<IRealtimeRecognitionEvent> TranscribeAsync(
+        IAwaitableAudioSource source,
+        CancellationToken cancellationToken = default
+    );
 }

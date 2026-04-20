@@ -2,9 +2,7 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
-
 using Microsoft.Extensions.Logging;
-
 using PersonaEngine.Lib.ASR.VAD;
 using PersonaEngine.Lib.Audio;
 
@@ -12,309 +10,330 @@ namespace PersonaEngine.Lib.ASR.Transcriber;
 
 internal class RealtimeTranscriptor : IRealtimeSpeechTranscriptor, IAsyncDisposable
 {
-    private readonly object cacheLock = new();
+    private readonly ILogger<RealtimeTranscriptor> _logger;
 
-    private readonly ILogger<RealtimeTranscriptor> logger;
+    private readonly RealtimeSpeechTranscriptorOptions _options;
 
-    private readonly RealtimeSpeechTranscriptorOptions options;
+    private readonly RealtimeOptions _realtimeOptions;
 
-    private readonly RealtimeOptions realtimeOptions;
+    private readonly ISpeechTranscriptorFactory? _recognizingSpeechTranscriptorFactory;
 
-    private readonly ISpeechTranscriptorFactory? recognizingSpeechTranscriptorFactory;
+    private readonly ISpeechTranscriptorFactory _speechTranscriptorFactory;
 
-    private readonly ISpeechTranscriptorFactory speechTranscriptorFactory;
+    private readonly IVadDetector _vadDetector;
 
-    private readonly Dictionary<string, ISpeechTranscriptor> transcriptorCache;
-
-    private readonly IVadDetector vadDetector;
+    private bool _isDisposed;
 
     private TimeSpan _lastDuration = TimeSpan.Zero;
 
     private TimeSpan _processedDuration = TimeSpan.Zero;
 
-    private bool isDisposed;
-
     public RealtimeTranscriptor(
-        ISpeechTranscriptorFactory        speechTranscriptorFactory,
-        IVadDetector                      vadDetector,
-        ISpeechTranscriptorFactory?       recognizingSpeechTranscriptorFactory,
+        ISpeechTranscriptorFactory speechTranscriptorFactory,
+        IVadDetector vadDetector,
+        ISpeechTranscriptorFactory? recognizingSpeechTranscriptorFactory,
         RealtimeSpeechTranscriptorOptions options,
-        RealtimeOptions                   realtimeOptions,
-        ILogger<RealtimeTranscriptor>     logger)
+        RealtimeOptions realtimeOptions,
+        ILogger<RealtimeTranscriptor> logger
+    )
     {
-        this.speechTranscriptorFactory            = speechTranscriptorFactory;
-        this.vadDetector                          = vadDetector;
-        this.recognizingSpeechTranscriptorFactory = recognizingSpeechTranscriptorFactory;
-        this.options                              = options;
-        this.realtimeOptions                      = realtimeOptions;
-        this.logger                               = logger;
-        transcriptorCache                         = new Dictionary<string, ISpeechTranscriptor>();
-
-        logger.LogDebug("RealtimeTranscriptor initialized with options: {@Options}, realtime options: {@RealtimeOptions}",
-                        options, realtimeOptions);
+        _speechTranscriptorFactory = speechTranscriptorFactory;
+        _vadDetector = vadDetector;
+        _recognizingSpeechTranscriptorFactory = recognizingSpeechTranscriptorFactory;
+        _options = options;
+        _realtimeOptions = realtimeOptions;
+        _logger = logger;
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        if ( isDisposed )
+        if (_isDisposed)
         {
-            return;
+            return ValueTask.CompletedTask;
         }
 
-        // lock (cacheLock)
-        // {
-        logger.LogInformation("Disposing {Count} cached transcriptors", transcriptorCache.Count);
-        foreach ( var transcriptor in transcriptorCache.Values )
-        {
-            await transcriptor.DisposeAsync();
-        }
+        _isDisposed = true;
 
-        transcriptorCache.Clear();
-        // }
-
-        isDisposed = true;
-        GC.SuppressFinalize(this);
+        return ValueTask.CompletedTask;
     }
 
     public async IAsyncEnumerable<IRealtimeRecognitionEvent> TranscribeAsync(
-        IAwaitableAudioSource                      source,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        IAwaitableAudioSource source,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
     {
-        if ( isDisposed )
-        {
-            throw new ObjectDisposedException(nameof(RealtimeTranscriptor));
-        }
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
 
-        var          stopwatch        = Stopwatch.StartNew();
-        var          promptBuilder    = new StringBuilder(options.Prompt);
+        var promptBuilder = new StringBuilder(_options.Prompt);
         CultureInfo? detectedLanguage = null;
 
         await source.WaitForInitializationAsync(cancellationToken);
         var sessionId = Guid.NewGuid().ToString();
 
-        logger.LogInformation("Starting transcription session {SessionId}", sessionId);
+        _logger.LogInformation("Starting transcription session {SessionId}", sessionId);
 
         yield return new RealtimeSessionStarted(sessionId);
 
-        try
+        while (!source.IsFlushed)
         {
-            while ( !source.IsFlushed )
-            {
-                var currentDuration = source.Duration;
+            var currentDuration = source.Duration;
 
-                if ( currentDuration == _lastDuration )
+            if (currentDuration == _lastDuration)
+            {
+                await source.WaitForNewSamplesAsync(
+                    _lastDuration + _realtimeOptions.ProcessingInterval,
+                    cancellationToken
+                );
+
+                continue;
+            }
+
+            _logger.LogTrace(
+                "Processing new audio segment: Current={Current}ms, Last={Last}ms, Delta={Delta}ms",
+                currentDuration.TotalMilliseconds,
+                _lastDuration.TotalMilliseconds,
+                (currentDuration - _lastDuration).TotalMilliseconds
+            );
+
+            _lastDuration = currentDuration;
+            var slicedSource = new SliceAudioSource(
+                source,
+                _processedDuration,
+                currentDuration - _processedDuration
+            );
+
+            VadSegment? lastNonFinalSegment = null;
+            VadSegment? recognizingSegment = null;
+
+            await foreach (
+                var segment in _vadDetector.DetectSegmentsAsync(slicedSource, cancellationToken)
+            )
+            {
+                if (segment.IsIncomplete)
                 {
-                    await source.WaitForNewSamplesAsync(_lastDuration + realtimeOptions.ProcessingInterval, cancellationToken);
+                    recognizingSegment = segment;
 
                     continue;
                 }
 
-                logger.LogTrace("Processing new audio segment: Current={Current}ms, Last={Last}ms, Delta={Delta}ms",
-                                currentDuration.TotalMilliseconds,
-                                _lastDuration.TotalMilliseconds,
-                                (currentDuration - _lastDuration).TotalMilliseconds);
+                lastNonFinalSegment = segment;
 
-                _lastDuration = currentDuration;
-                var segmentStopwatch = Stopwatch.StartNew();
-                var slicedSource     = new SliceAudioSource(source, _processedDuration, currentDuration - _processedDuration);
+                _logger.LogTrace(
+                    "Processing VAD segment: Start={Start}ms, Duration={Duration}ms",
+                    segment.StartTime.TotalMilliseconds,
+                    segment.Duration.TotalMilliseconds
+                );
 
-                VadSegment? lastNonFinalSegment = null;
-                VadSegment? recognizingSegment  = null;
+                var transcribeStopwatch = Stopwatch.StartNew();
+                var transcribingEvents = TranscribeSegments(
+                    _speechTranscriptorFactory,
+                    source,
+                    _processedDuration,
+                    segment.StartTime,
+                    segment.Duration,
+                    promptBuilder,
+                    detectedLanguage,
+                    cancellationToken
+                );
 
-                await foreach ( var segment in vadDetector.DetectSegmentsAsync(slicedSource, cancellationToken) )
+                await foreach (var segmentData in transcribingEvents)
                 {
-                    if ( segment.IsIncomplete )
+                    if (_options.AutodetectLanguageOnce)
                     {
-                        recognizingSegment = segment;
-
-                        continue;
+                        detectedLanguage = segmentData.Language;
                     }
 
-                    var segmentEnd = segment.StartTime + segment.Duration;
-                    lastNonFinalSegment = segment;
-
-                    logger.LogDebug("Processing VAD segment: Start={Start}ms, Duration={Duration}ms",
-                                    segment.StartTime.TotalMilliseconds,
-                                    segment.Duration.TotalMilliseconds);
-
-                    var transcribeStopwatch = Stopwatch.StartNew();
-                    var transcribingEvents = TranscribeSegments(
-                                                                speechTranscriptorFactory,
-                                                                source,
-                                                                _processedDuration,
-                                                                segment.StartTime,
-                                                                segment.Duration,
-                                                                promptBuilder,
-                                                                detectedLanguage,
-                                                                sessionId,
-                                                                cancellationToken);
-
-                    await foreach ( var segmentData in transcribingEvents )
+                    if (_realtimeOptions.ConcatenateSegmentsToPrompt)
                     {
-                        if ( options.AutodetectLanguageOnce )
-                        {
-                            detectedLanguage = segmentData.Language;
-                        }
-
-                        if ( realtimeOptions.ConcatenateSegmentsToPrompt )
-                        {
-                            promptBuilder.Append(segmentData.Text);
-                        }
-
-                        logger.LogDebug(
-                                        "Segment recognized: SessionId={SessionId}, Duration={Duration}ms, ProcessingTime={ProcessingTime}ms",
-                                        sessionId,
-                                        segmentData.Duration.TotalMilliseconds,
-                                        transcribeStopwatch.ElapsedMilliseconds);
-
-                        yield return new RealtimeSegmentRecognized(segmentData, sessionId);
+                        promptBuilder.Append(segmentData.Text);
                     }
+
+                    _logger.LogDebug(
+                        "Segment recognized: SessionId={SessionId}, Duration={Duration}ms, ProcessingTime={ProcessingTime}ms",
+                        sessionId,
+                        segmentData.Duration.TotalMilliseconds,
+                        transcribeStopwatch.ElapsedMilliseconds
+                    );
+
+                    yield return new RealtimeSegmentRecognized(
+                        segmentData,
+                        sessionId,
+                        transcribeStopwatch.Elapsed
+                    );
                 }
-
-                if ( options.IncludeSpeechRecogizingEvents && recognizingSegment != null )
-                {
-                    logger.LogDebug("Processing recognizing segment: Duration={Duration}ms",
-                                    recognizingSegment.Duration.TotalMilliseconds);
-
-                    var transcribingEvents = TranscribeSegments(
-                                                                recognizingSpeechTranscriptorFactory ?? speechTranscriptorFactory,
-                                                                source,
-                                                                _processedDuration,
-                                                                recognizingSegment.StartTime,
-                                                                recognizingSegment.Duration,
-                                                                promptBuilder,
-                                                                detectedLanguage,
-                                                                sessionId,
-                                                                cancellationToken);
-
-                    await foreach ( var segment in transcribingEvents )
-                    {
-                        yield return new RealtimeSegmentRecognizing(segment, sessionId);
-                    }
-                }
-
-                HandleSegmentProcessing(source, ref _processedDuration, lastNonFinalSegment, recognizingSegment, _lastDuration);
-
-                logger.LogTrace("Segment processing completed in {ElapsedTime}ms",
-                                segmentStopwatch.ElapsedMilliseconds);
             }
 
-            var finalStopwatch = Stopwatch.StartNew();
-            var lastEvents = TranscribeSegments(
-                                                speechTranscriptorFactory,
-                                                source,
-                                                _processedDuration,
-                                                TimeSpan.Zero,
-                                                source.Duration - _processedDuration,
-                                                promptBuilder,
-                                                detectedLanguage,
-                                                sessionId,
-                                                cancellationToken);
-
-            await foreach ( var segmentData in lastEvents )
+            if (_options.IncludeSpeechRecogizingEvents && recognizingSegment != null)
             {
-                if ( realtimeOptions.ConcatenateSegmentsToPrompt )
-                {
-                    promptBuilder.Append(segmentData.Text);
-                }
+                _logger.LogDebug(
+                    "Processing recognizing segment: Duration={Duration}ms",
+                    recognizingSegment.Duration.TotalMilliseconds
+                );
 
-                yield return new RealtimeSegmentRecognized(segmentData, sessionId);
+                var transcribeStopwatch = Stopwatch.StartNew();
+                var transcribingEvents = TranscribeSegments(
+                    _recognizingSpeechTranscriptorFactory ?? _speechTranscriptorFactory,
+                    source,
+                    _processedDuration,
+                    recognizingSegment.StartTime,
+                    recognizingSegment.Duration,
+                    promptBuilder,
+                    detectedLanguage,
+                    cancellationToken
+                );
+
+                await foreach (var segment in transcribingEvents)
+                {
+                    yield return new RealtimeSegmentRecognizing(
+                        segment,
+                        sessionId,
+                        transcribeStopwatch.Elapsed
+                    );
+                }
             }
 
-            logger.LogInformation(
-                                  "Transcription session completed: SessionId={SessionId}, TotalDuration={TotalDuration}ms, TotalProcessingTime={TotalTime}ms",
-                                  sessionId,
-                                  source.Duration.TotalMilliseconds,
-                                  stopwatch.ElapsedMilliseconds);
+            HandleSegmentProcessing(
+                source,
+                ref _processedDuration,
+                lastNonFinalSegment,
+                recognizingSegment,
+                _lastDuration
+            );
+        }
 
-            yield return new RealtimeSessionStopped(sessionId);
-        }
-        finally
+        var transcribeStopwatchLast = Stopwatch.StartNew();
+        var lastEvents = TranscribeSegments(
+            _speechTranscriptorFactory,
+            source,
+            _processedDuration,
+            TimeSpan.Zero,
+            source.Duration - _processedDuration,
+            promptBuilder,
+            detectedLanguage,
+            cancellationToken
+        );
+
+        await foreach (var segmentData in lastEvents)
         {
-            await CleanupSessionAsync(sessionId);
+            if (_realtimeOptions.ConcatenateSegmentsToPrompt)
+            {
+                promptBuilder.Append(segmentData.Text);
+            }
+
+            yield return new RealtimeSegmentRecognized(
+                segmentData,
+                sessionId,
+                transcribeStopwatchLast.Elapsed
+            );
         }
+
+        yield return new RealtimeSessionStopped(sessionId);
     }
 
     private void HandleSegmentProcessing(
         IAudioSource source,
         ref TimeSpan processedDuration,
-        VadSegment?  lastNonFinalSegment,
-        VadSegment?  recognizingSegment,
-        TimeSpan     lastDuration)
+        VadSegment? lastNonFinalSegment,
+        VadSegment? recognizingSegment,
+        TimeSpan lastDuration
+    )
     {
-        if ( lastNonFinalSegment != null )
+        if (lastNonFinalSegment != null)
         {
             var skippingDuration = lastNonFinalSegment.StartTime + lastNonFinalSegment.Duration;
             processedDuration += skippingDuration;
 
-            if ( source is IDiscardableAudioSource discardableSource )
+            if (source is IDiscardableAudioSource discardableSource)
             {
-                var lastSegmentEndFrameIndex = (int)(skippingDuration.TotalMilliseconds * source.SampleRate / 1000d) - 1;
+                var lastSegmentEndFrameIndex =
+                    (int)(skippingDuration.TotalMilliseconds * source.SampleRate / 1000d) - 1;
+
                 discardableSource.DiscardFrames(lastSegmentEndFrameIndex);
-                logger.LogTrace("Discarded frames up to index {FrameIndex}", lastSegmentEndFrameIndex);
+                _logger.LogTrace(
+                    "Discarded frames up to index {FrameIndex}",
+                    lastSegmentEndFrameIndex
+                );
             }
         }
-        else if ( recognizingSegment == null )
+        else if (recognizingSegment == null)
         {
-            if ( lastDuration - processedDuration > realtimeOptions.SilenceDiscardInterval )
+            if (lastDuration - processedDuration > _realtimeOptions.SilenceDiscardInterval)
             {
-                var silenceDurationToDiscard = TimeSpan.FromTicks(realtimeOptions.SilenceDiscardInterval.Ticks / 2);
+                var silenceDurationToDiscard = TimeSpan.FromTicks(
+                    _realtimeOptions.SilenceDiscardInterval.Ticks / 2
+                );
+
                 processedDuration += silenceDurationToDiscard;
 
-                if ( source is IDiscardableAudioSource discardableSource )
+                if (source is IDiscardableAudioSource discardableSource)
                 {
-                    var halfSilenceIndex = (int)(silenceDurationToDiscard.TotalMilliseconds * source.SampleRate / 1000d) - 1;
+                    var halfSilenceIndex =
+                        (int)(
+                            silenceDurationToDiscard.TotalMilliseconds * source.SampleRate / 1000d
+                        ) - 1;
+
                     discardableSource.DiscardFrames(halfSilenceIndex);
-                    logger.LogTrace("Discarded silence frames up to index {FrameIndex}", halfSilenceIndex);
+                    _logger.LogTrace(
+                        "Discarded silence frames up to index {FrameIndex}",
+                        halfSilenceIndex
+                    );
                 }
             }
         }
     }
 
     private async IAsyncEnumerable<TranscriptSegment> TranscribeSegments(
-        ISpeechTranscriptorFactory                 transcriptorFactory,
-        IAudioSource                               source,
-        TimeSpan                                   processedDuration,
-        TimeSpan                                   startTime,
-        TimeSpan                                   duration,
-        StringBuilder                              promptBuilder,
-        CultureInfo?                               detectedLanguage,
-        string                                     sessionId,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
+        ISpeechTranscriptorFactory transcriptorFactory,
+        IAudioSource source,
+        TimeSpan processedDuration,
+        TimeSpan startTime,
+        TimeSpan duration,
+        StringBuilder promptBuilder,
+        CultureInfo? detectedLanguage,
+        [EnumeratorCancellation] CancellationToken cancellationToken
+    )
     {
-        if ( duration < realtimeOptions.MinTranscriptDuration )
+        if (duration < _realtimeOptions.MinTranscriptDuration)
         {
             yield break;
         }
 
         startTime += processedDuration;
-        var paddedStart = startTime - realtimeOptions.PaddingDuration;
+        var paddedStart = startTime - _realtimeOptions.PaddingDuration;
 
-        if ( paddedStart < processedDuration )
+        if (paddedStart < processedDuration)
         {
             paddedStart = processedDuration;
         }
 
-        var paddedDuration = duration + realtimeOptions.PaddingDuration;
+        var paddedDuration = duration + _realtimeOptions.PaddingDuration;
 
-        using IAudioSource paddedSource = paddedDuration < realtimeOptions.MinDurationWithPadding
-                                              ? GetSilenceAddedSource(source, paddedStart, paddedDuration)
-                                              : new SliceAudioSource(source, paddedStart, paddedDuration);
+        using IAudioSource paddedSource =
+            paddedDuration < _realtimeOptions.MinDurationWithPadding
+                ? GetSilenceAddedSource(source, paddedStart, paddedDuration)
+                : new SliceAudioSource(source, paddedStart, paddedDuration);
 
-        var languageAutodetect = options.LanguageAutoDetect;
-        var language           = options.Language;
+        var languageAutodetect = _options.LanguageAutoDetect;
+        var language = _options.Language;
 
-        if ( languageAutodetect && options.AutodetectLanguageOnce && detectedLanguage != null )
+        if (languageAutodetect && _options.AutodetectLanguageOnce && detectedLanguage != null)
         {
             languageAutodetect = false;
-            language           = detectedLanguage;
+            language = detectedLanguage;
         }
 
-        var currentOptions = options with { Prompt = realtimeOptions.ConcatenateSegmentsToPrompt ? promptBuilder.ToString() : options.Prompt, LanguageAutoDetect = languageAutodetect, Language = language };
+        var currentOptions = _options with
+        {
+            Prompt = _realtimeOptions.ConcatenateSegmentsToPrompt
+                ? promptBuilder.ToString()
+                : _options.Prompt,
+            LanguageAutoDetect = languageAutodetect,
+            Language = language,
+        };
 
-        var transcriptor = GetOrCreateTranscriptor(transcriptorFactory, currentOptions, sessionId);
+        await using var transcriptor = transcriptorFactory.Create(currentOptions);
 
-        await foreach ( var segment in transcriptor.TranscribeAsync(paddedSource, cancellationToken) )
+        await foreach (var segment in transcriptor.TranscribeAsync(paddedSource, cancellationToken))
         {
             segment.StartTime += processedDuration;
 
@@ -322,52 +341,35 @@ internal class RealtimeTranscriptor : IRealtimeSpeechTranscriptor, IAsyncDisposa
         }
     }
 
-    private ISpeechTranscriptor GetOrCreateTranscriptor(
-        ISpeechTranscriptorFactory        factory,
-        RealtimeSpeechTranscriptorOptions currentOptions,
-        string                            sessionId)
+    private ConcatAudioSource GetSilenceAddedSource(
+        IAudioSource source,
+        TimeSpan paddedStart,
+        TimeSpan paddedDuration
+    )
     {
-        var cacheKey = $"{sessionId}_{factory.GetHashCode()}";
+        var silenceDuration = new TimeSpan(
+            (_realtimeOptions.MinDurationWithPadding.Ticks - paddedDuration.Ticks) / 2
+        );
 
-        lock (cacheLock)
-        {
-            if ( !transcriptorCache.TryGetValue(cacheKey, out var transcriptor) )
-            {
-                transcriptor = factory.Create(currentOptions);
-                transcriptorCache.Add(cacheKey, transcriptor);
-            }
+        var preSilence = new SilenceAudioSource(
+            silenceDuration,
+            source.SampleRate,
+            source.Metadata,
+            source.ChannelCount,
+            source.BitsPerSample
+        );
 
-            return transcriptor;
-        }
-    }
+        var postSilence = new SilenceAudioSource(
+            silenceDuration,
+            source.SampleRate,
+            source.Metadata,
+            source.ChannelCount,
+            source.BitsPerSample
+        );
 
-    private async ValueTask CleanupSessionAsync(string sessionId)
-    {
-        // lock (cacheLock)
-        // {
-        var keysToRemove = transcriptorCache.Keys
-                                            .Where(k => k.StartsWith($"{sessionId}_"))
-                                            .ToList();
-
-        foreach ( var key in keysToRemove )
-        {
-            if ( !transcriptorCache.TryGetValue(key, out var transcriptor) )
-            {
-                continue;
-            }
-
-            await transcriptor.DisposeAsync();
-            transcriptorCache.Remove(key);
-        }
-        // }
-    }
-
-    private ConcatAudioSource GetSilenceAddedSource(IAudioSource source, TimeSpan paddedStart, TimeSpan paddedDuration)
-    {
-        var silenceDuration = new TimeSpan((realtimeOptions.MinDurationWithPadding.Ticks - paddedDuration.Ticks) / 2);
-        var preSilence      = new SilenceAudioSource(silenceDuration, source.SampleRate, source.Metadata, source.ChannelCount, source.BitsPerSample);
-        var postSilence     = new SilenceAudioSource(silenceDuration, source.SampleRate, source.Metadata, source.ChannelCount, source.BitsPerSample);
-
-        return new ConcatAudioSource([preSilence, new SliceAudioSource(source, paddedStart, paddedDuration), postSilence], source.Metadata);
+        return new ConcatAudioSource(
+            [preSilence, new SliceAudioSource(source, paddedStart, paddedDuration), postSilence],
+            source.Metadata
+        );
     }
 }

@@ -2,10 +2,10 @@
 
 namespace PersonaEngine.Lib.Core.Conversation.Implementations.Strategies;
 
- public class AllowBargeInStrategy : IBargeInStrategy
+public class AllowBargeInStrategy : IBargeInStrategy
+{
+    public bool ShouldAllowBargeIn(BargeInContext context)
     {
-        public bool ShouldAllowBargeIn(BargeInContext context)
-        {
-            return true;
-        }
+        return true;
     }
+}

@@ -50,18 +50,18 @@ public class MergedMemoryChunks
     public bool TrySkip(uint count)
     {
         var bytesToSkip = count;
-        while ( bytesToSkip > 0 )
+        while (bytesToSkip > 0)
         {
             var positionInCurrentChunk = Position - AbsolutePositionOfCurrentChunk;
-            var currentChunk           = chunks[currentChunkIndex];
-            if ( positionInCurrentChunk + bytesToSkip <= currentChunk.Length )
+            var currentChunk = chunks[currentChunkIndex];
+            if (positionInCurrentChunk + bytesToSkip <= currentChunk.Length)
             {
                 Position += bytesToSkip;
 
                 return true;
             }
 
-            if ( currentChunkIndex + 1 == chunks.Count )
+            if (currentChunkIndex + 1 == chunks.Count)
             {
                 return false;
             }
@@ -70,9 +70,9 @@ public class MergedMemoryChunks
 
             currentChunkIndex++;
 
-            Position                       += remainingInCurrentChunk;
-            AbsolutePositionOfCurrentChunk =  Position;
-            bytesToSkip                    -= (uint)remainingInCurrentChunk;
+            Position += remainingInCurrentChunk;
+            AbsolutePositionOfCurrentChunk = Position;
+            bytesToSkip -= (uint)remainingInCurrentChunk;
         }
 
         return true;
@@ -83,9 +83,9 @@ public class MergedMemoryChunks
     /// </summary>
     public void RestartRead()
     {
-        currentChunkIndex              = 0;
+        currentChunkIndex = 0;
         AbsolutePositionOfCurrentChunk = 0;
-        Position                       = 0;
+        Position = 0;
     }
 
     /// <summary>
@@ -97,12 +97,12 @@ public class MergedMemoryChunks
     public ReadOnlyMemory<byte> GetChunk(int size)
     {
         var positionInCurrentChunk = (int)(Position - AbsolutePositionOfCurrentChunk);
-        var currentChunk           = chunks[currentChunkIndex];
+        var currentChunk = chunks[currentChunkIndex];
         // First, we try to just slice the current chunk if possible
-        if ( currentChunk.Length >= positionInCurrentChunk + size )
+        if (currentChunk.Length >= positionInCurrentChunk + size)
         {
             Position += size;
-            if ( currentChunk.Length == positionInCurrentChunk + size )
+            if (currentChunk.Length == positionInCurrentChunk + size)
             {
                 currentChunkIndex++;
                 AbsolutePositionOfCurrentChunk = Position;
@@ -112,28 +112,33 @@ public class MergedMemoryChunks
         }
 
         // We cannot slice it, so we need to compose it
-        var buffer        = new byte[size];
-        var bufferIndex   = 0;
+        var buffer = new byte[size];
+        var bufferIndex = 0;
         var remainingSize = size;
-        while ( remainingSize > 0 )
+        while (remainingSize > 0)
         {
-            var currentChunkAddressable = currentChunk.Slice(positionInCurrentChunk, Math.Min(remainingSize, currentChunk.Length - positionInCurrentChunk));
+            var currentChunkAddressable = currentChunk.Slice(
+                positionInCurrentChunk,
+                Math.Min(remainingSize, currentChunk.Length - positionInCurrentChunk)
+            );
 
             remainingSize -= currentChunkAddressable.Length;
-            Position      += currentChunkAddressable.Length;
+            Position += currentChunkAddressable.Length;
             currentChunkAddressable.CopyTo(buffer.AsMemory(bufferIndex));
             bufferIndex += currentChunkAddressable.Length;
-            if ( remainingSize > 0 && currentChunkIndex >= chunks.Count )
+            if (remainingSize > 0 && currentChunkIndex >= chunks.Count)
             {
-                throw new InvalidOperationException($"Not enough data was available in the chunks to read {size} bytes.");
+                throw new InvalidOperationException(
+                    $"Not enough data was available in the chunks to read {size} bytes."
+                );
             }
 
-            if ( remainingSize > 0 )
+            if (remainingSize > 0)
             {
                 positionInCurrentChunk = 0;
                 currentChunkIndex++;
                 AbsolutePositionOfCurrentChunk = Position;
-                currentChunk                   = chunks[currentChunkIndex];
+                currentChunk = chunks[currentChunkIndex];
             }
         }
 
@@ -206,9 +211,9 @@ public class MergedMemoryChunks
     /// <returns></returns>
     public byte[] ToArray()
     {
-        var buffer      = new byte[Length];
+        var buffer = new byte[Length];
         var bufferIndex = 0;
-        foreach ( var chunk in chunks )
+        foreach (var chunk in chunks)
         {
             chunk.Span.CopyTo(buffer.AsSpan(bufferIndex));
             bufferIndex += chunk.Length;

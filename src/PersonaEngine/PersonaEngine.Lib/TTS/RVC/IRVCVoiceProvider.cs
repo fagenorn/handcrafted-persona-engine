@@ -3,19 +3,15 @@
 public interface IRVCVoiceProvider : IAsyncDisposable
 {
     /// <summary>
-    ///     Gets the fullpath to the voice model
+    ///     Gets voice model info including path and output sample rate.
     /// </summary>
     /// <param name="voiceId">Voice identifier</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Voice model path</returns>
-    Task<string> GetVoiceAsync(
-        string            voiceId,
-        CancellationToken cancellationToken = default);
+    /// <returns>Voice model metadata</returns>
+    RvcVoiceInfo GetVoice(string voiceId);
 
     /// <summary>
     ///     Gets all available voice IDs
     /// </summary>
     /// <returns>List of voice IDs</returns>
-    Task<IReadOnlyList<string>> GetAvailableVoicesAsync(
-        CancellationToken cancellationToken = default);
+    IReadOnlyList<string> GetAvailableVoices();
 }

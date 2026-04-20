@@ -40,24 +40,28 @@ public static class SampleSerializer
     /// <summary>
     ///     Serializes the float samples into a PCM byte buffer.
     /// </summary>
-    public static void Serialize(ReadOnlyMemory<float> samples, Memory<byte> buffer, ushort bitsPerSample)
+    public static void Serialize(
+        ReadOnlyMemory<float> samples,
+        Memory<byte> buffer,
+        ushort bitsPerSample
+    )
     {
         var bytesPerSample = bitsPerSample / 8;
-        var totalSamples   = samples.Length;
-        var totalBytes     = totalSamples * bytesPerSample;
+        var totalSamples = samples.Length;
+        var totalBytes = totalSamples * bytesPerSample;
 
-        if ( buffer.Length < totalBytes )
+        if (buffer.Length < totalBytes)
         {
             throw new ArgumentException("Buffer too small to hold the serialized data.");
         }
 
         var samplesSpan = samples.Span;
-        var bufferSpan  = buffer.Span;
+        var bufferSpan = buffer.Span;
 
         var sampleIndex = 0;
         var bufferIndex = 0;
 
-        while ( sampleIndex < totalSamples )
+        while (sampleIndex < totalSamples)
         {
             var sampleValue = samplesSpan[sampleIndex];
             WriteSample(bufferSpan, bufferIndex, sampleValue, bitsPerSample);
@@ -69,23 +73,29 @@ public static class SampleSerializer
     /// <summary>
     ///     Deserializes the PCM byte buffer into float samples.
     /// </summary>
-    public static void Deserialize(ReadOnlyMemory<byte> buffer, Memory<float> samples, ushort bitsPerSample)
+    public static void Deserialize(
+        ReadOnlyMemory<byte> buffer,
+        Memory<float> samples,
+        ushort bitsPerSample
+    )
     {
         var bytesPerSample = bitsPerSample / 8;
-        var totalSamples   = buffer.Length / bytesPerSample;
+        var totalSamples = buffer.Length / bytesPerSample;
 
-        if ( samples.Length < totalSamples )
+        if (samples.Length < totalSamples)
         {
-            throw new ArgumentException("Samples buffer is too small to hold the deserialized data.");
+            throw new ArgumentException(
+                "Samples buffer is too small to hold the deserialized data."
+            );
         }
 
-        var bufferSpan  = buffer.Span;
+        var bufferSpan = buffer.Span;
         var samplesSpan = samples.Span;
 
         var sampleIndex = 0;
         var bufferIndex = 0;
 
-        while ( bufferIndex < bufferSpan.Length )
+        while (bufferIndex < bufferSpan.Length)
         {
             var sampleValue = ReadSample(bufferSpan, ref bufferIndex, bitsPerSample);
             samplesSpan[sampleIndex++] = sampleValue;
@@ -102,7 +112,7 @@ public static class SampleSerializer
 
         float sampleValue;
 
-        switch ( bitsPerSample )
+        switch (bitsPerSample)
         {
             case 8:
                 var sampleByte = span[index];
@@ -135,7 +145,9 @@ public static class SampleSerializer
                 break;
 
             default:
-                throw new NotSupportedException($"Bits per sample {bitsPerSample} is not supported.");
+                throw new NotSupportedException(
+                    $"Bits per sample {bitsPerSample} is not supported."
+                );
         }
 
         index += bytesPerSample;
@@ -146,9 +158,14 @@ public static class SampleSerializer
     /// <summary>
     ///     Writes a single sample into the byte span at the specified index.
     /// </summary>
-    internal static void WriteSample(Span<byte> span, int index, float sampleValue, ushort bitsPerSample)
+    internal static void WriteSample(
+        Span<byte> span,
+        int index,
+        float sampleValue,
+        ushort bitsPerSample
+    )
     {
-        switch ( bitsPerSample )
+        switch (bitsPerSample)
         {
             case 8:
                 var sampleByte = (byte)((sampleValue + 1.0f) * 127.5f);
@@ -181,7 +198,9 @@ public static class SampleSerializer
                 break;
 
             default:
-                throw new NotSupportedException($"Bits per sample {bitsPerSample} is not supported.");
+                throw new NotSupportedException(
+                    $"Bits per sample {bitsPerSample} is not supported."
+                );
         }
     }
 
@@ -190,13 +209,13 @@ public static class SampleSerializer
     /// </summary>
     private static int ReadInt24LittleEndian(ReadOnlySpan<byte> span)
     {
-        int b0     = span[0];
-        int b1     = span[1];
-        int b2     = span[2];
+        int b0 = span[0];
+        int b1 = span[1];
+        int b2 = span[2];
         var sample = (b2 << 16) | (b1 << 8) | b0;
 
         // Sign-extend to 32 bits if necessary
-        if ( (sample & 0x800000) != 0 )
+        if ((sample & 0x800000) != 0)
         {
             sample |= unchecked((int)0xFF000000);
         }

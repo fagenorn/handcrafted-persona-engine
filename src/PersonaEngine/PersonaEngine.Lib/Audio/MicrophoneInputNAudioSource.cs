@@ -1,8 +1,8 @@
+using System.Buffers;
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-
 using NAudio.Wave;
-
 using PersonaEngine.Lib.Configuration;
 
 namespace PersonaEngine.Lib.Audio;
@@ -29,21 +29,29 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
 
     private WaveInEvent? _waveIn;
 
+    public event AudioSamplesHandler? SamplesAvailable;
+
     public MicrophoneInputNAudioSource(
-        ILogger<MicrophoneInputNAudioSource>     logger,
+        ILogger<MicrophoneInputNAudioSource> logger,
         IOptionsMonitor<MicrophoneConfiguration> optionsMonitor,
-        IChannelAggregationStrategy?             aggregationStrategy = null)
-        : base(new Dictionary<string, string>(),
-               true,
-               false,
-               DefaultInitialSize,
-               DefaultInitialSize,
-               aggregationStrategy)
+        IChannelAggregationStrategy? aggregationStrategy = null
+    )
+        : base(
+            new Dictionary<string, string>(),
+            true,
+            false,
+            DefaultInitialSize,
+            DefaultInitialSize,
+            aggregationStrategy
+        )
     {
-        _logger         = logger ?? throw new ArgumentNullException(nameof(logger));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _currentOptions = optionsMonitor.CurrentValue;
 
-        _logger.LogInformation("Initializing MicrophoneInputNAudioSource with options: {@Options}", _currentOptions);
+        _logger.LogInformation(
+            "Initializing MicrophoneInputNAudioSource with options: {@Options}",
+            _currentOptions
+        );
 
         InitializeMicrophone(_currentOptions);
 
@@ -56,7 +64,7 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
         {
             ObjectDisposedException.ThrowIf(_isDisposed, typeof(MicrophoneInputNAudioSource));
 
-            if ( _recordingCts is { IsCancellationRequested: false } )
+            if (_recordingCts is { IsCancellationRequested: false })
             {
                 _logger.LogWarning("StartRecording called, but recording is already active.");
 
@@ -71,12 +79,12 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
     {
         lock (_lock)
         {
-            if ( _isDisposed )
+            if (_isDisposed)
             {
                 return;
             }
 
-            if ( _recordingCts == null || _recordingCts.IsCancellationRequested )
+            if (_recordingCts == null || _recordingCts.IsCancellationRequested)
             {
                 return;
             }
@@ -85,7 +93,14 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
         }
     }
 
-    public IEnumerable<string> GetAvailableDevices() { return GetAvailableDevicesInternal(_logger); }
+    public IEnumerable<string> GetAvailableDevices()
+    {
+        return GetAvailableDevicesInternal(_logger);
+    }
+
+    public string? CurrentDeviceName => _currentOptions.DeviceName;
+
+    public IReadOnlyList<string> AvailableDevices => GetAvailableDevicesInternal(_logger).ToList();
 
     public new void Dispose()
     {
@@ -100,17 +115,25 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
         {
             var deviceCount = WaveInEvent.DeviceCount;
             logger?.LogDebug("Enumerating {DeviceCount} audio input devices.", deviceCount);
-            for ( var n = 0; n < deviceCount; n++ )
+            for (var n = 0; n < deviceCount; n++)
             {
                 try
                 {
                     var caps = WaveInEvent.GetCapabilities(n);
                     deviceNames.Add(caps.ProductName ?? $"Unnamed Device {n}");
-                    logger?.LogTrace("Found Device {DeviceNumber}: {ProductName}", n, caps.ProductName);
+                    logger?.LogTrace(
+                        "Found Device {DeviceNumber}: {ProductName}",
+                        n,
+                        caps.ProductName
+                    );
                 }
                 catch (Exception capEx)
                 {
-                    logger?.LogError(capEx, "Error getting capabilities for WaveInEvent device number {DeviceNumber}.", n);
+                    logger?.LogError(
+                        capEx,
+                        "Error getting capabilities for WaveInEvent device number {DeviceNumber}.",
+                        n
+                    );
                     deviceNames.Add($"⚠️ {n}");
                 }
             }
@@ -129,17 +152,20 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
     {
         lock (_lock)
         {
-            if ( _isDisposed )
+            if (_isDisposed)
             {
                 return;
             }
 
-            if ( newOptions.DeviceName == _currentOptions.DeviceName )
+            if (newOptions.DeviceName == _currentOptions.DeviceName)
             {
                 return;
             }
 
-            _logger.LogInformation("Audio input configuration changed. Reconfiguring microphone. New options: {@Options}", newOptions);
+            _logger.LogInformation(
+                "Audio input configuration changed. Reconfiguring microphone. New options: {@Options}",
+                newOptions
+            );
             _currentOptions = newOptions;
 
             _wasRecordingBeforeReconfigure = _recordingCts is { IsCancellationRequested: false };
@@ -148,7 +174,7 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
 
             InitializeMicrophone(newOptions);
 
-            if ( !_wasRecordingBeforeReconfigure )
+            if (!_wasRecordingBeforeReconfigure)
             {
                 return;
             }
@@ -162,7 +188,7 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
     {
         lock (_lock)
         {
-            if ( _isDisposed )
+            if (_isDisposed)
             {
                 return;
             }
@@ -170,30 +196,53 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
             DisposeMicrophoneInstance();
 
             var deviceNumber = FindDeviceNumberByName(options.DeviceName);
-            if ( deviceNumber == -1 )
+            if (deviceNumber == -1)
             {
-                _logger.LogWarning("Could not find audio input device named '{DeviceName}'. Falling back to default device (0).", options.DeviceName);
+                _logger.LogWarning(
+                    "Could not find audio input device named '{DeviceName}'. Falling back to default device (0).",
+                    options.DeviceName
+                );
                 deviceNumber = 0;
             }
 
             try
             {
-                _waveIn = new WaveInEvent { DeviceNumber = deviceNumber, WaveFormat = new WaveFormat(16000, 16, 1), BufferMilliseconds = 100 };
-
-                if ( !IsInitialized )
+                _waveIn = new WaveInEvent
                 {
-                    Initialize(new AudioSourceHeader { BitsPerSample = 16, Channels = 1, SampleRate = 16000 });
+                    DeviceNumber = deviceNumber,
+                    WaveFormat = new WaveFormat(16000, 16, 1),
+                    BufferMilliseconds = 100,
+                };
+
+                if (!IsInitialized)
+                {
+                    Initialize(
+                        new AudioSourceHeader
+                        {
+                            BitsPerSample = 16,
+                            Channels = 1,
+                            SampleRate = 16000,
+                        }
+                    );
                 }
 
-                _waveIn.DataAvailable    += WaveIn_DataAvailable;
+                _waveIn.DataAvailable += WaveIn_DataAvailable;
                 _waveIn.RecordingStopped += WaveInRecordingStopped;
 
-                _logger.LogInformation("Microphone initialized with DeviceNumber: {DeviceNumber}, WaveFormat: {WaveFormat}",
-                                       _waveIn.DeviceNumber, _waveIn.WaveFormat);
+                _logger.LogInformation(
+                    "Microphone initialized with DeviceNumber: {DeviceNumber}, WaveFormat: {WaveFormat}",
+                    _waveIn.DeviceNumber,
+                    _waveIn.WaveFormat
+                );
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to initialize WaveInEvent with DeviceNumber {DeviceNumber} and options {@Options}", deviceNumber, options);
+                _logger.LogError(
+                    ex,
+                    "Failed to initialize WaveInEvent with DeviceNumber {DeviceNumber} and options {@Options}",
+                    deviceNumber,
+                    options
+                );
                 _waveIn = null;
             }
         }
@@ -201,9 +250,11 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
 
     private int FindDeviceNumberByName(string? deviceName)
     {
-        if ( string.IsNullOrWhiteSpace(deviceName) )
+        if (string.IsNullOrWhiteSpace(deviceName))
         {
-            _logger.LogDebug("Device name is null or whitespace, returning default device number 0.");
+            _logger.LogDebug(
+                "Device name is null or whitespace, returning default device number 0."
+            );
 
             return 0;
         }
@@ -211,13 +262,17 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
         try
         {
             var devices = GetAvailableDevicesInternal();
-            var index   = 0;
-            foreach ( var name in devices )
+            var index = 0;
+            foreach (var name in devices)
             {
                 _logger.LogTrace("Checking device {DeviceNumber}: {ProductName}", index, name);
-                if ( deviceName.Trim().Equals(name?.Trim(), StringComparison.OrdinalIgnoreCase) )
+                if (deviceName.Trim().Equals(name?.Trim(), StringComparison.OrdinalIgnoreCase))
                 {
-                    _logger.LogDebug("Found device '{DeviceName}' at DeviceNumber {DeviceNumber}", deviceName, index);
+                    _logger.LogDebug(
+                        "Found device '{DeviceName}' at DeviceNumber {DeviceNumber}",
+                        deviceName,
+                        index
+                    );
 
                     return index;
                 }
@@ -230,16 +285,21 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
             _logger.LogError(ex, "Error searching for device name '{DeviceName}'.", deviceName);
         }
 
-        _logger.LogWarning("Audio input device named '{DeviceName}' not found among available devices.", deviceName);
+        _logger.LogWarning(
+            "Audio input device named '{DeviceName}' not found among available devices.",
+            deviceName
+        );
 
         return -1;
     }
 
     private void StartRecordingInternal()
     {
-        if ( _waveIn == null )
+        if (_waveIn == null)
         {
-            _logger.LogError("Cannot start recording, microphone is not initialized (likely due to previous error).");
+            _logger.LogError(
+                "Cannot start recording, microphone is not initialized (likely due to previous error)."
+            );
 
             return;
         }
@@ -262,7 +322,7 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
 
     private void StopInternal()
     {
-        if ( _waveIn == null || _recordingCts == null || _recordingCts.IsCancellationRequested )
+        if (_waveIn == null || _recordingCts == null || _recordingCts.IsCancellationRequested)
         {
             return;
         }
@@ -288,19 +348,50 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
 
     private void WaveIn_DataAvailable(object? sender, WaveInEventArgs e)
     {
-        if ( _recordingCts is not { IsCancellationRequested: false } )
+        if (_recordingCts is not { IsCancellationRequested: false })
         {
             return;
         }
 
         var sourceSpan = e.Buffer.AsMemory(0, e.BytesRecorded);
         WriteData(sourceSpan);
+
+        RaiseSamplesAvailable(e.Buffer, e.BytesRecorded);
+    }
+
+    private void RaiseSamplesAvailable(byte[] buffer, int bytesRecorded)
+    {
+        var handler = SamplesAvailable;
+        if (handler is null)
+            return;
+
+        // WaveFormat is fixed at 16-bit mono 16 kHz (see InitializeMicrophone).
+        var int16s = MemoryMarshal.Cast<byte, short>(buffer.AsSpan(0, bytesRecorded));
+
+        // Rent a scratch buffer per call. The AudioSamplesHandler contract on
+        // IMicrophone says the span is only valid for the duration of the call, so
+        // there's no need to keep the buffer alive beyond this invocation.
+        var scratch = ArrayPool<float>.Shared.Rent(int16s.Length);
+        try
+        {
+            var floatSpan = scratch.AsSpan(0, int16s.Length);
+            for (var i = 0; i < int16s.Length; i++)
+            {
+                floatSpan[i] = int16s[i] / 32768f;
+            }
+
+            handler(floatSpan, 16000);
+        }
+        finally
+        {
+            ArrayPool<float>.Shared.Return(scratch);
+        }
     }
 
     private void WaveInRecordingStopped(object? sender, StoppedEventArgs e)
     {
         _logger.LogDebug("MicrophoneIn_RecordingStopped event received.");
-        if ( e.Exception != null )
+        if (e.Exception != null)
         {
             _logger.LogError(e.Exception, "An error occurred during microphone recording.");
             // Decide how to handle this - maybe set an error state?
@@ -312,18 +403,20 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
 
     private void DisposeMicrophoneInstance()
     {
-        if ( _waveIn == null )
+        if (_waveIn == null)
         {
             return;
         }
 
         _logger.LogDebug("Disposing existing WaveInEvent instance.");
-        _waveIn.DataAvailable    -= WaveIn_DataAvailable;
+        _waveIn.DataAvailable -= WaveIn_DataAvailable;
         _waveIn.RecordingStopped -= WaveInRecordingStopped;
 
-        if ( _recordingCts is { IsCancellationRequested: false } )
+        if (_recordingCts is { IsCancellationRequested: false })
         {
-            _logger.LogWarning("Disposing microphone instance while it was potentially still marked as recording. Stopping first.");
+            _logger.LogWarning(
+                "Disposing microphone instance while it was potentially still marked as recording. Stopping first."
+            );
             StopInternal();
         }
 
@@ -333,12 +426,12 @@ public sealed class MicrophoneInputNAudioSource : AwaitableWaveFileSource, IMicr
 
     protected override void Dispose(bool disposing)
     {
-        if ( _isDisposed )
+        if (_isDisposed)
         {
             return;
         }
 
-        if ( disposing )
+        if (disposing)
         {
             _logger.LogInformation("Disposing MicrophoneInputNAudioSource...");
             lock (_lock)

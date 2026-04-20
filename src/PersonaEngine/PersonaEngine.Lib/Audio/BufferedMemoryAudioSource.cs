@@ -33,27 +33,29 @@ public class BufferedMemoryAudioSource : IAudioSource, IMemoryBackedAudioSource
     /// <param name="storeSamples"> A value indicating whether to store samples as floats. Default true.</param>
     /// <param name="storeBytes"> A value indicating whether to store samples as byte[]. Default false.</param>
     /// <param name="aggregationStrategy"> Optional. The channel aggregation strategy to use.</param>
-    public BufferedMemoryAudioSource(IReadOnlyDictionary<string, string> metadata,
-                                     bool                                storeFloats         = true,
-                                     bool                                storeBytes          = false,
-                                     int                                 initialSizeFloats   = DefaultInitialSize,
-                                     int                                 initialSizeBytes    = DefaultInitialSize,
-                                     IChannelAggregationStrategy?        aggregationStrategy = null)
+    public BufferedMemoryAudioSource(
+        IReadOnlyDictionary<string, string> metadata,
+        bool storeFloats = true,
+        bool storeBytes = false,
+        int initialSizeFloats = DefaultInitialSize,
+        int initialSizeBytes = DefaultInitialSize,
+        IChannelAggregationStrategy? aggregationStrategy = null
+    )
     {
-        Metadata                 = metadata;
+        Metadata = metadata;
         this.aggregationStrategy = aggregationStrategy;
 
-        if ( !storeFloats && !storeBytes )
+        if (!storeFloats && !storeBytes)
         {
             throw new ArgumentException("At least one of storeFloats or storeBytes must be true.");
         }
 
-        if ( storeFloats )
+        if (storeFloats)
         {
             FloatFrames = new float[initialSizeFloats];
         }
 
-        if ( storeBytes )
+        if (storeBytes)
         {
             ByteFrames = new byte[initialSizeBytes];
         }
@@ -96,12 +98,13 @@ public class BufferedMemoryAudioSource : IAudioSource, IMemoryBackedAudioSource
 
     public virtual TimeSpan Duration => TimeSpan.FromMilliseconds(FramesCount * 1000d / SampleRate);
 
-    public virtual TimeSpan TotalDuration => TimeSpan.FromMilliseconds(framesCount * 1000d / SampleRate);
+    public virtual TimeSpan TotalDuration =>
+        TimeSpan.FromMilliseconds(framesCount * 1000d / SampleRate);
 
     /// <inheritdoc />
     public void Dispose()
     {
-        if ( isDisposed )
+        if (isDisposed)
         {
             return;
         }
@@ -111,12 +114,16 @@ public class BufferedMemoryAudioSource : IAudioSource, IMemoryBackedAudioSource
         isDisposed = true;
     }
 
-    public virtual Task<Memory<float>> GetSamplesAsync(long startFrame, int maxFrames = int.MaxValue, CancellationToken cancellationToken = default)
+    public virtual Task<Memory<float>> GetSamplesAsync(
+        long startFrame,
+        int maxFrames = int.MaxValue,
+        CancellationToken cancellationToken = default
+    )
     {
         ThrowIfNotInitialized();
 
         // We first check if we have the samples as floats, if not we deserialize them from bytes
-        if ( FloatFrames != null )
+        if (FloatFrames != null)
         {
             return Task.FromResult(GetFloatFramesSlice(startFrame, maxFrames));
         }
@@ -126,10 +133,14 @@ public class BufferedMemoryAudioSource : IAudioSource, IMemoryBackedAudioSource
         return Task.FromResult(SampleSerializer.Deserialize(byteSlice, BitsPerSample));
     }
 
-    public virtual Task<Memory<byte>> GetFramesAsync(long startFrame, int maxFrames = int.MaxValue, CancellationToken cancellationToken = default)
+    public virtual Task<Memory<byte>> GetFramesAsync(
+        long startFrame,
+        int maxFrames = int.MaxValue,
+        CancellationToken cancellationToken = default
+    )
     {
         // We first check if we have the samples as bytes, if not we serialize them from floats
-        if ( ByteFrames != null )
+        if (ByteFrames != null)
         {
             return Task.FromResult(GetByteFramesSlice(startFrame, maxFrames));
         }
@@ -139,9 +150,14 @@ public class BufferedMemoryAudioSource : IAudioSource, IMemoryBackedAudioSource
         return Task.FromResult(SampleSerializer.Serialize(slice, BitsPerSample));
     }
 
-    public virtual Task<int> CopyFramesAsync(Memory<byte> destination, long startFrame, int maxFrames = int.MaxValue, CancellationToken cancellationToken = default)
+    public virtual Task<int> CopyFramesAsync(
+        Memory<byte> destination,
+        long startFrame,
+        int maxFrames = int.MaxValue,
+        CancellationToken cancellationToken = default
+    )
     {
-        if ( ByteFrames != null )
+        if (ByteFrames != null)
         {
             var slice = GetByteFramesSlice(startFrame, maxFrames);
 
@@ -163,7 +179,10 @@ public class BufferedMemoryAudioSource : IAudioSource, IMemoryBackedAudioSource
 
     public bool StoresBytes => ByteFrames != null;
 
-    ~BufferedMemoryAudioSource() { Dispose(false); }
+    ~BufferedMemoryAudioSource()
+    {
+        Dispose(false);
+    }
 
     /// <summary>
     ///     Initializes the source with the specified header.
@@ -172,12 +191,12 @@ public class BufferedMemoryAudioSource : IAudioSource, IMemoryBackedAudioSource
     /// <exception cref="InvalidOperationException">Thrown when the source is already initialized.</exception>
     public virtual void Initialize(AudioSourceHeader header)
     {
-        if ( IsInitialized )
+        if (IsInitialized)
         {
             throw new InvalidOperationException("The source is already initialized.");
         }
 
-        Header        = header;
+        Header = header;
         IsInitialized = true;
     }
 
@@ -191,17 +210,20 @@ public class BufferedMemoryAudioSource : IAudioSource, IMemoryBackedAudioSource
     {
         ThrowIfNotInitialized();
 
-        if ( frame.Length != Header.Channels )
+        if (frame.Length != Header.Channels)
         {
-            throw new ArgumentException("The frame size does not match the channels.", nameof(frame));
+            throw new ArgumentException(
+                "The frame size does not match the channels.",
+                nameof(frame)
+            );
         }
 
-        if ( FloatFrames != null )
+        if (FloatFrames != null)
         {
             AddFrameToSamples(frame);
         }
 
-        if ( ByteFrames != null )
+        if (ByteFrames != null)
         {
             AddFrameToFrames(frame);
         }
@@ -218,17 +240,20 @@ public class BufferedMemoryAudioSource : IAudioSource, IMemoryBackedAudioSource
     public virtual void AddFrame(ReadOnlyMemory<byte> frame)
     {
         ThrowIfNotInitialized();
-        if ( frame.Length != Header.Channels * Header.BitsPerSample / 8 )
+        if (frame.Length != Header.Channels * Header.BitsPerSample / 8)
         {
-            throw new ArgumentException("The frame size does not match the channels.", nameof(frame));
+            throw new ArgumentException(
+                "The frame size does not match the channels.",
+                nameof(frame)
+            );
         }
 
-        if ( FloatFrames != null )
+        if (FloatFrames != null)
         {
             AddFrameToSamples(frame);
         }
 
-        if ( ByteFrames != null )
+        if (ByteFrames != null)
         {
             AddFrameToFrames(frame);
         }
@@ -238,7 +263,7 @@ public class BufferedMemoryAudioSource : IAudioSource, IMemoryBackedAudioSource
 
     protected void ThrowIfNotInitialized()
     {
-        if ( !IsInitialized )
+        if (!IsInitialized)
         {
             throw new InvalidOperationException("The source is not initialized.");
         }
@@ -250,24 +275,24 @@ public class BufferedMemoryAudioSource : IAudioSource, IMemoryBackedAudioSource
     /// <param name="disposing">A value indicating whether the method is called from Dispose.</param>
     protected virtual void Dispose(bool disposing)
     {
-        if ( disposing )
+        if (disposing)
         {
             FloatFrames = [];
-            ByteFrames  = [];
+            ByteFrames = [];
         }
     }
 
     private Memory<float> GetFloatFramesSlice(long startFrame, int maxFrames)
     {
         var startSample = (int)(startFrame * ChannelCount);
-        var length      = (int)(Math.Min(maxFrames, FramesCount - startFrame) * ChannelCount);
+        var length = (int)(Math.Min(maxFrames, FramesCount - startFrame) * ChannelCount);
 
         return FloatFrames.AsMemory(startSample, length);
     }
 
     private Memory<byte> GetByteFramesSlice(long startFrame, int maxFrames)
     {
-        var startByte   = (int)(startFrame * FrameSize);
+        var startByte = (int)(startFrame * FrameSize);
         var lengthBytes = (int)(Math.Min(maxFrames, FramesCount - startFrame) * FrameSize);
 
         return ByteFrames.AsMemory(startByte, lengthBytes);
@@ -275,14 +300,14 @@ public class BufferedMemoryAudioSource : IAudioSource, IMemoryBackedAudioSource
 
     private void AddFrameToFrames(ReadOnlyMemory<byte> frame)
     {
-        if ( ByteFrames!.Length <= FramesCount * FrameSize )
+        if (ByteFrames!.Length <= FramesCount * FrameSize)
         {
             Array.Resize(ref ByteFrames, ByteFrames.Length * 2);
         }
 
-        var startByte         = (int)(FramesCount * FrameSize);
+        var startByte = (int)(FramesCount * FrameSize);
         var destinationMemory = ByteFrames.AsMemory(startByte);
-        if ( aggregationStrategy != null )
+        if (aggregationStrategy != null)
         {
             aggregationStrategy.Aggregate(frame, destinationMemory, BitsPerSample);
         }
@@ -294,33 +319,37 @@ public class BufferedMemoryAudioSource : IAudioSource, IMemoryBackedAudioSource
 
     private void AddFrameToSamples(ReadOnlyMemory<byte> frame)
     {
-        if ( FloatFrames!.Length <= FramesCount * ChannelCount )
+        if (FloatFrames!.Length <= FramesCount * ChannelCount)
         {
             Array.Resize(ref FloatFrames, FloatFrames.Length * 2);
         }
 
         var destinationMemory = FloatFrames.AsMemory((int)(FramesCount * ChannelCount));
 
-        if ( aggregationStrategy != null )
+        if (aggregationStrategy != null)
         {
             aggregationStrategy.Aggregate(frame, destinationMemory, BitsPerSample);
         }
         else
         {
-            SampleSerializer.Deserialize(frame, FloatFrames.AsMemory((int)(FramesCount * ChannelCount)), BitsPerSample);
+            SampleSerializer.Deserialize(
+                frame,
+                FloatFrames.AsMemory((int)(FramesCount * ChannelCount)),
+                BitsPerSample
+            );
         }
     }
 
     private void AddFrameToFrames(ReadOnlyMemory<float> frame)
     {
-        if ( ByteFrames!.Length <= FramesCount * FrameSize )
+        if (ByteFrames!.Length <= FramesCount * FrameSize)
         {
             Array.Resize(ref ByteFrames, ByteFrames.Length * 2);
         }
 
-        var startByte         = (int)(FramesCount * FrameSize);
+        var startByte = (int)(FramesCount * FrameSize);
         var destinationMemory = ByteFrames.AsMemory(startByte);
-        if ( aggregationStrategy != null )
+        if (aggregationStrategy != null)
         {
             aggregationStrategy.Aggregate(frame, destinationMemory, BitsPerSample);
         }
@@ -332,13 +361,13 @@ public class BufferedMemoryAudioSource : IAudioSource, IMemoryBackedAudioSource
 
     private void AddFrameToSamples(ReadOnlyMemory<float> frame)
     {
-        if ( FloatFrames!.Length <= FramesCount * ChannelCount )
+        if (FloatFrames!.Length <= FramesCount * ChannelCount)
         {
             Array.Resize(ref FloatFrames, FloatFrames.Length * 2);
         }
 
         var destinationMemory = FloatFrames.AsMemory((int)(FramesCount * ChannelCount));
-        if ( aggregationStrategy != null )
+        if (aggregationStrategy != null)
         {
             aggregationStrategy.Aggregate(frame, destinationMemory);
         }
