@@ -189,6 +189,33 @@ if ($PSCmdlet.ShouldProcess($EspeakDir, 'install portable espeak-ng')) {
     Write-Host "(WhatIf) Would bundle espeak-ng into $EspeakDir"
 }
 
+# Sanity-check: required static assets must be present before zipping.
+# These are shipped by the app (not bootstrap-downloaded), and their absence
+# means the csproj Content globs matched nothing — typically because the files
+# are .gitignored and weren't checked in. Crashing here prevents a repeat of
+# the v3.0.0 regression where the release zip shipped without fonts/shaders.
+$requiredAssets = @(
+    'Resources\Fonts\Seguiemj.ttf',
+    'Resources\Fonts\Montserrat.ttf',
+    'Resources\Shaders\t_shader.vert',
+    'Resources\Shaders\wheel_shader.frag',
+    'Resources\Prompts\personality.txt'
+)
+$missing = @()
+foreach ($rel in $requiredAssets) {
+    $full = Join-Path $PublishDir $rel
+    if (-not (Test-Path -LiteralPath $full)) {
+        $missing += $rel
+    }
+}
+if ($missing.Count -gt 0) {
+    throw "Publish output is missing required static assets:`n  " +
+          ($missing -join "`n  ") +
+          "`nCheck that the files are committed to git (Resources/* is ignored by default)."
+}
+Write-Host ""
+Write-Host "Required static assets verified ($($requiredAssets.Count) files)."
+
 if (Test-Path -LiteralPath $ZipPath) {
     if ($PSCmdlet.ShouldProcess($ZipPath, 'remove stale zip')) {
         Remove-Item -Force -LiteralPath $ZipPath
