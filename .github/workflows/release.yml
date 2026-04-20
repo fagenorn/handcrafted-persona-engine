@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
   build-and-release:
@@ -16,7 +16,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: "9.0.x"
 
       - name: Restore tools
         working-directory: src/PersonaEngine
@@ -57,8 +57,8 @@ jobs:
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Stage appsettings.json from template
-        # appsettings.json is gitignored for secrets hygiene (it holds the
-        # developer's real API keys locally). The App .csproj still requires
+        # appsettings.json is gitignored for secrets hygiene. 
+        # The App .csproj still requires
         # it to exist at publish time, so we seed it from the sanitized
         # template checked into the repo. The copy also means the release zip
         # ships a usable appsettings.json next to the exe — end users get a
