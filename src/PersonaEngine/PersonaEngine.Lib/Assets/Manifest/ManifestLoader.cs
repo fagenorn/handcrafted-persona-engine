@@ -1,6 +1,4 @@
-using System.Reflection;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace PersonaEngine.Lib.Assets.Manifest;
 
@@ -8,17 +6,22 @@ public static class ManifestLoader
 {
     public const int SupportedSchemaVersion = 1;
 
-    public static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-        Converters = { new AssetSourceJsonConverter(), new JsonStringEnumConverter() },
-    };
+    /// <summary>
+    /// Shared serializer context. Exposed so tests and the lock store use the
+    /// exact same options / source-gen type info as the manifest loader.
+    /// </summary>
+    public static readonly ManifestJsonContext JsonContext = new(
+        new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true,
+        }
+    );
 
     public static InstallManifest LoadFromJson(string json)
     {
         var manifest =
-            JsonSerializer.Deserialize<InstallManifest>(json, JsonOptions)
+            JsonSerializer.Deserialize(json, JsonContext.InstallManifest)
             ?? throw new JsonException("Manifest deserialized to null");
 
         if (manifest.SchemaVersion != SupportedSchemaVersion)

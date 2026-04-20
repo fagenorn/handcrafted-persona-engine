@@ -17,7 +17,7 @@ public sealed class InstallStateLockStore(string path, ILogger? logger = null)
         try
         {
             var json = File.ReadAllText(_path);
-            return JsonSerializer.Deserialize<InstallStateLock>(json, ManifestLoader.JsonOptions)
+            return JsonSerializer.Deserialize(json, ManifestLoader.JsonContext.InstallStateLock)
                 ?? InstallStateLock.Empty(fallbackManifestVersion);
         }
         catch (JsonException ex)
@@ -32,7 +32,7 @@ public sealed class InstallStateLockStore(string path, ILogger? logger = null)
 
     public void Write(InstallStateLock state)
     {
-        var json = JsonSerializer.Serialize(state, ManifestLoader.JsonOptions);
+        var json = JsonSerializer.Serialize(state, ManifestLoader.JsonContext.InstallStateLock);
         var dir = Path.GetDirectoryName(_path);
         if (!string.IsNullOrEmpty(dir))
         {

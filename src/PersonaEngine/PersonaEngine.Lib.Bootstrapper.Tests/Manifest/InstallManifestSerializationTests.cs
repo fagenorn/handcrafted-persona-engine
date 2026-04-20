@@ -7,17 +7,6 @@ namespace PersonaEngine.Lib.Bootstrapper.Tests.Manifest;
 
 public class InstallManifestSerializationTests
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-        Converters =
-        {
-            new AssetSourceJsonConverter(),
-            new System.Text.Json.Serialization.JsonStringEnumConverter(),
-        },
-    };
-
     [Fact]
     public void Roundtrips_a_full_manifest()
     {
@@ -50,8 +39,11 @@ public class InstallManifestSerializationTests
             }
         );
 
-        var json = JsonSerializer.Serialize(manifest, JsonOptions);
-        var deserialized = JsonSerializer.Deserialize<InstallManifest>(json, JsonOptions);
+        var json = JsonSerializer.Serialize(manifest, ManifestLoader.JsonContext.InstallManifest);
+        var deserialized = JsonSerializer.Deserialize(
+            json,
+            ManifestLoader.JsonContext.InstallManifest
+        );
 
         deserialized.Should().BeEquivalentTo(manifest);
     }
