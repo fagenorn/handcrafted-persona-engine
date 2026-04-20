@@ -56,6 +56,22 @@ jobs:
           $version = $tag.TrimStart('v')
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
+      - name: Stage appsettings.json from template
+        # appsettings.json is gitignored for secrets hygiene (it holds the
+        # developer's real API keys locally). The App .csproj still requires
+        # it to exist at publish time, so we seed it from the sanitized
+        # template checked into the repo. The copy also means the release zip
+        # ships a usable appsettings.json next to the exe — end users get a
+        # working schema to fill in rather than a broken install.
+        shell: pwsh
+        run: |
+          $src = 'src/PersonaEngine/PersonaEngine.App/appsettings.template.json'
+          $dst = 'src/PersonaEngine/PersonaEngine.App/appsettings.json'
+          if (-not (Test-Path $src)) {
+            throw "Missing $src — cannot seed appsettings.json."
+          }
+          Copy-Item $src $dst -Force
+
       - name: Build release zip
         shell: pwsh
         env:
