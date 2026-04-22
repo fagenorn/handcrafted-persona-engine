@@ -65,7 +65,7 @@ The included **Aria** model is rigged for the engine's lip-sync and expression p
   </a>
   <p><i>Click to watch the demo on YouTube.</i></p>
 
-  <video src="https://github.com/user-attachments/assets/8c486a9f-db2c-4486-8e20-0b1e336e476c"></video>
+  <video src="https://github.com/user-attachments/assets/e1a68bd7-c8d7-4821-b60c-05032179a982"></video>
 </div>
 
 ## <a id="installation-guide"></a>Getting started
