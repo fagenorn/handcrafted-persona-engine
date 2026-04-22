@@ -43,6 +43,15 @@ That's it. **You do not need to install CUDA, cuDNN, the .NET runtime, espeak-ng
 
 ## <a id="quick-start"></a>🚀 Quick start
 
+> [!IMPORTANT]
+> **3-minute install walkthrough**
+>
+> <a href="https://youtu.be/3WLPXKvDaDk" target="_blank">
+>   <img src="assets/install_thumb.png" alt="3-minute install walkthrough" width="420">
+> </a>
+>
+> Prefer to watch than read? This covers everything below, end-to-end.
+
 1. Grab the latest `PersonaEngine-<version>-win-x64.zip` from the [Releases page](https://github.com/fagenorn/handcrafted-persona-engine/releases/latest).
 2. Extract it somewhere simple (e.g. `C:\PersonaEngine`). **Avoid** `C:\Program Files`, `C:\Windows`, and OneDrive-synced folders.
 3. Double-click `PersonaEngine.exe`.
