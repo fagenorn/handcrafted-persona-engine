@@ -4,6 +4,8 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Required by the LibraryImport source generator used in NativeLibraryLoader. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationIcon>icon.ico</ApplicationIcon>
     <AssemblyName>PersonaEngine</AssemblyName>
   </PropertyGroup>
