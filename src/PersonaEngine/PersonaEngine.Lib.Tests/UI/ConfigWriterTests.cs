@@ -47,6 +47,29 @@ public class ConfigWriterTests : IDisposable
 
     private ConfigWriter CreateWriter(string path) => new(path, DebounceMs);
 
+    // Poll for the debounce Timer callback rather than sleep a fixed multiple
+    // of DebounceMs — on contended CI runners the ThreadPool can delay the
+    // callback well past DebounceMs * N, which caused intermittent failures
+    // where LastSaveTime was still null when the assertion ran.
+    private static async Task WaitForSaveAsync(ConfigWriter writer, DateTime? baseline = null)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            var last = writer.LastSaveTime;
+            if (last is not null && (baseline is null || last > baseline))
+            {
+                return;
+            }
+
+            await Task.Delay(25);
+        }
+
+        throw new TimeoutException(
+            $"ConfigWriter did not flush within 5s (LastSaveTime={writer.LastSaveTime:o}, baseline={baseline:o})."
+        );
+    }
+
     [Fact]
     public async Task Write_TypedOptions_UpdatesJsonSection()
     {
@@ -56,7 +79,7 @@ public class ConfigWriterTests : IDisposable
         var updated = new KokoroVoiceOptions { DefaultVoice = "af_nova", DefaultSpeed = 1.5f };
         writer.Write(updated);
 
-        await Task.Delay(DebounceMs * 4);
+        await WaitForSaveAsync(writer);
 
         var json = JsonNode.Parse(File.ReadAllText(path))!;
         Assert.Equal(
@@ -75,7 +98,7 @@ public class ConfigWriterTests : IDisposable
         // Write only Kokoro — Window section must survive
         writer.Write(new KokoroVoiceOptions { DefaultVoice = "af_nova" });
 
-        await Task.Delay(DebounceMs * 4);
+        await WaitForSaveAsync(writer);
 
         var json = JsonNode.Parse(File.ReadAllText(path))!;
         // Window section should still be present and intact
@@ -96,7 +119,7 @@ public class ConfigWriterTests : IDisposable
         writer.Write(kokoro);
         writer.Write(window);
 
-        await Task.Delay(DebounceMs * 4);
+        await WaitForSaveAsync(writer);
 
         var json = JsonNode.Parse(File.ReadAllText(path))!;
         Assert.Equal(
@@ -124,7 +147,7 @@ public class ConfigWriterTests : IDisposable
         Assert.Equal(originalJson, File.ReadAllText(path));
 
         // Wait for debounce to fire
-        await Task.Delay(DebounceMs * 4);
+        await WaitForSaveAsync(writer);
 
         var json = JsonNode.Parse(File.ReadAllText(path))!;
         // Only the final value should be written
@@ -144,7 +167,7 @@ public class ConfigWriterTests : IDisposable
 
         writer.Write(new KokoroVoiceOptions { DefaultVoice = "af_nova" });
 
-        await Task.Delay(DebounceMs * 4);
+        await WaitForSaveAsync(writer);
 
         Assert.NotNull(writer.LastSaveTime);
         Assert.True(writer.LastSaveTime <= DateTime.UtcNow);
@@ -173,15 +196,7 @@ public class ConfigWriterTests : IDisposable
         writer.Write(new SubtitleOptions());
         writer.Write(new LlmOptions());
 
-        // Poll for the debounce Timer callback rather than sleep a fixed
-        // multiple of DebounceMs — on contended CI runners the ThreadPool can
-        // delay the callback well past DebounceMs * 4, which caused intermittent
-        // failures where LastSaveTime was still null when assertion ran.
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (writer.LastSaveTime is null && DateTime.UtcNow < deadline)
-        {
-            await Task.Delay(25);
-        }
+        await WaitForSaveAsync(writer);
 
         // If we got here, all types were successfully discovered and written
         Assert.NotNull(writer.LastSaveTime);
