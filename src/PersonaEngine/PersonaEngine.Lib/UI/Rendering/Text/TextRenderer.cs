@@ -1,6 +1,7 @@
 ﻿using System.Numerics;
 using FontStashSharp.Interfaces;
 using PersonaEngine.Lib.UI.Common;
+using PersonaEngine.Lib.UI.Rendering.Shaders;
 using Silk.NET.OpenGL;
 using Shader = PersonaEngine.Lib.UI.Common.Shader;
 using Texture = PersonaEngine.Lib.UI.Common.Texture;
@@ -61,8 +62,8 @@ internal class TextRenderer : IFontStashRenderer2, IDisposable
         );
         _indexBuffer.SetData(indexData, 0, indexData.Length);
 
-        var vertSrc = File.ReadAllText(Path.Combine(@"Resources/Shaders", "t_shader.vert"));
-        var fragSrc = File.ReadAllText(Path.Combine(@"Resources/Shaders", "t_shader.frag"));
+        var vertSrc = ShaderRegistry.GetSource("glsl/t_shader.vert");
+        var fragSrc = ShaderRegistry.GetSource("glsl/t_shader.frag");
         _shader = new Shader(_gl, vertSrc, fragSrc);
         _shader.Use();
 
