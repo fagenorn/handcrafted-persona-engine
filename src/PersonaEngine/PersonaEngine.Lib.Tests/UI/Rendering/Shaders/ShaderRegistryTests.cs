@@ -54,4 +54,17 @@ public class ShaderRegistryTests
         ReferenceEquals(plain, leadingSlash).Should().BeTrue();
         ReferenceEquals(plain, leadingBackslash).Should().BeTrue();
     }
+
+    [Fact]
+    public void GetSource_RejectsNonAscii_WithPreciseLocation()
+    {
+        var act = () => ShaderRegistry.GetSource("test/non_ascii.glsl");
+
+        act.Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("*U+2014*")
+            .WithMessage("*line 2*")
+            .WithMessage("*column 9*")
+            .WithMessage("*test/non_ascii.glsl*");
+    }
 }
