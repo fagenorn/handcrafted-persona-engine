@@ -1,0 +1,16 @@
+{
+  "profiles": {
+    "PersonaEngine": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "PERSONAENGINE_SKIP_BOOTSTRAP": "1"
+      }
+    },
+    "PersonaEngine (with bootstrap)": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "PERSONAENGINE_SKIP_BOOTSTRAP": ""
+      }
+    }
+  }
+}
