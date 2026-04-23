@@ -20,4 +20,9 @@
     <ProjectReference Include="..\PersonaEngine.Lib\PersonaEngine.Lib.csproj" />
     <ProjectReference Include="..\PersonaEngine.Lib.Bootstrapper\PersonaEngine.Lib.Bootstrapper.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="Resources\Shaders\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 </Project>
