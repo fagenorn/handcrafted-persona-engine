@@ -34,4 +34,24 @@ public class ShaderRegistryTests
             .WithMessage("*test/does_not_exist.glsl*")
             .WithMessage("*Resources*Shaders*");
     }
+
+    [Fact]
+    public void GetSource_AcceptsBackslashPath()
+    {
+        var forward = ShaderRegistry.GetSource("test/ascii_ok.glsl");
+        var back = ShaderRegistry.GetSource("test\\ascii_ok.glsl");
+
+        ReferenceEquals(forward, back).Should().BeTrue();
+    }
+
+    [Fact]
+    public void GetSource_TrimsLeadingSeparators()
+    {
+        var plain = ShaderRegistry.GetSource("test/ascii_ok.glsl");
+        var leadingSlash = ShaderRegistry.GetSource("/test/ascii_ok.glsl");
+        var leadingBackslash = ShaderRegistry.GetSource("\\test/ascii_ok.glsl");
+
+        ReferenceEquals(plain, leadingSlash).Should().BeTrue();
+        ReferenceEquals(plain, leadingBackslash).Should().BeTrue();
+    }
 }
