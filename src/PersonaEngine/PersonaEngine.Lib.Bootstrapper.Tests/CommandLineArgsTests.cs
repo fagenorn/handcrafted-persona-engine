@@ -60,6 +60,20 @@ public sealed class CommandLineArgsTests
     }
 
     [Fact]
+    public void SkipBootstrap_flag_is_recognized()
+    {
+        var parsed = CommandLineArgs.Parse(new[] { "--skip-bootstrap" });
+        parsed.SkipBootstrap.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SkipBootstrap_defaults_to_false()
+    {
+        var parsed = CommandLineArgs.Parse(Array.Empty<string>());
+        parsed.SkipBootstrap.Should().BeFalse();
+    }
+
+    [Fact]
     public void Unknown_args_are_ignored_without_failing_known_flags()
     {
         // Unknown args were originally captured into a PassThrough list; that

@@ -29,8 +29,22 @@ internal static class Program
         // Bootstrap runs before IConfiguration is built, so it sees only CLI args
         // and the embedded manifest — any future bootstrap setting must be a CLI
         // flag, not an appsettings.json entry.
+        //
+        // Dev escape hatch: when --skip-bootstrap is passed or the env var
+        // PERSONAENGINE_SKIP_BOOTSTRAP is truthy (set automatically by
+        // Properties/launchSettings.json in VS / Rider / `dotnet run`), we skip
+        // the runner entirely. Assets under Resources/ must then already be
+        // populated out-of-band — the CUDA preload below will log and move on
+        // if they aren't, and downstream subsystems will surface clearer errors.
         var parsedArgs = CommandLineArgs.Parse(args);
-        if (!await RunBootstrapAsync(parsedArgs).ConfigureAwait(false))
+        if (ShouldSkipBootstrap(parsedArgs, out var skipReason))
+        {
+            Log.Warning(
+                "Skipping bootstrap ({Reason}). Assets under Resources/ must already be populated.",
+                skipReason
+            );
+        }
+        else if (!await RunBootstrapAsync(parsedArgs).ConfigureAwait(false))
         {
             await Log.CloseAndFlushAsync();
             return 1;
@@ -83,6 +97,46 @@ internal static class Program
         window.Run();
 
         return 0;
+    }
+
+    /// <summary>
+    ///     Env var consulted to skip the bootstrapper without a CLI flag. Any of
+    ///     <c>1</c>, <c>true</c>, <c>yes</c> (case-insensitive, whitespace-trimmed) enables skip.
+    ///     Set automatically by <c>Properties/launchSettings.json</c> so VS / Rider /
+    ///     <c>dotnet run</c> never trigger the bootstrapper in a dev checkout.
+    /// </summary>
+    private const string SkipBootstrapEnvVar = "PERSONAENGINE_SKIP_BOOTSTRAP";
+
+    /// <summary>
+    ///     Resolves the dev-mode skip signal from CLI args or environment.
+    ///     <paramref name="reason" /> is the human-readable source of the signal, suitable
+    ///     for a single log line; it is only meaningful when the method returns <c>true</c>.
+    /// </summary>
+    private static bool ShouldSkipBootstrap(CommandLineArgs args, out string reason)
+    {
+        if (args.SkipBootstrap)
+        {
+            reason = "--skip-bootstrap flag";
+            return true;
+        }
+
+        var raw = Environment.GetEnvironmentVariable(SkipBootstrapEnvVar)?.Trim();
+        if (IsTruthy(raw))
+        {
+            reason = $"{SkipBootstrapEnvVar}={raw}";
+            return true;
+        }
+
+        reason = string.Empty;
+        return false;
+
+        static bool IsTruthy(string? value) =>
+            value is not null
+            && (
+                value.Equals("1", StringComparison.Ordinal)
+                || value.Equals("true", StringComparison.OrdinalIgnoreCase)
+                || value.Equals("yes", StringComparison.OrdinalIgnoreCase)
+            );
     }
 
     /// <summary>
