@@ -8,6 +8,7 @@ using Hexa.NET.ImGui;
 using Hexa.NET.ImGui.Utilities;
 using Hexa.NET.ImNodes;
 using PersonaEngine.Lib.UI.Common;
+using PersonaEngine.Lib.UI.Rendering.Shaders;
 using Silk.NET.Input;
 using Silk.NET.Input.Extensions;
 using Silk.NET.Maths;
@@ -953,8 +954,8 @@ public class ImGuiController : IDisposable
         _gl.GetInteger(GLEnum.ArrayBufferBinding, out var lastArrayBuffer);
         _gl.GetInteger(GLEnum.VertexArrayBinding, out var lastVertexArray);
 
-        var vertexSource = ImGuiShaderSources.Vertex;
-        var fragmentSource = ImGuiShaderSources.Fragment;
+        var vertexSource = ShaderRegistry.GetSource("glsl/imgui.vert");
+        var fragmentSource = ShaderRegistry.GetSource("glsl/imgui.frag");
 
         _shader = new Shader(_gl, vertexSource, fragmentSource);
 

@@ -7,12 +7,20 @@ public sealed record CommandLineArgs
     public required BootstrapOptions Bootstrap { get; init; }
     public required bool NonInteractive { get; init; }
 
+    /// <summary>
+    ///     When <c>true</c>, the host should short-circuit <see cref="BootstrapRunner" />
+    ///     entirely. Intended for developer / CI scenarios where assets under
+    ///     <c>Resources/</c> are already managed out-of-band.
+    /// </summary>
+    public required bool SkipBootstrap { get; init; }
+
     public static CommandLineArgs Parse(IReadOnlyList<string> args)
     {
         var mode = BootstrapMode.AutoIfMissing;
         ProfileTier? profile = null;
         var nonInteractive = false;
         var skipGpuCheck = false;
+        var skipBootstrap = false;
 
         foreach (var arg in args)
         {
@@ -36,6 +44,9 @@ public sealed record CommandLineArgs
                 case "--skip-gpu-check":
                     skipGpuCheck = true;
                     break;
+                case "--skip-bootstrap":
+                    skipBootstrap = true;
+                    break;
                 case var s when s.StartsWith("--profile=", StringComparison.Ordinal):
                     profile = ParseProfile(s.Substring("--profile=".Length));
                     break;
@@ -57,6 +68,7 @@ public sealed record CommandLineArgs
                 SkipGpuCheck = skipGpuCheck,
             },
             NonInteractive = nonInteractive,
+            SkipBootstrap = skipBootstrap,
         };
     }
 

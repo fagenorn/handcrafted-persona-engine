@@ -3,6 +3,7 @@ using System.Numerics;
 using FontStashSharp;
 using Microsoft.Extensions.Options;
 using PersonaEngine.Lib.Configuration;
+using PersonaEngine.Lib.UI.Rendering.Shaders;
 using PersonaEngine.Lib.UI.Rendering.Text;
 using Silk.NET.Input;
 using Silk.NET.OpenGL;
@@ -141,8 +142,8 @@ public partial class RouletteWheel : IRenderComponent
         _indexBuffer.SetData(_indexData, 0, _indexData.Length);
 
         // Initialize shader
-        var vertSrc = File.ReadAllText(Path.Combine(@"Resources/Shaders", "wheel_shader.vert"));
-        var fragSrc = File.ReadAllText(Path.Combine(@"Resources/Shaders", "wheel_shader.frag"));
+        var vertSrc = ShaderRegistry.GetSource("glsl/wheel_shader.vert");
+        var fragSrc = ShaderRegistry.GetSource("glsl/wheel_shader.frag");
         _shader = new Shader(_gl, vertSrc, fragSrc);
 
         // Setup VAO
