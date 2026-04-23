@@ -6,4 +6,9 @@ public interface IConfigWriter : IDisposable
         where T : notnull;
 
     DateTime? LastSaveTime { get; }
+
+    /// <summary>
+    ///     Synchronously drains any pending debounced writes to disk.
+    /// </summary>
+    void Flush();
 }

@@ -76,6 +76,36 @@ public sealed class ConfigWriter : IConfigWriter
         ResetDebounceTimer();
     }
 
+    /// <summary>
+    ///     Synchronously drains any pending writes to disk, bypassing the
+    ///     debounce timer. Safe to call concurrently with <see cref="Write{T}" />:
+    ///     if the Timer callback is mid-flush, this blocks on the same semaphore
+    ///     until it completes, then flushes anything that arrived after.
+    /// </summary>
+    /// <remarks>
+    ///     Provides a deterministic observation point for tests and for host
+    ///     shutdown paths that need the on-disk file to reflect the latest Write
+    ///     before the process exits. <see cref="Dispose" /> performs the same
+    ///     drain, plus tears down the timer and semaphore.
+    /// </remarks>
+    public void Flush()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (_pendingSections.IsEmpty)
+            return;
+
+        _flushLock.Wait();
+        try
+        {
+            FlushToDisk();
+        }
+        finally
+        {
+            _flushLock.Release();
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed)

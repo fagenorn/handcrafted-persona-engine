@@ -47,39 +47,15 @@ public class ConfigWriterTests : IDisposable
 
     private ConfigWriter CreateWriter(string path) => new(path, DebounceMs);
 
-    // Poll for the debounce Timer callback rather than sleep a fixed multiple
-    // of DebounceMs — on contended CI runners the ThreadPool can delay the
-    // callback well past DebounceMs * N, which caused intermittent failures
-    // where LastSaveTime was still null when the assertion ran.
-    private static async Task WaitForSaveAsync(ConfigWriter writer, DateTime? baseline = null)
-    {
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (DateTime.UtcNow < deadline)
-        {
-            var last = writer.LastSaveTime;
-            if (last is not null && (baseline is null || last > baseline))
-            {
-                return;
-            }
-
-            await Task.Delay(25);
-        }
-
-        throw new TimeoutException(
-            $"ConfigWriter did not flush within 5s (LastSaveTime={writer.LastSaveTime:o}, baseline={baseline:o})."
-        );
-    }
-
     [Fact]
-    public async Task Write_TypedOptions_UpdatesJsonSection()
+    public void Write_TypedOptions_UpdatesJsonSection()
     {
         var path = CreateTempConfig();
         using var writer = CreateWriter(path);
 
         var updated = new KokoroVoiceOptions { DefaultVoice = "af_nova", DefaultSpeed = 1.5f };
         writer.Write(updated);
-
-        await WaitForSaveAsync(writer);
+        writer.Flush();
 
         var json = JsonNode.Parse(File.ReadAllText(path))!;
         Assert.Equal(
@@ -90,15 +66,14 @@ public class ConfigWriterTests : IDisposable
     }
 
     [Fact]
-    public async Task Write_PreservesOtherSections()
+    public void Write_PreservesOtherSections()
     {
         var path = CreateTempConfig();
         using var writer = CreateWriter(path);
 
         // Write only Kokoro — Window section must survive
         writer.Write(new KokoroVoiceOptions { DefaultVoice = "af_nova" });
-
-        await WaitForSaveAsync(writer);
+        writer.Flush();
 
         var json = JsonNode.Parse(File.ReadAllText(path))!;
         // Window section should still be present and intact
@@ -108,7 +83,7 @@ public class ConfigWriterTests : IDisposable
     }
 
     [Fact]
-    public async Task Write_MultipleTypes_AppliesAll()
+    public void Write_MultipleTypes_AppliesAll()
     {
         var path = CreateTempConfig();
         using var writer = CreateWriter(path);
@@ -118,8 +93,7 @@ public class ConfigWriterTests : IDisposable
 
         writer.Write(kokoro);
         writer.Write(window);
-
-        await WaitForSaveAsync(writer);
+        writer.Flush();
 
         var json = JsonNode.Parse(File.ReadAllText(path))!;
         Assert.Equal(
@@ -131,7 +105,7 @@ public class ConfigWriterTests : IDisposable
     }
 
     [Fact]
-    public async Task Write_DebouncesBatchesRapidCalls()
+    public void Write_DebouncesBatchesRapidCalls()
     {
         var path = CreateTempConfig();
         using var writer = CreateWriter(path);
@@ -146,8 +120,8 @@ public class ConfigWriterTests : IDisposable
         // File should be unchanged immediately (debounce not fired yet)
         Assert.Equal(originalJson, File.ReadAllText(path));
 
-        // Wait for debounce to fire
-        await WaitForSaveAsync(writer);
+        // Flush synchronously instead of racing with the debounce Timer.
+        writer.Flush();
 
         var json = JsonNode.Parse(File.ReadAllText(path))!;
         // Only the final value should be written
@@ -158,7 +132,7 @@ public class ConfigWriterTests : IDisposable
     }
 
     [Fact]
-    public async Task Write_SetsLastSaveTime()
+    public void Write_SetsLastSaveTime()
     {
         var path = CreateTempConfig();
         using var writer = CreateWriter(path);
@@ -166,8 +140,7 @@ public class ConfigWriterTests : IDisposable
         Assert.Null(writer.LastSaveTime);
 
         writer.Write(new KokoroVoiceOptions { DefaultVoice = "af_nova" });
-
-        await WaitForSaveAsync(writer);
+        writer.Flush();
 
         Assert.NotNull(writer.LastSaveTime);
         Assert.True(writer.LastSaveTime <= DateTime.UtcNow);
@@ -183,7 +156,7 @@ public class ConfigWriterTests : IDisposable
     }
 
     [Fact]
-    public async Task AutoDiscovery_FindsAllNestedOptionsTypes()
+    public void AutoDiscovery_FindsAllNestedOptionsTypes()
     {
         var path = CreateTempConfig();
         using var writer = CreateWriter(path);
@@ -195,8 +168,7 @@ public class ConfigWriterTests : IDisposable
         writer.Write(new WindowConfiguration());
         writer.Write(new SubtitleOptions());
         writer.Write(new LlmOptions());
-
-        await WaitForSaveAsync(writer);
+        writer.Flush();
 
         // If we got here, all types were successfully discovered and written
         Assert.NotNull(writer.LastSaveTime);
