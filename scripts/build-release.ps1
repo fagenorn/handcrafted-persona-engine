@@ -197,8 +197,18 @@ if ($PSCmdlet.ShouldProcess($EspeakDir, 'install portable espeak-ng')) {
 $requiredAssets = @(
     'Resources\Fonts\Seguiemj.ttf',
     'Resources\Fonts\Montserrat.ttf',
-    'Resources\Shaders\t_shader.vert',
-    'Resources\Shaders\wheel_shader.frag',
+    'Resources\Shaders\glsl\imgui.frag',
+    'Resources\Shaders\glsl\imgui.vert',
+    'Resources\Shaders\glsl\t_shader.frag',
+    'Resources\Shaders\glsl\t_shader.vert',
+    'Resources\Shaders\glsl\wheel_shader.frag',
+    'Resources\Shaders\glsl\wheel_shader.vert',
+    'Resources\Shaders\glsl\include\bayer_dither.glsl',
+    'Resources\Shaders\hlsl\overlay\arrow.hlsl',
+    'Resources\Shaders\hlsl\overlay\button.hlsl',
+    'Resources\Shaders\hlsl\overlay\icon.hlsl',
+    'Resources\Shaders\hlsl\overlay\outline.hlsl',
+    'Resources\Shaders\hlsl\overlay\quad.hlsl',
     'Resources\Prompts\personality.txt'
 )
 $missing = @()
