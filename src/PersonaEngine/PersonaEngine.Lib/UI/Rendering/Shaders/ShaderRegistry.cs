@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace PersonaEngine.Lib.UI.Rendering.Shaders;
 
@@ -7,16 +9,22 @@ namespace PersonaEngine.Lib.UI.Rendering.Shaders;
 ///     Resolves <paramref name="relativePath" /> against
 ///     <c>AppContext.BaseDirectory/Resources/Shaders/</c>, reads the file once,
 ///     and caches the result for the process lifetime. Shader sources are
-///     validated and preprocessed (<c>#include</c> expansion) on first load;
-///     subsequent calls return the cached, fully-processed string by reference.
+///     validated (ASCII-only) and preprocessed (<c>#include</c> expansion) on
+///     first load; subsequent calls return the cached, fully-processed string
+///     by reference.
 /// </summary>
 public static class ShaderRegistry
 {
     private static readonly ConcurrentDictionary<string, string> Cache = new();
 
+    private static readonly Regex IncludeRegex = new(
+        "^\\s*#include\\s+\"(?<path>[^\"\\r\\n]+)\"\\s*$",
+        RegexOptions.Compiled | RegexOptions.Multiline
+    );
+
     /// <summary>
     ///     Loads a shader source file from <c>Resources/Shaders/</c>, caching
-    ///     the result by normalized relative path.
+    ///     the fully-processed result by normalized relative path.
     /// </summary>
     /// <param name="relativePath">
     ///     Forward-slash-delimited path relative to <c>Resources/Shaders/</c>.
@@ -30,7 +38,7 @@ public static class ShaderRegistry
     {
         var key = Normalize(relativePath);
 
-        return Cache.GetOrAdd(key, Load);
+        return Cache.GetOrAdd(key, k => LoadAndProcess(k, new HashSet<string>()));
     }
 
     private static string Normalize(string relativePath)
@@ -38,7 +46,28 @@ public static class ShaderRegistry
         return relativePath.Replace('\\', '/').TrimStart('/');
     }
 
-    private static string Load(string key)
+    private static string LoadAndProcess(string key, HashSet<string> inProgress)
+    {
+        if (!inProgress.Add(key))
+        {
+            var chain = string.Join(" -> ", inProgress.Append(key));
+            throw new InvalidOperationException($"Circular #include: {chain}");
+        }
+
+        try
+        {
+            var text = ReadFile(key);
+            EnsureAscii(key, text);
+
+            return ExpandIncludes(text, inProgress);
+        }
+        finally
+        {
+            inProgress.Remove(key);
+        }
+    }
+
+    private static string ReadFile(string key)
     {
         var absolute = Path.Combine(
             AppContext.BaseDirectory,
@@ -54,10 +83,25 @@ public static class ShaderRegistry
             );
         }
 
-        var text = File.ReadAllText(absolute);
-        EnsureAscii(key, text);
+        return File.ReadAllText(absolute);
+    }
 
-        return text;
+    private static string ExpandIncludes(string source, HashSet<string> inProgress)
+    {
+        return IncludeRegex.Replace(
+            source,
+            match =>
+            {
+                var includedKey = Normalize(match.Groups["path"].Value);
+                var included = LoadAndProcess(includedKey, inProgress);
+                if (!included.EndsWith('\n'))
+                {
+                    return included + "\n";
+                }
+
+                return included;
+            }
+        );
     }
 
     /// <summary>

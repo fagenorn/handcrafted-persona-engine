@@ -67,4 +67,29 @@ public class ShaderRegistryTests
             .WithMessage("*column 9*")
             .WithMessage("*test/non_ascii.glsl*");
     }
+
+    [Fact]
+    public void GetSource_ExpandsIncludes()
+    {
+        var source = ShaderRegistry.GetSource("test/includes_ascii.glsl");
+
+        // Content from the included file must be present.
+        source.Should().Contain("gl_FragColor = vec4(1.0)");
+        // Content from the outer file must be present.
+        source.Should().Contain("void after_include()");
+        // The raw #include directive itself must have been consumed.
+        source.Should().NotContain("#include");
+    }
+
+    [Fact]
+    public void GetSource_CircularInclude_Throws()
+    {
+        var act = () => ShaderRegistry.GetSource("test/cycle_a.glsl");
+
+        act.Should()
+            .Throw<InvalidOperationException>()
+            .WithMessage("*Circular #include*")
+            .WithMessage("*cycle_a*")
+            .WithMessage("*cycle_b*");
+    }
 }
