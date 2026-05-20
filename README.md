@@ -6,15 +6,15 @@
   <p><i>An AI-driven voice, animation, and personality stack for your Live2D character.</i></p>
 
   <p>
-    <a href="https://github.com/fagenorn/handcrafted-persona-engine/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/fagenorn/handcrafted-persona-engine?style=for-the-badge&logo=github&color=6366f1"></a>
-    <a href="https://github.com/fagenorn/handcrafted-persona-engine/releases/latest"><img alt="Downloads" src="https://img.shields.io/github/downloads/fagenorn/handcrafted-persona-engine/total?style=for-the-badge&logo=github&color=8b5cf6"></a>
+    <a href="https://github.com/fagenorn/handcrafted-persona-engine/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/elevenyellow/handcrafted-persona-engine?style=for-the-badge&logo=github&color=6366f1"></a>
+    <a href="https://github.com/fagenorn/handcrafted-persona-engine/releases/latest"><img alt="Downloads" src="https://img.shields.io/github/downloads/elevenyellow/handcrafted-persona-engine/total?style=for-the-badge&logo=github&color=8b5cf6"></a>
     <a href="https://discord.gg/p3CXEyFtrA"><img alt="Discord" src="https://img.shields.io/discord/1347649495646601419?style=for-the-badge&logo=discord&logoColor=white&label=Discord&color=5865F2"></a>
     <a href="https://x.com/fagenorn"><img alt="Follow on X" src="https://img.shields.io/twitter/follow/fagenorn?style=for-the-badge&logo=x&color=000000"></a>
     <br>
     <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20x64-0078d6?style=flat-square">
     <img alt=".NET" src="https://img.shields.io/badge/.NET-9.0-512BD4?style=flat-square&logo=dotnet&logoColor=white">
     <img alt="GPU" src="https://img.shields.io/badge/GPU-NVIDIA%20CUDA-76B900?style=flat-square&logo=nvidia&logoColor=white">
-    <img alt="License" src="https://img.shields.io/github/license/fagenorn/handcrafted-persona-engine?style=flat-square&color=blue">
+    <img alt="License" src="https://img.shields.io/github/license/elevenyellow/handcrafted-persona-engine?style=flat-square&color=blue">
   </p>
 </div>
 
