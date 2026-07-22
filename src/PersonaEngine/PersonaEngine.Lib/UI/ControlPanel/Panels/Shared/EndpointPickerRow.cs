@@ -17,11 +17,12 @@ public static class EndpointPickerRow
 {
     /// <summary>
     ///     Default preset list shared by every LLM connection section (text + vision).
-    ///     OpenAI public endpoint + the two locally-hosted OpenAI-compatible runtimes.
+    ///     Hosted OpenAI-compatible APIs plus locally-hosted runtimes.
     /// </summary>
     public static readonly ImmutableArray<(string Label, string Url)> DefaultPresets =
     [
         ("OpenAI", "https://api.openai.com/v1"),
+        ("Atlas Cloud", "https://api.atlascloud.ai/v1"),
         ("LM Studio", "http://localhost:1234/v1"),
         ("Ollama", "http://localhost:11434/v1"),
     ];
